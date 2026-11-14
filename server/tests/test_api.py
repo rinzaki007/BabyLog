@@ -189,3 +189,53 @@ def test_pull_skips_photo_upsert_after_photo_was_deleted(client):
     assert pulled.json()["items"][0]["entity_id"] == photo_id
     assert pulled.json()["scanned_count"] == 2
     assert pulled.json()["next_cursor"] > 0
+
+
+def test_owner_authoritative_snapshot_replaces_family_records(client):
+    owner = register(client, "snapshot-owner@example.test")
+    member = register(client, "snapshot-member@example.test")
+    family_id = client.post("/api/families", headers=auth(owner), json={"name": "snapshot"}).json()["family_id"]
+    invite = client.post(f"/api/families/{family_id}/invites", headers=auth(owner)).json()["invite_code"]
+    assert client.post("/api/families/join", headers=auth(member), json={"code": invite}).status_code == 200
+
+    baby_id = str(uuid.uuid4())
+    old_event_id = str(uuid.uuid4())
+    for entity_type, entity_id, payload in [
+        ("baby", baby_id, {"id": baby_id, "displayName": "旧名字", "hasAvatar": False}),
+        ("event", old_event_id, {"id": old_event_id, "babyId": baby_id, "eventType": "FEEDING", "amountMl": 90}),
+    ]:
+        pushed = client.post("/api/sync/push", headers=auth(owner), json={"family_id": family_id, "changes": [{
+            "operation_id": str(uuid.uuid4()), "entity_type": entity_type, "entity_id": entity_id,
+            "operation": "upsert", "payload": payload, "base_version": 0
+        }]})
+        assert pushed.status_code == 200
+
+    denied = client.post("/api/sync/authoritative-snapshot", headers=auth(member), json={
+        "family_id": family_id, "items": []
+    })
+    assert denied.status_code == 403
+
+    new_event_id = str(uuid.uuid4())
+    snapshot = client.post("/api/sync/authoritative-snapshot", headers=auth(owner), json={
+        "family_id": family_id,
+        "items": [
+            {"operation_id": str(uuid.uuid4()), "entity_type": "baby", "entity_id": baby_id,
+             "operation": "upsert", "payload": {"id": baby_id, "displayName": "第一台手机", "hasAvatar": False}},
+            {"operation_id": str(uuid.uuid4()), "entity_type": "event", "entity_id": new_event_id,
+             "operation": "upsert", "payload": {"id": new_event_id, "babyId": baby_id, "eventType": "FEEDING", "amountMl": 120}},
+        ]
+    })
+    assert snapshot.status_code == 200, snapshot.text
+    assert snapshot.json()["replaced"] is True
+    assert snapshot.json()["changes"] == 3
+
+    with client.app.state  if False else open(os.path.join(os.environ["BABYLOG_DATA_DIR"], "babylog.db"), "rb"):
+        pass
+    pulled = client.get("/api/sync/pull", headers=auth(member), params={"family_id": family_id, "cursor": 0})
+    assert pulled.status_code == 200
+    latest = {}
+    for item in pulled.json()["items"]:
+        latest[(item["entity_type"], item["entity_id"])] = item
+    assert latest[("baby", baby_id)]["payload"]["displayName"] == "第一台手机"
+    assert latest[("event", old_event_id)]["operation"] == "delete"
+    assert latest[("event", new_event_id)]["payload"]["amountMl"] == 120
