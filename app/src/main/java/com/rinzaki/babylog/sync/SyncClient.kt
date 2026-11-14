@@ -459,11 +459,15 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 "仍有 $remainingPending 项待同步记录未完成上传；本机数据已保留，稍后将安全重试"
             }
             val cloudStatus = SyncHttp.request(base, "/api/sync/status?family_id=$familyId", token = token)
+            val localBabies = dao.getAllBabies().filter { it.familyId == familyId }
+            val activeBabyIds = localBabies.map { it.id }.toSet()
             val localCanonical = buildList {
-                dao.getAllBabies().forEach { add("baby:${it.id}:${it.serverVersion ?: 0L}") }
-                dao.getAllEvents().filter { it.deletedAt == null }.forEach { add("event:${it.id}:${it.serverVersion ?: 0L}") }
-                dao.getAllPhotos().filter { it.deletedAt == null }.forEach { add("photo:${it.id}:${it.serverVersion ?: 0L}") }
-            }.sorted().joinToString("\\n")
+                localBabies.forEach { add("baby:${it.id}:${it.serverVersion ?: 0L}") }
+                dao.getAllEvents().filter { it.babyId in activeBabyIds && it.deletedAt == null }
+                    .forEach { add("event:${it.id}:${it.serverVersion ?: 0L}") }
+                dao.getAllPhotos().filter { it.babyId in activeBabyIds && it.deletedAt == null }
+                    .forEach { add("photo:${it.id}:${it.serverVersion ?: 0L}") }
+            }.sorted().joinToString("\n")
             val localDigest = java.security.MessageDigest.getInstance("SHA-256")
                 .digest(localCanonical.toByteArray(Charsets.UTF_8))
                 .joinToString("") { "%02x".format(it.toInt() and 0xff) }
