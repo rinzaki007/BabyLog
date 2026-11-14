@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.rinzaki.babylog.AppUpdateSection
 import com.rinzaki.babylog.data.BabyLogDao
 import com.rinzaki.babylog.data.SyncOperationEntity
 import kotlinx.coroutines.Dispatchers
@@ -87,6 +88,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
                 Text("默认离线使用。只有填写自己的 NAS 地址并登录后，才会启用同步。")
+                AppUpdateSection()
                 OutlinedTextField(server, { server = it }, Modifier.fillMaxWidth(), label = { Text("NAS 同步地址") }, placeholder = { Text("https://sync.example.com") }, singleLine = true)
                 Button(
                     onClick = {
