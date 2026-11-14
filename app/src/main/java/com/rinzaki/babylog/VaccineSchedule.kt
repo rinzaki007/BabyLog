@@ -138,10 +138,13 @@ internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDo
         return text.singleOrNull()?.let { chinese[it] }
     }
     val target = normalize(item.vaccineName)
+    fun isPentavalentRecord(name: String): Boolean =
+        name.contains("五联") || name.contains("dtapipvhib") || name.contains("pentaxim") || name.contains("潘太欣")
     val matches = recordedNamesAndDoses.filter { (rawName, _) ->
         val name = normalize(rawName)
         when {
-            item.vaccineName.contains("五联") -> name.contains("五联") || name.contains("dtapipvhib") || name.contains("pentaxim") || name.contains("潘太欣")
+            item.vaccineName.contains("五联") -> isPentavalentRecord(name)
+            item.vaccineName.startsWith("Hib") -> name.contains("hib") || name.contains("流感嗜血杆菌") || isPentavalentRecord(name)
             item.group == "乙脑" -> name.contains("乙脑") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
             item.group == "甲肝" -> name.contains("甲肝") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
             item.vaccineName.startsWith("Hib") -> name.contains("hib") || name.contains("流感嗜血杆菌")
