@@ -38,8 +38,8 @@ class VaccineScheduleTest {
 
     @Test
     fun liveVaccineIntervalsOfLessThan28DaysAreFlagged() {
-        val first = VaccineScheduleItem("麻腮风疫苗", "第 1 剂", 8, isLiveVaccine = true)
-        val second = VaccineScheduleItem("水痘疫苗", "第 1 剂", 9, isLiveVaccine = true)
+        val first = VaccineScheduleItem("麻腮风疫苗", "第 1 剂", 8, requires28DayInterval = true)
+        val second = VaccineScheduleItem("水痘疫苗", "第 1 剂", 9, requires28DayInterval = true)
         val warnings = liveVaccineScheduleConflicts(listOf(first to LocalDate.of(2026, 8, 1), second to LocalDate.of(2026, 8, 20)))
         assertEquals(1, warnings.size)
     }
@@ -55,8 +55,8 @@ class VaccineScheduleTest {
 
     @Test
     fun sameDayLiveVaccinesAreNotFlaggedAsIntervalConflict() {
-        val first = VaccineScheduleItem("麻腮风疫苗", "第 1 剂", 8, isLiveVaccine = true)
-        val second = VaccineScheduleItem("水痘疫苗", "第 1 剂", 8, isLiveVaccine = true)
+        val first = VaccineScheduleItem("麻腮风疫苗", "第 1 剂", 8, requires28DayInterval = true)
+        val second = VaccineScheduleItem("水痘疫苗", "第 1 剂", 8, requires28DayInterval = true)
         assertTrue(liveVaccineScheduleConflicts(listOf(first to LocalDate.of(2026, 8, 1), second to LocalDate.of(2026, 8, 1))).isEmpty())
     }
 
