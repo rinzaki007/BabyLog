@@ -35,3 +35,20 @@ data class BabyEventEntity(
     val serverVersion: Long? = null,
     val deletedAt: Long? = null
 )
+
+@Entity(
+    tableName = "baby_photos",
+    indices = [Index("babyId"), Index("takenAt"), Index("syncStatus")]
+)
+data class BabyPhotoEntity(
+    @PrimaryKey val id: String,
+    val babyId: String,
+    val localPath: String,
+    val caption: String?,
+    val takenAt: Long,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val syncStatus: String = "PENDING",
+    val remotePath: String? = null,
+    val deletedAt: Long? = null
+)
