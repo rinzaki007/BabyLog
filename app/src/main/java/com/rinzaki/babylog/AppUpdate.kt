@@ -46,30 +46,44 @@ private object BabyUpdater {
     }
 
     suspend fun check(context: Context): BabyRelease = withContext(Dispatchers.IO) {
-        val c = URL(RELEASE_API).openConnection() as HttpURLConnection
-        try {
-            c.connectTimeout = 12000; c.readTimeout = 15000
-            c.setRequestProperty("Accept", "application/vnd.github+json")
-            c.setRequestProperty("User-Agent", "BabyLog-Android")
-            check(c.responseCode == 200) { "更新检查失败（HTTP ${c.responseCode}）" }
-            val j = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
-            val assets = j.optJSONArray("assets") ?: error("Release 没有附件")
-            var apk: JSONObject? = null
-            for (i in 0 until assets.length()) {
-                val item = assets.optJSONObject(i) ?: continue
-                if (item.optString("name").endsWith(".apk", true)) { apk = item; break }
-            }
-            val asset = apk ?: error("最新 Release 尚未附带 APK")
-            val url = asset.optString("browser_download_url")
-            require(url.startsWith("https://")) { "下载地址不安全" }
-            val tag = j.optString("tag_name")
-            val version = tag.removePrefix("v").removePrefix("V")
-            require(version.isNotBlank()) { "版本号无效" }
-            context.getSharedPreferences(UPDATE_PREFS, 0).edit().putLong("last_check", System.currentTimeMillis()).apply()
-            BabyRelease(tag, version, j.optString("body").ifBlank { "本次更新未提供说明。" }, url,
-                asset.optLong("size", 0L),
-                asset.optString("digest").takeIf { it.startsWith("sha256:") }?.substringAfter("sha256:"))
-        } finally { c.disconnect() }
+        val release = try {
+            val connection = URL(RELEASE_API).openConnection() as HttpURLConnection
+            try {
+                connection.connectTimeout = 12000; connection.readTimeout = 15000
+                connection.setRequestProperty("Accept", "application/vnd.github+json")
+                connection.setRequestProperty("User-Agent", "BabyLog-Android")
+                check(connection.responseCode == 200) { "GitHub API HTTP ${connection.responseCode}" }
+                val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                val assets = json.optJSONArray("assets") ?: error("Release 没有附件")
+                val asset = (0 until assets.length()).mapNotNull { assets.optJSONObject(it) }
+                    .firstOrNull { it.optString("name").endsWith(".apk", true) } ?: error("最新 Release 尚未附带 APK")
+                val tag = json.optString("tag_name")
+                BabyRelease(tag, tag.removePrefix("v").removePrefix("V"), json.optString("body").ifBlank { "本次更新未提供说明。" },
+                    asset.optString("browser_download_url"), asset.optLong("size"),
+                    asset.optString("digest").takeIf { it.startsWith("sha256:") }?.substringAfter("sha256:"))
+            } finally { connection.disconnect() }
+        } catch (_: Exception) {
+            fetchPublicReleasePage()
+        }
+        require(release.version.isNotBlank() && release.url.startsWith("https://")) { "Release 信息无效" }
+        context.getSharedPreferences(UPDATE_PREFS, 0).edit().putLong("last_check", System.currentTimeMillis()).apply()
+        release
+    }
+
+    private fun fetchPublicReleasePage(): BabyRelease {
+        val connection = URL("https://github.com/rinzaki007/BabyLog/releases/latest").openConnection() as HttpURLConnection
+        return try {
+            connection.connectTimeout = 12000; connection.readTimeout = 20000
+            connection.setRequestProperty("User-Agent", "BabyLog-Android")
+            check(connection.responseCode == 200) { "更新检查失败（HTTP ${connection.responseCode}），请稍后重试" }
+            val html = connection.inputStream.bufferedReader().use { it.readText() }
+            val tag = Regex("/releases/tag/([^\\\"?#]+)").find(html)?.groupValues?.get(1).orEmpty()
+            require(tag.isNotBlank()) { "暂时没有可用的正式 Release" }
+            val pattern = Regex("href=\\\"([^\\\"]*/releases/download/" + Regex.escape(tag) + "/[^\\\"]+\\.apk)", RegexOption.IGNORE_CASE)
+            val assetPath = pattern.find(html)?.groupValues?.get(1)?.replace("&amp;", "&") ?: error("最新 Release 尚未附带 APK")
+            val url = if (assetPath.startsWith("http")) assetPath else "https://github.com" + assetPath
+            BabyRelease(tag, tag.removePrefix("v").removePrefix("V"), "可从 GitHub Releases 查看本次更新说明。", url, 0L, null)
+        } finally { connection.disconnect() }
     }
 
     suspend fun download(context: Context, release: BabyRelease, progress: (Float) -> Unit): File =

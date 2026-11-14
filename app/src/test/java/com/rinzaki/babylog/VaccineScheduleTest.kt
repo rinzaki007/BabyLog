@@ -33,4 +33,19 @@ class VaccineScheduleTest {
         val item = VaccineScheduleItem("乙肝疫苗", "第 1 剂", 0)
         assertTrue(vaccineDoseIsRecorded(item, listOf("重组乙肝疫苗" to "第1剂")))
     }
+    @Test
+    fun vaccineRecordAcceptsChineseDoseAndNeedleLabels() {
+        val item = VaccineScheduleItem("乙肝疫苗", "第 1 剂", 0)
+        assertTrue(vaccineDoseIsRecorded(item, listOf("乙肝疫苗" to "第一针")))
+    }
+
+    @Test
+    fun unnumberedRepeatedVaccineRecordsFillDosesInSequence() {
+        val first = VaccineScheduleItem("百白破疫苗", "第 1 剂", 2)
+        val second = VaccineScheduleItem("百白破疫苗", "第 2 剂", 4)
+        val records = listOf("百白破疫苗" to "", "百白破疫苗" to "")
+        assertTrue(vaccineDoseIsRecorded(first, records))
+        assertTrue(vaccineDoseIsRecorded(second, records))
+    }
+
 }

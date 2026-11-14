@@ -4,6 +4,8 @@ import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.content.ContentValues
+import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -185,7 +187,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         OutlinedButton(onClick = { showSyncSettings = true }) { Text("家庭同步设置") }
                     }
                 }
-                if (selectedNav == 0) item { AppUpdateSection() }
                 if (selectedNav == 0) item {
                     if (baby == null || editingProfile) {
                         BabyProfileEditor(baby) { name, birthDate, sex, avatar, weight, length, head ->
@@ -234,7 +235,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         BabyAlbumSection(
                             baby = baby,
                             photos = photos,
-                            onAdd = { uri ->
+                            onAdd = { uri, takenAt ->
                                 scope.launch {
                                     runCatching {
                                         val mime = appContext.contentResolver.getType(uri) ?: "image/jpeg"
@@ -247,7 +248,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                             appContext.contentResolver.openInputStream(uri)?.use { input -> destination.outputStream().use { output -> input.copyTo(output) } } ?: error("无法读取所选照片")
                                         }
                                         val now = System.currentTimeMillis()
-                                        val photo = BabyPhotoEntity(photoId, baby.id, destination.absolutePath, null, now, now, now)
+                                        val photo = BabyPhotoEntity(photoId, baby.id, destination.absolutePath, null, takenAt, now, now)
                                         dao.upsertPhoto(photo)
                                         if (SyncPreferences.familyId(appContext).isNotBlank()) {
                                             dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "photo", photo.id, "upsert", photoSyncPayload(photo, mime).toString(), photo.serverVersion, now))
@@ -364,7 +365,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
 private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: List<BabyEventEntity>) {
     var showAll by remember { mutableStateOf(false) }
     val records = remember(events) {
-        events.mapNotNull { event ->
+        events.sortedBy { it.occurredAt }.mapNotNull { event ->
             runCatching {
                 val payload = JSONObject(event.payloadJson)
                 payload.optString("vaccineName") to payload.optString("dose")
@@ -629,15 +630,21 @@ private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
 private fun BabyAlbumSection(
     baby: BabyEntity,
     photos: List<BabyPhotoEntity>,
-    onAdd: (android.net.Uri) -> Unit,
+    onAdd: (android.net.Uri, Long) -> Unit,
     onCaption: (BabyPhotoEntity, String) -> Unit,
     onDelete: (BabyPhotoEntity) -> Unit
 ) {
     var deletingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var viewingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var editingCaption by remember { mutableStateOf<BabyPhotoEntity?>(null) }
+    var photoDateTime by remember { mutableStateOf(LocalDateTime.now()) }
+    val photoDateTimeLabel = remember(photoDateTime) { photoDateTime.format(DateTimeFormatter.ofPattern("MM-dd HH:mm")) }
+    val context = LocalContext.current
+    val albumScope = rememberCoroutineScope()
+    var galleryMessage by remember { mutableStateOf<String?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
-        uris.forEach(onAdd)
+        val timestamp = photoDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        uris.forEach { onAdd(it, timestamp) }
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -645,7 +652,15 @@ private fun BabyAlbumSection(
                 Text("成长相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text("记录每一个值得珍藏的日子", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("从相册选择") }
+            Column(horizontalAlignment = Alignment.End) {
+                OutlinedButton(onClick = {
+                    DatePickerDialog(context, { _, y, m, d ->
+                        photoDateTime = LocalDate.of(y, m + 1, d).atTime(photoDateTime.toLocalTime())
+                        TimePickerDialog(context, { _, h, min -> photoDateTime = photoDateTime.withHour(h).withMinute(min) }, photoDateTime.hour, photoDateTime.minute, true).show()
+                    }, photoDateTime.year, photoDateTime.monthValue - 1, photoDateTime.dayOfMonth).show()
+                }) { Text("时间：$photoDateTimeLabel") }
+                Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("选择照片") }
+            }
         }
         if (photos.isEmpty()) {
             Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F0))) {
@@ -664,7 +679,7 @@ private fun BabyAlbumSection(
                 monthPhotos.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         pair.forEach { photo ->
-                            AlbumPhotoCard(photo, onClick = { viewingPhoto = photo }, onEdit = { editingCaption = photo }, onDelete = { deletingPhoto = photo }, modifier = Modifier.weight(1f))
+                            AlbumPhotoCard(photo, onClick = { viewingPhoto = photo }, onEdit = { editingCaption = photo }, onDelete = { deletingPhoto = photo }, onSaveGallery = { albumScope.launch { galleryMessage = runCatching { withContext(Dispatchers.IO) { savePhotoToGallery(context, photo.localPath) }; "已保存到手机相册" }.getOrElse { "保存失败：${it.message}" } } }, modifier = Modifier.weight(1f))
                         }
                         if (pair.size == 1) Spacer(Modifier.weight(1f))
                     }
@@ -681,6 +696,12 @@ private fun BabyAlbumSection(
                     }
                     if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = "照片预览", modifier = Modifier.fillMaxWidth().height(420.dp), contentScale = ContentScale.Fit)
                     Text(SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault()).format(Date(photo.takenAt)), color = Color.White)
+                    galleryMessage?.let { Text(it, color = Color.White, style = MaterialTheme.typography.bodySmall) }
+                    OutlinedButton(onClick = {
+                        albumScope.launch {
+                            galleryMessage = runCatching { withContext(Dispatchers.IO) { savePhotoToGallery(context, photo.localPath) }; "已保存到手机相册" }.getOrElse { "保存失败：${it.message}" }
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("保存到手机相册") }
                     if (!photo.caption.isNullOrBlank()) Text(photo.caption!!, color = Color.White)
                     TextButton(onClick = { viewingPhoto = null }, modifier = Modifier.align(Alignment.End)) { Text("关闭", color = Color.White) }
                 }
@@ -704,6 +725,25 @@ private fun BabyAlbumSection(
         )
     }
 }
+private fun savePhotoToGallery(context: android.content.Context, path: String) {
+    val source = File(path)
+    require(source.isFile) { "照片文件不存在" }
+    val mime = mimeTypeForPath(path)
+    val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, "BabyLog-${System.currentTimeMillis()}${source.extension.let { if (it.isBlank()) ".jpg" else ".$it" }}")
+        put(MediaStore.Images.Media.MIME_TYPE, mime)
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/BabyLog")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+    }
+    val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: error("无法创建相册文件")
+    try {
+        context.contentResolver.openOutputStream(uri)?.use { output -> source.inputStream().use { it.copyTo(output) } } ?: error("无法写入相册")
+        if (android.os.Build.VERSION.SDK_INT >= 29) context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+    } catch (e: Exception) { context.contentResolver.delete(uri, null, null); throw e }
+}
+
 private fun decodeSampledPhoto(path: String, reqWidth: Int, reqHeight: Int): android.graphics.Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(path, bounds)
@@ -724,6 +764,7 @@ private fun AlbumPhotoCard(
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onSaveGallery: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
@@ -738,6 +779,7 @@ private fun AlbumPhotoCard(
                 Text(photo.caption?.takeIf { it.isNotBlank() } ?: "添加照片备注", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 Row {
                     TextButton(onClick = onEdit) { Text("备注") }
+                    TextButton(onClick = onSaveGallery) { Text("保存") }
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
                 }
@@ -956,12 +998,6 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                             label = { Text("本次奶量（ml）") },
                             singleLine = true
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf(60f, 90f, 120f, 150f, 180f, 210f).forEach { v ->
-                                if (amount.toInt() == v.toInt()) FilledTonalButton(onClick = { amount = v }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)) { Text(v.toInt().toString()) }
-                                else OutlinedButton(onClick = { amount = v }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)) { Text(v.toInt().toString()) }
-                            }
-                        }
                         Text("单位：毫升（ml）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     "DIAPER" -> {

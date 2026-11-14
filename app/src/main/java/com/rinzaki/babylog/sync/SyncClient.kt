@@ -157,11 +157,21 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 pending.forEach { operation ->
                     if (operation.entityType == "photo" && operation.operation == "upsert") {
                         val photo = dao.getPhoto(operation.entityId)
-                        val localFile = photo?.let { File(it.localPath) }
-                        if (photo == null || localFile == null || !localFile.isFile) {
-                            dao.markOperationConflict(operation.operationId, "本地照片文件不存在，无法上传")
-                            if (photo != null) dao.setPhotoServerVersion(photo.id, -1L, "CONFLICT")
+                        if (photo == null) {
+                            dao.markOperationConflict(operation.operationId, "照片记录不存在，无法上传")
                             return@forEach
+                        }
+                        val localFile = File(photo.localPath)
+                        if (!localFile.isFile) {
+                            // A previous upload may already exist on the NAS even if the local cache was removed.
+                            // Restore it before deciding that this queued operation is unrecoverable.
+                            try {
+                                SyncHttp.downloadPhoto(base, familyId, photo.id, token, localFile)
+                            } catch (restoreError: Exception) {
+                                dao.markOperationConflict(operation.operationId, "本地照片和 NAS 备份均不可用：${restoreError.message ?: "照片不存在"}")
+                                dao.setPhotoServerVersion(photo.id, -1L, "CONFLICT")
+                                return@forEach
+                            }
                         }
                         try {
                             SyncHttp.uploadPhoto(base, familyId, photo.id, token, localFile, mimeTypeForPath(photo.localPath))
