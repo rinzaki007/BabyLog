@@ -45,6 +45,15 @@ class VaccineScheduleTest {
     }
 
     @Test
+    fun recordedLiveVaccinesWithShortIntervalsAreFlagged() {
+        val warnings = recordedLiveVaccineConflicts(listOf(
+            "麻腮风疫苗" to LocalDate.of(2026, 8, 1),
+            "水痘疫苗" to LocalDate.of(2026, 8, 20)
+        ))
+        assertEquals(1, warnings.size)
+    }
+
+    @Test
     fun sameDayLiveVaccinesAreNotFlaggedAsIntervalConflict() {
         val first = VaccineScheduleItem("麻腮风疫苗", "第 1 剂", 8, isLiveVaccine = true)
         val second = VaccineScheduleItem("水痘疫苗", "第 1 剂", 8, isLiveVaccine = true)
