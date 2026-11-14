@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -129,6 +132,18 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var addingEvent by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
+    var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
+    val vaccineEvents = events.filter { it.eventType == "VACCINE" }
+    val normalEvents = events.filter { it.eventType != "VACCINE" }
+    LaunchedEffect(Unit) {
+        if (SyncPreferences.familyId(appContext).isNotBlank()) SyncScheduler.enqueue(appContext)
+        while (true) {
+            lastSyncAt = SyncPreferences.lastSyncAt(appContext)
+            syncError = SyncPreferences.lastSyncError(appContext)
+            kotlinx.coroutines.delay(1500)
+        }
+    }
     var selectedNav by remember { mutableStateOf(0) }
 
     MaterialTheme(colorScheme = WarmColors) {
@@ -136,16 +151,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
                 NavigationBar(containerColor = Color.White) {
-                    val destinations = listOf("首页", "记录", "趋势", "相册")
-                    val targets = listOf(0, 3, 4, 6)
+                    val destinations = listOf("首页", "记录", "疫苗", "趋势", "相册")
                     destinations.forEachIndexed { index, label ->
                         NavigationBarItem(
                             selected = selectedNav == index,
-                            onClick = {
-                                selectedNav = index
-                                scope.launch { listState.animateScrollToItem(targets[index].coerceAtMost(if (baby == null) 1 else 6)) }
-                            },
-                            icon = { Text(listOf("⌂", "＋", "⌁", "▦")[index], style = MaterialTheme.typography.titleLarge) },
+                            onClick = { selectedNav = index; scope.launch { listState.scrollToItem(0) } },
+                            icon = { Text(listOf("⌂", "＋", "✚", "⌁", "▦")[index], style = MaterialTheme.typography.titleLarge) },
                             label = { Text(label) }
                         )
                     }
@@ -158,7 +169,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 36.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                item {
+                if (selectedNav == 0) item {
                     Column {
                         Text("BABYLOG", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         Text("成长的每一天", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -166,17 +177,14 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(if (SyncPreferences.familyId(appContext).isBlank()) "离线模式 · 本机安全保存" else "家庭同步已连接", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                                val last = SyncPreferences.lastSyncAt(appContext)
-                                Text(if (last > 0L) "上次同步 " + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(last)) else "尚未同步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                                FilledTonalButton(onClick = { SyncScheduler.enqueue(appContext) }) { Text("立即同步") }
+                                Text(if (lastSyncAt > 0L) "最近成功同步 " + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt)) else "尚未同步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (!syncError.isNullOrBlank()) Text("同步提示：" + syncError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                             }
                         }
                         OutlinedButton(onClick = { showSyncSettings = true }) { Text("家庭同步设置") }
                     }
                 }
-                item {
+                if (selectedNav == 0) item {
                     if (baby == null || editingProfile) {
                         BabyProfileEditor(baby) { name, birthDate, sex, avatar, weight, length, head ->
                             val now = System.currentTimeMillis()
@@ -203,8 +211,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     } else BabyProfileCard(baby) { editingProfile = true }
                 }
                 if (baby != null) {
-                    item { TodaySummary(events) }
-                    item {
+                    if (selectedNav == 0) item { TodaySummary(normalEvents) }
+                    if (selectedNav == 0) item {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("快捷记录", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -218,9 +226,9 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     }
-                    item { TrendsSummary(events) }
-                    item { GrowthSection(baby, events) }
-                    item {
+                    if (selectedNav == 3) item { TrendsSummary(normalEvents) }
+                    if (selectedNav == 3) item { GrowthSection(baby, normalEvents) }
+                    if (selectedNav == 4) item {
                         BabyAlbumSection(
                             baby = baby,
                             photos = photos,
@@ -271,13 +279,13 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         )
                     }
-                    item {
+                    if (selectedNav == 1) item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("成长足迹", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                             Text("共 ${events.size} 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    if (events.isEmpty()) {
+                    if (selectedNav == 1 && normalEvents.isEmpty()) {
                         item {
                             Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -287,7 +295,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                         }
-                    } else items(events, key = { it.id }) { event ->
+                    } else if (selectedNav == 1) items(normalEvents, key = { it.id }) { event ->
                         EventCard(event) { scope.launch {
                             val now = System.currentTimeMillis()
                             dao.softDeleteEvent(event.id, now)
@@ -301,8 +309,25 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         } }
                     }
-                } else item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                item { Text(if (SyncPreferences.familyId(appContext).isBlank()) "离线模式 · 数据仅保存在本机" else "家庭同步已配置 · 照片同步功能仍在完善", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    if (selectedNav == 2) item { VaccinePage(vaccineEvents, onSave = { payload, timestamp ->
+                        val now = System.currentTimeMillis()
+                        scope.launch {
+                            val vaccine = BabyEventEntity(UUID.randomUUID().toString(), baby.id, "VACCINE", timestamp, payload.toString(), null, now)
+                            dao.upsertEvent(vaccine)
+                            if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", vaccine.id, "upsert", eventSyncPayload(vaccine).toString(), vaccine.serverVersion, now))
+                                SyncScheduler.enqueue(appContext)
+                            }
+                        }
+                    }, onDelete = { event -> scope.launch {
+                        val now = System.currentTimeMillis(); dao.softDeleteEvent(event.id, now)
+                        if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                            val deleted = dao.getEvent(event.id)
+                            if (deleted != null) { dao.clearPendingOperations("event", deleted.id); dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", deleted.id, "delete", eventSyncPayload(deleted).toString(), deleted.serverVersion, now)); SyncScheduler.enqueue(appContext) }
+                        }
+                    } }) }
+                } else if (selectedNav == 0) item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                if (selectedNav == 0) item { Text(if (SyncPreferences.familyId(appContext).isBlank()) "离线模式 · 数据仅保存在本机" else "家庭同步已配置", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }
@@ -328,6 +353,92 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
 }
 
+
+
+@Composable
+private fun VaccinePage(events: List<BabyEventEntity>, onSave: (JSONObject, Long) -> Unit, onDelete: (BabyEventEntity) -> Unit) {
+    val context = LocalContext.current
+    var showEditor by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var dose by remember { mutableStateOf("") }
+    var clinic by remember { mutableStateOf("") }
+    var site by remember { mutableStateOf("") }
+    var batch by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf(LocalDate.now()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("疫苗接种档案", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("独立管理宝宝每一次接种，方便长期查询和核对。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("💉 宝宝疫苗档案", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("已记录 " + events.size + " 次接种", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("接种安排请以当地接种机构和医生提供的计划为准。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Button(onClick = { showEditor = true }, modifier = Modifier.fillMaxWidth()) { Text("＋ 添加疫苗接种记录") }
+        if (events.isEmpty()) {
+            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("💉", style = MaterialTheme.typography.headlineLarge)
+                    Text("还没有疫苗接种记录", fontWeight = FontWeight.SemiBold)
+                    Text("完成接种后，记录疫苗名称、日期和剂次。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else {
+            Text("接种历史", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            events.sortedByDescending { it.occurredAt }.forEach { event ->
+                val data = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
+                Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("💉", style = MaterialTheme.typography.titleLarge)
+                            Column(Modifier.weight(1f).padding(start = 10.dp)) {
+                                Text(data.optString("vaccineName", "疫苗接种"), fontWeight = FontWeight.Bold)
+                                Text(SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()).format(Date(event.occurredAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(data.optString("dose"), color = MaterialTheme.colorScheme.primary)
+                        }
+                        listOfNotNull(
+                            data.optString("clinic").takeIf { it.isNotBlank() }?.let { "接种机构：" + it },
+                            data.optString("site").takeIf { it.isNotBlank() }?.let { "接种部位：" + it },
+                            data.optString("batchNumber").takeIf { it.isNotBlank() }?.let { "疫苗批号：" + it },
+                            data.optString("note").takeIf { it.isNotBlank() }?.let { "备注：" + it }
+                        ).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        TextButton(onClick = { onDelete(event) }, modifier = Modifier.align(Alignment.End)) { Text("删除记录", color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            }
+        }
+    }
+    if (showEditor) AlertDialog(
+        onDismissRequest = { showEditor = false },
+        title = { Text("添加疫苗记录", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.height(460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(name, { name = it.take(60) }, Modifier.fillMaxWidth(), label = { Text("疫苗名称 *") }, singleLine = true)
+                OutlinedButton(onClick = { DatePickerDialog(context, { _, y, m, d -> date = LocalDate.of(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth).show() }, modifier = Modifier.fillMaxWidth()) { Text("接种日期：" + date) }
+                OutlinedTextField(dose, { dose = it.take(30) }, Modifier.fillMaxWidth(), label = { Text("剂次（如：第 1 剂）") }, singleLine = true)
+                OutlinedTextField(clinic, { clinic = it.take(80) }, Modifier.fillMaxWidth(), label = { Text("接种机构") }, singleLine = true)
+                OutlinedTextField(site, { site = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("接种部位") }, singleLine = true)
+                OutlinedTextField(batch, { batch = it.take(50) }, Modifier.fillMaxWidth(), label = { Text("疫苗批号（可选）") }, singleLine = true)
+                OutlinedTextField(note, { note = it.take(200) }, Modifier.fillMaxWidth(), label = { Text("备注（可选）") }, minLines = 2)
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (name.isBlank()) { error = "请填写疫苗名称"; return@Button }
+                val payload = JSONObject().put("vaccineName", name.trim()).put("dose", dose.trim())
+                    .put("clinic", clinic.trim()).put("site", site.trim()).put("batchNumber", batch.trim()).put("note", note.trim())
+                onSave(payload, date.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
+                name = ""; dose = ""; clinic = ""; site = ""; batch = ""; note = ""; date = LocalDate.now(); showEditor = false
+            }) { Text("保存记录") }
+        },
+        dismissButton = { TextButton(onClick = { showEditor = false }) { Text("取消") } }
+    )
+}
 
 @Composable
 private fun TrendsSummary(events: List<BabyEventEntity>) {
