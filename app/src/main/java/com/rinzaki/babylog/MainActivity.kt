@@ -400,7 +400,15 @@ private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: L
     val pending = decorated.filterNot { it.third }
     val completedCount = decorated.size - pending.size
     val visible = if (showAll) decorated else (pending.take(8) + decorated.filter { it.third }.takeLast(4)).distinct().sortedBy { it.second }
-    val conflicts = remember(allItems) { liveVaccineScheduleConflicts(allItems) }
+    val recordedConflicts = remember(events) {
+        recordedLiveVaccineConflicts(events.mapNotNull { event ->
+            runCatching {
+                val name = JSONObject(event.payloadJson).optString("vaccineName")
+                if (name.isBlank()) null else name to java.time.Instant.ofEpochMilli(event.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate()
+            }.getOrNull()
+        })
+    }
+    val conflicts = remember(allItems, recordedConflicts) { (liveVaccineScheduleConflicts(allItems) + recordedConflicts).distinct() }
     Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EFF8))) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -411,7 +419,7 @@ private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: L
                 Text("已接种 $completedCount/${decorated.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
             conflicts.forEach { warning ->
-                Text("⚠ 接种间隔提示：$warning。减毒活疫苗通常需同日接种或间隔至少 28 天，请让接种门诊核对具体产品和日期。",
+                Text("⚠ 接种间隔提示：$warning。部分注射用减毒活疫苗通常需同日接种或间隔至少 28 天，请让接种门诊核对具体产品和日期。",
                     color = Color(0xFFB65D4A), style = MaterialTheme.typography.bodySmall)
             }
             if (visible.isEmpty()) {
