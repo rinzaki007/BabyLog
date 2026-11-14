@@ -190,3 +190,17 @@ private object RoomAccess {
             .build().also { instance = it }
     }
 }
+
+fun babySyncPayload(baby: BabyEntity): JSONObject = JSONObject()
+    .put("id", baby.id).put("familyId", baby.familyId).put("displayName", baby.displayName)
+    .put("birthTime", baby.birthTime).put("createdAt", baby.createdAt).put("updatedAt", baby.updatedAt)
+    .put("sex", baby.sex).put("avatarUri", baby.avatarUri)
+    .put("birthWeightGrams", baby.birthWeightGrams)
+    .put("birthLengthCm", baby.birthLengthCm)
+    .put("birthHeadCircumferenceCm", baby.birthHeadCircumferenceCm)
+
+fun eventSyncPayload(event: BabyEventEntity): JSONObject = JSONObject()
+    .put("id", event.id).put("babyId", event.babyId).put("eventType", event.eventType)
+    .put("occurredAt", event.occurredAt).put("payloadJson", event.payloadJson)
+    .put("createdBy", event.createdBy).put("updatedAt", event.updatedAt)
+    .put("deletedAt", event.deletedAt)

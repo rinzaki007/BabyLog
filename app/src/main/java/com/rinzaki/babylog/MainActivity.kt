@@ -61,6 +61,12 @@ import com.rinzaki.babylog.data.BabyEventEntity
 import com.rinzaki.babylog.data.BabyPhotoEntity
 import com.rinzaki.babylog.data.BabyLogDao
 import com.rinzaki.babylog.data.BabyLogDatabase
+import com.rinzaki.babylog.data.SyncOperationEntity
+import com.rinzaki.babylog.sync.SyncPreferences
+import com.rinzaki.babylog.sync.SyncScheduler
+import com.rinzaki.babylog.sync.SyncSettingsDialog
+import com.rinzaki.babylog.sync.babySyncPayload
+import com.rinzaki.babylog.sync.eventSyncPayload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -90,7 +96,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         database = Room.databaseBuilder(applicationContext, BabyLogDatabase::class.java, "babylog.db")
-            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3).build()
+            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4)
+            .enableMultiInstanceInvalidation().build()
         setContent { BabyLogApp(database.babyLogDao()) }
     }
     override fun onDestroy() {
@@ -109,6 +116,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val photosFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observePhotos(baby.id) }
     val photos by photosFlow.collectAsState(initial = emptyList())
     var editingProfile by remember { mutableStateOf(false) }
+    var showSyncSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -124,6 +132,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         Text("BABYLOG", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         Text("成长的每一天", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                         Text("把细碎日常，变成温柔的回忆", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedButton(onClick = { showSyncSettings = true }) { Text("家庭同步设置") }
                     }
                 }
                 item {
@@ -132,14 +141,20 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             val now = System.currentTimeMillis()
                             val birthTime = birthDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
                             scope.launch {
-                                dao.upsertBaby(BabyEntity(
+                                val updatedBaby = BabyEntity(
                                     id = baby?.id ?: UUID.randomUUID().toString(),
-                                    familyId = baby?.familyId ?: "00000000-0000-0000-0000-000000000000",
+                                    familyId = SyncPreferences.familyId(appContext).ifBlank { baby?.familyId ?: "00000000-0000-0000-0000-000000000000" },
                                     displayName = name.trim(), birthTime = birthTime,
                                     createdAt = baby?.createdAt ?: now, updatedAt = now,
                                     sex = sex, avatarUri = avatar, birthWeightGrams = weight,
-                                    birthLengthCm = length, birthHeadCircumferenceCm = head
-                                ))
+                                    birthLengthCm = length, birthHeadCircumferenceCm = head,
+                                    serverVersion = baby?.serverVersion
+                                )
+                                dao.upsertBaby(updatedBaby)
+                                if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                    dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "baby", updatedBaby.id, "upsert", babySyncPayload(updatedBaby).toString(), updatedBaby.serverVersion, now))
+                                    SyncScheduler.enqueue(appContext)
+                                }
                                 editingProfile = false
                             }
                         }
@@ -194,19 +209,38 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     } else items(events, key = { it.id }) { event ->
-                        EventCard(event) { scope.launch { dao.softDeleteEvent(event.id, System.currentTimeMillis()) } }
+                        EventCard(event) { scope.launch {
+                            val now = System.currentTimeMillis()
+                            dao.softDeleteEvent(event.id, now)
+                            if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                val deleted = dao.getEvent(event.id)
+                                if (deleted != null) {
+                                    dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", deleted.id, "delete", eventSyncPayload(deleted).toString(), deleted.serverVersion, now))
+                                    SyncScheduler.enqueue(appContext)
+                                }
+                            }
+                        } }
                     }
                 } else item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                item { Text("照片与记录目前保存在本机 · 家庭共享与云同步将在后续阶段接入", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                item { Text(if (SyncPreferences.familyId(appContext).isBlank()) "离线模式 · 数据仅保存在本机" else "家庭同步已配置 · 照片同步功能仍在完善", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
+    }
+
+    if (showSyncSettings) {
+        SyncSettingsDialog(dao = dao, onDismiss = { showSyncSettings = false })
     }
 
     if (addingEvent != null && baby != null) {
         EventEditor(addingEvent!!, onDismiss = { addingEvent = null }) { type, payload, occurredAt ->
             val now = System.currentTimeMillis()
             scope.launch {
-                dao.upsertEvent(BabyEventEntity(UUID.randomUUID().toString(), baby.id, type, occurredAt, payload.toString(), null, now))
+                val event = BabyEventEntity(UUID.randomUUID().toString(), baby.id, type, occurredAt, payload.toString(), null, now)
+                dao.upsertEvent(event)
+                if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                    dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", event.id, "upsert", eventSyncPayload(event).toString(), event.serverVersion, now))
+                    SyncScheduler.enqueue(appContext)
+                }
                 addingEvent = null
             }
         }
