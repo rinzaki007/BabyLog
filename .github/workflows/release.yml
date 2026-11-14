@@ -1,0 +1,55 @@
+name: BabyLog Android Release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example 0.2.0"
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  release:
+    name: Build and publish signed APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Validate signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.BABYLOG_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.BABYLOG_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.BABYLOG_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.BABYLOG_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || (echo "Missing BABYLOG_KEYSTORE_BASE64" && exit 1)
+          test -n "$KEYSTORE_PASSWORD" || (echo "Missing BABYLOG_KEYSTORE_PASSWORD" && exit 1)
+          test -n "$KEY_ALIAS" || (echo "Missing BABYLOG_KEY_ALIAS" && exit 1)
+          test -n "$KEY_PASSWORD" || (echo "Missing BABYLOG_KEY_PASSWORD" && exit 1)
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/babylog-release.jks"
+          echo "BABYLOG_KEYSTORE_FILE=$RUNNER_TEMP/babylog-release.jks" >> "$GITHUB_ENV"
+      - name: Build signed release APK
+        env:
+          BABYLOG_KEYSTORE_PASSWORD: ${{ secrets.BABYLOG_KEYSTORE_PASSWORD }}
+          BABYLOG_KEY_ALIAS: ${{ secrets.BABYLOG_KEY_ALIAS }}
+          BABYLOG_KEY_PASSWORD: ${{ secrets.BABYLOG_KEY_PASSWORD }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then VERSION="${{ inputs.version }}"; fi
+          VERSION_CODE=$((GITHUB_RUN_NUMBER + 1))
+          gradle --no-daemon assembleRelease -PappVersionName="$VERSION" -PappVersionCode="$VERSION_CODE"
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
+          name: BabyLog ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
+          generate_release_notes: true
+          files: app/build/outputs/apk/release/*.apk

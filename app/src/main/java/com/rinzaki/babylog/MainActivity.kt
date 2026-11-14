@@ -185,6 +185,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         OutlinedButton(onClick = { showSyncSettings = true }) { Text("家庭同步设置") }
                     }
                 }
+                if (selectedNav == 0) item { AppUpdateSection() }
                 if (selectedNav == 0) item {
                     if (baby == null || editingProfile) {
                         BabyProfileEditor(baby) { name, birthDate, sex, avatar, weight, length, head ->
