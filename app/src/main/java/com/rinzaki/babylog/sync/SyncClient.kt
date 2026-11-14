@@ -35,6 +35,7 @@ object SyncPreferences {
     fun saveSession(context: Context, token: String) { prefs(context).edit().putString("token", token).remove("family_id").putLong("cursor", 0L).apply() }
     fun saveFamily(context: Context, id: String) { prefs(context).edit().putString("family_id", id).putLong("cursor", 0L).apply() }
     fun saveCursor(context: Context, value: Long) { prefs(context).edit().putLong("cursor", value).apply() }
+    fun resetCursor(context: Context) { prefs(context).edit().putLong("cursor", 0L).apply() }
     fun clearSession(context: Context) { prefs(context).edit().remove("token").remove("family_id").remove("account_email").putLong("cursor", 0L).apply() }
     fun lastSyncAt(context: Context) = prefs(context).getLong("last_sync_at", 0L)
     fun lastSyncError(context: Context) = prefs(context).getString("last_sync_error", null)
@@ -208,6 +209,71 @@ object SyncScheduler {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork("babylog-sync-periodic", ExistingPeriodicWorkPolicy.UPDATE, request)
         enqueue(context)
     }
+    fun cancel(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork("babylog-sync-now")
+        WorkManager.getInstance(context).cancelUniqueWork("babylog-sync-periodic")
+    }
+}
+
+
+suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babylog.data.BabyLogDao): String {
+    val base = SyncPreferences.server(context)
+    val token = SyncPreferences.token(context)
+    val familyId = SyncPreferences.familyId(context)
+    require(base.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) { "请先登录并加入家庭空间" }
+    val babies = dao.getAllBabies()
+    val events = dao.getAllEvents()
+    val photos = dao.getAllPhotos()
+    val items = JSONArray()
+
+    for (baby in babies) {
+        val avatar = baby.avatarUri?.takeIf { it.isNotBlank() }?.let(::File)
+        if (avatar != null) {
+            require(avatar.isFile) { "宝宝头像文件不存在，已停止覆盖：" + baby.displayName }
+            SyncHttp.uploadAvatar(base, familyId, baby.id, token, avatar)
+        }
+        items.put(JSONObject().put("operation_id", java.util.UUID.randomUUID().toString())
+            .put("entity_type", "baby").put("entity_id", baby.id)
+            .put("operation", "upsert").put("payload", babySyncPayload(baby)))
+    }
+    for (event in events) {
+        items.put(JSONObject().put("operation_id", java.util.UUID.randomUUID().toString())
+            .put("entity_type", "event").put("entity_id", event.id)
+            .put("operation", if (event.deletedAt == null) "upsert" else "delete")
+            .put("payload", eventSyncPayload(event)))
+    }
+    for (photo in photos) {
+        val operation = if (photo.deletedAt == null) "upsert" else "delete"
+        if (operation == "upsert") {
+            val file = File(photo.localPath)
+            if (!file.isFile) SyncHttp.downloadPhoto(base, familyId, photo.id, token, file)
+            require(file.isFile && file.length() > 0L) { "照片文件不可用，已停止覆盖：" + photo.id }
+            SyncHttp.uploadPhoto(base, familyId, photo.id, token, file, mimeTypeForPath(photo.localPath))
+        }
+        items.put(JSONObject().put("operation_id", java.util.UUID.randomUUID().toString())
+            .put("entity_type", "photo").put("entity_id", photo.id)
+            .put("operation", operation)
+            .put("payload", photoSyncPayload(photo, mimeTypeForPath(photo.localPath))))
+    }
+    val result = SyncHttp.request(base, "/api/sync/authoritative-snapshot", "POST", token,
+        JSONObject().put("family_id", familyId).put("items", items))
+    val versions = result.optJSONArray("versions") ?: JSONArray()
+    for (i in 0 until versions.length()) {
+        val item = versions.getJSONObject(i)
+        val id = item.optString("entity_id")
+        val version = item.optLong("version", -1L)
+        if (version < 0L) continue
+        when (item.optString("entity_type")) {
+            "baby" -> dao.setBabyServerVersion(id, version)
+            "event" -> dao.setEventServerVersion(id, version)
+            "photo" -> dao.setPhotoServerVersion(id, version, "SYNCED")
+        }
+    }
+    dao.clearAllSyncOperations()
+    SyncPreferences.saveCursor(context, result.optLong("cursor", 0L))
+    SyncPreferences.markSyncSuccess(context)
+    return "覆盖完成：已将本机 " + babies.size + " 份档案、" + events.size + " 条记录、" +
+        photos.count { it.deletedAt == null } + " 张照片设为家庭云端权威数据。"
 }
 
 internal fun syncOperationBelongsToFamily(ownerFamilyId: String?, activeFamilyId: String): Boolean =
@@ -368,7 +434,11 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
         if (dao.hasLocalOperation(type, id)) return
         when (type) {
             "baby" -> {
-                if (operation == "delete") return
+                if (operation == "delete") {
+                    dao.deleteBabyFromServer(id)
+                    File(applicationContext.filesDir, "baby_avatars/$id.jpg").delete()
+                    return
+                }
                 dao.upsertBaby(BabyEntity(
                     id = payload.optString("id", id),
                     familyId = familyId,
