@@ -41,14 +41,24 @@ object SyncPreferences {
     fun clearSession(context: Context) { prefs(context).edit().remove("token").remove("family_id").remove("account_email").putLong("cursor", 0L).apply() }
     fun lastSyncAt(context: Context) = prefs(context).getLong("last_sync_at", 0L)
     fun lastSyncError(context: Context) = prefs(context).getString("last_sync_error", null)
-    fun isSyncing(context: Context) = prefs(context).getBoolean("sync_in_progress", false)
-    fun markSyncStarted(context: Context) { prefs(context).edit().putBoolean("sync_in_progress", true).apply() }
+    fun isSyncing(context: Context): Boolean {
+        val preferences = prefs(context)
+        val startedAt = preferences.getLong("sync_started_at", 0L)
+        val active = preferences.getBoolean("sync_in_progress", false) &&
+            startedAt > 0L && System.currentTimeMillis() - startedAt < TimeUnit.MINUTES.toMillis(10)
+        if (!active) preferences.edit().putBoolean("sync_in_progress", false).apply()
+        return active
+    }
+    fun markSyncStarted(context: Context) {
+        prefs(context).edit().putBoolean("sync_in_progress", true)
+            .putLong("sync_started_at", System.currentTimeMillis()).apply()
+    }
     fun markSyncSuccess(context: Context) {
         prefs(context).edit().putLong("last_sync_at", System.currentTimeMillis())
-            .putBoolean("sync_in_progress", false).remove("last_sync_error").apply()
+            .putBoolean("sync_in_progress", false).remove("sync_started_at").remove("last_sync_error").apply()
     }
     fun markSyncFailure(context: Context, reason: String) {
-        prefs(context).edit().putBoolean("sync_in_progress", false)
+        prefs(context).edit().putBoolean("sync_in_progress", false).remove("sync_started_at")
             .putString("last_sync_error", reason.take(240)).apply()
     }
 }
