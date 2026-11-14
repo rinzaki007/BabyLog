@@ -385,13 +385,13 @@ private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     Text("成长曲线", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text("体重、身长和头围变化", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text(latest?.let { "\${"%.2f".format(Locale.getDefault(), it.second)} $unit" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text(latest?.let { "${"%.2f".format(Locale.getDefault(), it.second)} $unit" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
             SelectionRow(listOf("体重", "身长", "头围"), metric) { metric = it }
             SelectionRow(listOf("全部", "近 30 天", "近 90 天"), range) { range = it }
             if (points.isEmpty()) {
                 Box(Modifier.fillMaxWidth().height(128.dp), contentAlignment = Alignment.Center) {
-                    Text("还没有\${metric}数据，记录几次后就能看到变化", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Text("还没有${metric}数据，记录几次后就能看到变化", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             } else {
                 val min = (points.minOf { it.second } - if (metric == "体重") 0.3f else 1f).coerceAtLeast(0f)
@@ -413,7 +413,7 @@ private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     }
                     coords.forEach { drawCircle(Color(0xFF8874B8), radius = 4.dp.toPx(), center = it) }
                 }
-                Text("\${points.size} 次测量 · 最近记录 \${SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${points.size} 次测量 · 最近记录 ${SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text("曲线仅展示已记录的数据，不代表医学评估；建议定期测量并按医生建议解读。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -707,9 +707,9 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
     var stoolColor by remember { mutableStateOf("黄色") }
     var stoolAmount by remember { mutableStateOf("中量") }
     var sleepMinutes by remember { mutableStateOf(60f) }
-    var weightKg by remember { mutableStateOf(5f) }
-    var lengthCm by remember { mutableStateOf(55f) }
-    var headCm by remember { mutableStateOf(38f) }
+    var weightKg by remember { mutableStateOf("") }
+    var lengthCm by remember { mutableStateOf("") }
+    var headCm by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val title = when (eventType) { "FEEDING" -> "喂养记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; else -> "成长记录" }
@@ -763,20 +763,20 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                     }
                     "GROWTH" -> {
                         OutlinedTextField(
-                            value = "%.2f".format(Locale.getDefault(), weightKg),
-                            onValueChange = { raw -> raw.replace(',', '.').toFloatOrNull()?.let { weightKg = it.coerceIn(0.1f, 80f) } },
+                            value = weightKg,
+                            onValueChange = { raw -> weightKg = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("当前体重（kg）") },
                             singleLine = true
                         )
                         OutlinedTextField(
-                            value = "%.1f".format(Locale.getDefault(), lengthCm),
-                            onValueChange = { it.replace(',', '.').toFloatOrNull()?.let { v -> lengthCm = v.coerceIn(20f, 120f) } },
+                            value = lengthCm,
+                            onValueChange = { raw -> lengthCm = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
                             modifier = Modifier.fillMaxWidth(), label = { Text("身长（cm）") }, singleLine = true
                         )
                         OutlinedTextField(
-                            value = "%.1f".format(Locale.getDefault(), headCm),
-                            onValueChange = { it.replace(',', '.').toFloatOrNull()?.let { v -> headCm = v.coerceIn(20f, 70f) } },
+                            value = headCm,
+                            onValueChange = { raw -> headCm = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
                             modifier = Modifier.fillMaxWidth(), label = { Text("头围（cm）") }, singleLine = true
                         )
                     }
@@ -797,7 +797,24 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                         if (stool) payload.put("stoolShape", stoolShape).put("stoolColor", stoolColor).put("stoolAmount", stoolAmount)
                     }
                     "SLEEP" -> payload.put("durationMinutes", sleepMinutes.toInt())
-                    "GROWTH" -> payload.put("weightGrams", (weightKg * 1000).toInt()).put("lengthCm", lengthCm.toDouble()).put("headCircumferenceCm", headCm.toDouble())
+                    "GROWTH" -> {
+                        val weight = weightKg.toDoubleOrNull()
+                        val length = lengthCm.toDoubleOrNull()
+                        val head = headCm.toDoubleOrNull()
+                        if (weight == null && length == null && head == null) {
+                            error = "请至少填写一项测量数据"
+                            return@Button
+                        }
+                        if ((weight != null && weight !in 0.1..80.0) ||
+                            (length != null && length !in 20.0..120.0) ||
+                            (head != null && head !in 20.0..70.0)) {
+                            error = "请检查测量数值是否在合理范围内"
+                            return@Button
+                        }
+                        weight?.let { payload.put("weightGrams", (it * 1000).toInt()) }
+                        length?.let { payload.put("lengthCm", it) }
+                        head?.let { payload.put("headCircumferenceCm", it) }
+                    }
                 }
                 if (note.isNotBlank()) payload.put("note", note.trim())
                 onSave(eventType, payload, timestamp)
