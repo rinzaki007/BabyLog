@@ -568,12 +568,21 @@ private fun BabyProfileEditor(
                 DatePickerDialog(context, { _, y, m, d -> birthDate = LocalDate.of(y, m + 1, d) },
                     birthDate.year, birthDate.monthValue - 1, birthDate.dayOfMonth).show()
             }, modifier = Modifier.fillMaxWidth()) { Text(birthDate.toString()) }
-            Text("出生体重  ${if (birthWeight <= 0f) "未记录" else "${birthWeight.toInt()} g"}", fontWeight = FontWeight.SemiBold)
-            Slider(birthWeight, { birthWeight = it }, valueRange = 0f..5000f, steps = 99)
-            Text("出生身长  ${if (birthLength <= 0f) "未记录" else "${"%.1f".format(Locale.getDefault(), birthLength)} cm"}", fontWeight = FontWeight.SemiBold)
-            Slider(birthLength, { birthLength = it }, valueRange = 0f..60f, steps = 119)
-            Text("出生头围  ${if (birthHead <= 0f) "未记录" else "${"%.1f".format(Locale.getDefault(), birthHead)} cm"}", fontWeight = FontWeight.SemiBold)
-            Slider(birthHead, { birthHead = it }, valueRange = 0f..45f, steps = 89)
+            OutlinedTextField(
+                value = if (birthWeight <= 0f) "" else birthWeight.toInt().toString(),
+                onValueChange = { birthWeight = it.filter(Char::isDigit).toFloatOrNull()?.coerceIn(0f, 8000f) ?: 0f },
+                modifier = Modifier.fillMaxWidth(), label = { Text("出生体重（g）") }, singleLine = true
+            )
+            OutlinedTextField(
+                value = if (birthLength <= 0f) "" else "%.1f".format(Locale.getDefault(), birthLength),
+                onValueChange = { birthLength = it.replace(',', '.').toFloatOrNull()?.coerceIn(0f, 80f) ?: 0f },
+                modifier = Modifier.fillMaxWidth(), label = { Text("出生身长（cm）") }, singleLine = true
+            )
+            OutlinedTextField(
+                value = if (birthHead <= 0f) "" else "%.1f".format(Locale.getDefault(), birthHead),
+                onValueChange = { birthHead = it.replace(',', '.').toFloatOrNull()?.coerceIn(0f, 60f) ?: 0f },
+                modifier = Modifier.fillMaxWidth(), label = { Text("出生头围（cm）") }, singleLine = true
+            )
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(onClick = {
                 when {
@@ -609,18 +618,35 @@ private fun Avatar(uri: String?, size: Int) {
 @Composable
 private fun BabyProfileCard(baby: BabyEntity, onEdit: () -> Unit) {
     val birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate()
-    val days = java.time.temporal.ChronoUnit.DAYS.between(birthDate, LocalDate.now()).coerceAtLeast(0) + 1
-    Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(baby.avatarUri, 62)
-            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(baby.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("${baby.sex ?: "宝宝"} · 第 $days 天", style = MaterialTheme.typography.bodySmall)
-                Text("出生体重 ${baby.birthWeightGrams?.let { "$it g" } ?: "未记录"} · $birthDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(listOfNotNull(baby.birthLengthCm?.let { "身长 ${"%.1f".format(Locale.getDefault(), it)} cm" }, baby.birthHeadCircumferenceCm?.let { "头围 ${"%.1f".format(Locale.getDefault(), it)} cm" }).joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val today = LocalDate.now()
+    val days = java.time.temporal.ChronoUnit.DAYS.between(birthDate, today).coerceAtLeast(0) + 1
+    val months = java.time.temporal.ChronoUnit.MONTHS.between(birthDate, today).coerceAtLeast(0)
+    val ageText = if (months < 1) "第 $days 天" else "$months 个月"
+    Card(shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
+        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Avatar(baby.avatarUri, 76)
+                Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(baby.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("${baby.sex ?: "宝宝"} · $ageText", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("出生于 $birthDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(onClick = onEdit) { Text("编辑资料") }
             }
-            TextButton(onClick = onEdit) { Text("编辑") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ProfileMetric("出生体重", baby.birthWeightGrams?.let { "$it g" } ?: "未记录", Modifier.weight(1f))
+                ProfileMetric("出生身长", baby.birthLengthCm?.let { "${"%.1f".format(Locale.getDefault(), it)} cm" } ?: "未记录", Modifier.weight(1f))
+                ProfileMetric("出生头围", baby.birthHeadCircumferenceCm?.let { "${"%.1f".format(Locale.getDefault(), it)} cm" } ?: "未记录", Modifier.weight(1f))
+            }
         }
+    }
+}
+
+@Composable
+private fun ProfileMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier.background(Color.White.copy(alpha = 0.72f), RoundedCornerShape(15.dp)).padding(vertical = 10.dp, horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
