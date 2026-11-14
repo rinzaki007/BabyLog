@@ -134,7 +134,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
             bottomBar = {
                 NavigationBar(containerColor = Color.White) {
                     val destinations = listOf("首页", "记录", "趋势", "相册")
-                    val targets = listOf(0, 5, 3, 4)
+                    val targets = listOf(0, 6, 3, 5)
                     destinations.forEachIndexed { index, label ->
                         NavigationBarItem(
                             selected = selectedNav == index,
@@ -201,6 +201,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 }
                 if (baby != null) {
                     item { TodaySummary(events) }
+                    item { TrendsSummary(events) }
                     item { GrowthSection(baby, events) }
                     item {
                         BabyAlbumSection(
@@ -313,6 +314,38 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
 }
 
+
+@Composable
+private fun TrendsSummary(events: List<BabyEventEntity>) {
+    val weekStart = LocalDate.now().minusDays(6).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val recent = events.filter { it.occurredAt >= weekStart }
+    val milk = recent.filter { it.eventType == "FEEDING" }.sumOf {
+        runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0)
+    }
+    val feedCount = recent.count { it.eventType == "FEEDING" }
+    val peeCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("urine") }.getOrDefault(false) }
+    val stoolCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
+    val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf {
+        runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0)
+    }
+    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("近 7 天趋势", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("按记录自动统计", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryPill("🍼", "配方奶", "$milk ml", Modifier.weight(1f))
+                SummaryPill("🧴", "喂养次数", "$feedCount 次", Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryPill("💧", "小便", "$peeCount 次", Modifier.weight(1f))
+                SummaryPill("🌿", "大便", "$stoolCount 次", Modifier.weight(1f))
+                SummaryPill("🌙", "睡眠", if (sleepMinutes >= 60) "${sleepMinutes / 60}h" else "${sleepMinutes}m", Modifier.weight(1f))
+            }
+        }
+    }
+}
 
 @Composable
 private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
