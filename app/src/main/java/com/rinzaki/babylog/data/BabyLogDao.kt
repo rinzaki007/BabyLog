@@ -86,8 +86,11 @@ interface BabyLogDao {
     @Query("DELETE FROM sync_operations WHERE entityType = :entityType AND entityId = :entityId AND status = 'PENDING'")
     suspend fun clearPendingOperations(entityType: String, entityId: String)
 
-    @Query("SELECT EXISTS(SELECT 1 FROM sync_operations WHERE entityType = :entityType AND entityId = :entityId AND status = 'CONFLICT')")
-    suspend fun hasConflict(entityType: String, entityId: String): Boolean
+    @Query("SELECT EXISTS(SELECT 1 FROM sync_operations WHERE entityType = :entityType AND entityId = :entityId AND status IN ('PENDING', 'CONFLICT'))")
+    suspend fun hasLocalOperation(entityType: String, entityId: String): Boolean
+
+    @Query("UPDATE sync_operations SET baseVersion = :baseVersion, status = 'PENDING', error = NULL WHERE operationId = :operationId AND status = 'CONFLICT'")
+    suspend fun rebaseConflict(operationId: String, baseVersion: Long)
 
     @Query("DELETE FROM sync_operations WHERE operationId = :operationId")
     suspend fun removeOperation(operationId: String)
