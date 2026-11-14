@@ -638,89 +638,218 @@ private fun BabyAlbumSection(
     var viewingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var editingCaption by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var photoDateTime by remember { mutableStateOf(LocalDateTime.now()) }
-    val photoDateTimeLabel = remember(photoDateTime) { photoDateTime.format(DateTimeFormatter.ofPattern("MM-dd HH:mm")) }
+    val photoDateTimeLabel = remember(photoDateTime) {
+        photoDateTime.format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
+    }
     val context = LocalContext.current
     val albumScope = rememberCoroutineScope()
     var galleryMessage by remember { mutableStateOf<String?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(20)
+    ) { uris ->
         val timestamp = photoDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         uris.forEach { onAdd(it, timestamp) }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("成长相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("记录每一个值得珍藏的日子", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "共 ${photos.size} 张照片 · 按拍摄日期排列",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             Column(horizontalAlignment = Alignment.End) {
                 OutlinedButton(onClick = {
                     DatePickerDialog(context, { _, y, m, d ->
                         photoDateTime = LocalDate.of(y, m + 1, d).atTime(photoDateTime.toLocalTime())
-                        TimePickerDialog(context, { _, h, min -> photoDateTime = photoDateTime.withHour(h).withMinute(min) }, photoDateTime.hour, photoDateTime.minute, true).show()
+                        TimePickerDialog(
+                            context,
+                            { _, h, min -> photoDateTime = photoDateTime.withHour(h).withMinute(min) },
+                            photoDateTime.hour,
+                            photoDateTime.minute,
+                            true
+                        ).show()
                     }, photoDateTime.year, photoDateTime.monthValue - 1, photoDateTime.dayOfMonth).show()
-                }) { Text("时间：$photoDateTimeLabel") }
-                Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("选择照片") }
+                }) { Text("时间 $photoDateTimeLabel") }
+                Button(
+                    onClick = {
+                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+                ) { Text("＋ 添加照片") }
             }
         }
+
         if (photos.isEmpty()) {
-            Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F0))) {
-                Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F0))
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Text("📷", style = MaterialTheme.typography.headlineLarge)
                     Text("收藏宝宝的第一张成长照片", fontWeight = FontWeight.SemiBold)
-                    Text("照片会保存在本机；加入家庭同步后可共享到 NAS 相册。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "照片会保存在本机；加入家庭同步后可共享到 NAS 家庭相册。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         } else {
             val grouped = photos.sortedByDescending { it.takenAt }.groupBy {
-                SimpleDateFormat("yyyy年M月", Locale.getDefault()).format(Date(it.takenAt))
+                SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(it.takenAt))
             }
-            grouped.forEach { (month, monthPhotos) ->
-                Text(month, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                monthPhotos.chunked(2).forEach { pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        pair.forEach { photo ->
-                            AlbumPhotoCard(photo, onClick = { viewingPhoto = photo }, onEdit = { editingCaption = photo }, onDelete = { deletingPhoto = photo }, onSaveGallery = { albumScope.launch { galleryMessage = runCatching { withContext(Dispatchers.IO) { savePhotoToGallery(context, photo.localPath) }; "已保存到手机相册" }.getOrElse { "保存失败：${it.message}" } } }, modifier = Modifier.weight(1f))
+            grouped.forEach { (day, dayPhotos) ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(day, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "${dayPhotos.size} 张",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    dayPhotos.chunked(3).forEach { rowPhotos ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
+                            rowPhotos.forEach { photo ->
+                                AlbumPhotoCard(
+                                    photo = photo,
+                                    onClick = {
+                                        viewingPhoto = photo
+                                        galleryMessage = null
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            repeat(3 - rowPhotos.size) { Spacer(Modifier.weight(1f)) }
                         }
-                        if (pair.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
         }
     }
+
     viewingPhoto?.let { photo ->
         Dialog(onDismissRequest = { viewingPhoto = null }) {
-            Surface(shape = RoundedCornerShape(24.dp), color = Color.Black, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF211E25),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
-                        value = withContext(Dispatchers.IO) { runCatching { decodeSampledPhoto(photo.localPath, 900, 900) }.getOrNull() }
-                    }
-                    if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = "照片预览", modifier = Modifier.fillMaxWidth().height(420.dp), contentScale = ContentScale.Fit)
-                    Text(SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault()).format(Date(photo.takenAt)), color = Color.White)
-                    galleryMessage?.let { Text(it, color = Color.White, style = MaterialTheme.typography.bodySmall) }
-                    OutlinedButton(onClick = {
-                        albumScope.launch {
-                            galleryMessage = runCatching { withContext(Dispatchers.IO) { savePhotoToGallery(context, photo.localPath) }; "已保存到手机相册" }.getOrElse { "保存失败：${it.message}" }
+                        value = withContext(Dispatchers.IO) {
+                            runCatching { decodeSampledPhoto(photo.localPath, 1200, 1600) }.getOrNull()
                         }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("保存到手机相册") }
-                    if (!photo.caption.isNullOrBlank()) Text(photo.caption!!, color = Color.White)
-                    TextButton(onClick = { viewingPhoto = null }, modifier = Modifier.align(Alignment.End)) { Text("关闭", color = Color.White) }
+                    }
+                    if (bitmap != null) {
+                        Image(
+                            bitmap!!.asImageBitmap(),
+                            contentDescription = "宝宝照片大图",
+                            modifier = Modifier.fillMaxWidth().height(430.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        Box(
+                            Modifier.fillMaxWidth().height(240.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("照片暂时无法读取", color = Color.White)
+                        }
+                    }
+                    Text(
+                        SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault()).format(Date(photo.takenAt)),
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        photo.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注",
+                        color = Color(0xFFD8D1DE),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    galleryMessage?.let {
+                        Text(it, color = Color(0xFFD8D1DE), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = {
+                            editingCaption = photo
+                            viewingPhoto = null
+                        }) { Text("编辑备注", color = Color.White) }
+                        TextButton(onClick = {
+                            albumScope.launch {
+                                galleryMessage = runCatching {
+                                    withContext(Dispatchers.IO) { savePhotoToGallery(context, photo.localPath) }
+                                    "已保存到手机相册"
+                                }.getOrElse { "保存失败：${it.message}" }
+                            }
+                        }) { Text("保存到手机", color = Color.White) }
+                        TextButton(onClick = { deletingPhoto = photo; viewingPhoto = null }) {
+                            Text("删除", color = Color(0xFFFFA99F))
+                        }
+                    }
+                    TextButton(
+                        onClick = { viewingPhoto = null },
+                        modifier = Modifier.align(Alignment.End)
+                    ) { Text("关闭", color = Color.White) }
                 }
             }
         }
     }
+
     editingCaption?.let { photo ->
         var caption by remember(photo.id) { mutableStateOf(photo.caption.orEmpty()) }
-        AlertDialog(onDismissRequest = { editingCaption = null }, title = { Text("照片备注") },
-            text = { OutlinedTextField(caption, { caption = it.take(120) }, modifier = Modifier.fillMaxWidth(), label = { Text("写下这张照片的故事") }) },
-            confirmButton = { TextButton(onClick = { onCaption(photo, caption.trim()); editingCaption = null }) { Text("保存") } },
-            dismissButton = { TextButton(onClick = { editingCaption = null }) { Text("取消") } })
+        AlertDialog(
+            onDismissRequest = { editingCaption = null },
+            title = { Text("照片备注") },
+            text = {
+                OutlinedTextField(
+                    caption,
+                    { caption = it.take(120) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("写下这张照片的故事") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onCaption(photo, caption.trim())
+                    editingCaption = null
+                }) { Text("保存") }
+            },
+            dismissButton = { TextButton(onClick = { editingCaption = null }) { Text("取消") } }
+        )
     }
+
     deletingPhoto?.let { photo ->
         AlertDialog(
             onDismissRequest = { deletingPhoto = null },
             title = { Text("删除这张照片？") },
-            text = { Text("照片会从本机相册移除；如果已加入家庭同步，也会从 NAS 家庭相册中删除。") },
-            confirmButton = { TextButton(onClick = { onDelete(photo); deletingPhoto = null }) { Text("删除") } },
+            text = {
+                Text("照片会从本机相册移除；如果已加入家庭同步，也会从 NAS 家庭相册中删除。")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete(photo)
+                    deletingPhoto = null
+                }) { Text("删除") }
+            },
             dismissButton = { TextButton(onClick = { deletingPhoto = null }) { Text("取消") } }
         )
     }
@@ -762,32 +891,46 @@ private fun decodeSampledPhoto(path: String, reqWidth: Int, reqHeight: Int): and
 private fun AlbumPhotoCard(
     photo: BabyPhotoEntity,
     onClick: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onSaveGallery: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
-        value = withContext(Dispatchers.IO) { runCatching { decodeSampledPhoto(photo.localPath, 320, 320) }.getOrNull() }
+        value = withContext(Dispatchers.IO) {
+            runCatching { decodeSampledPhoto(photo.localPath, 360, 360) }.getOrNull()
+        }
     }
-    Card(modifier = modifier.clickable(onClick = onClick), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column {
-            if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = "宝宝照片", modifier = Modifier.fillMaxWidth().height(132.dp), contentScale = ContentScale.Crop)
-            else Box(Modifier.fillMaxWidth().height(132.dp).background(Color(0xFFF2EDF7)), contentAlignment = Alignment.Center) { Text("📷") }
-            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(SimpleDateFormat("MM月dd日", Locale.getDefault()).format(Date(photo.takenAt)), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
-                Text(photo.caption?.takeIf { it.isNotBlank() } ?: "添加照片备注", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                Row {
-                    TextButton(onClick = onEdit) { Text("备注") }
-                    TextButton(onClick = onSaveGallery) { Text("保存") }
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
+    Card(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))
+    ) {
+        Box(Modifier.fillMaxWidth().height(116.dp)) {
+            if (bitmap != null) {
+                Image(
+                    bitmap!!.asImageBitmap(),
+                    contentDescription = "宝宝照片缩略图",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("📷", style = MaterialTheme.typography.titleLarge)
                 }
+            }
+            Box(
+                Modifier.align(Alignment.BottomEnd)
+                    .padding(5.dp)
+                    .background(Color.Black.copy(alpha = 0.58f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 5.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(photo.takenAt)),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
         }
     }
 }
-
 @Composable
 private fun BabyProfileEditor(
     existing: BabyEntity?,
