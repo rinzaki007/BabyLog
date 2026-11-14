@@ -117,13 +117,13 @@ internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDo
             item.vaccineName.startsWith("Hib") -> name.contains("hib") || name.contains("流感嗜血杆菌")
             item.vaccineName.contains("肺炎球菌") -> name.contains("肺炎球菌") && (!item.vaccineName.contains("13 价") || name.contains("13价") || name.contains("13价肺炎"))
             item.vaccineName.contains("轮状病毒") -> name.contains("轮状病毒")
-            item.vaccineName.contains("EV71") -> name.contains("ev71") || name.contains("手足口")
+            item.vaccineName.contains("EV71") -> name.contains("ev71") || name.contains("手足口") || name.contains("肠道病毒71")
             item.vaccineName.contains("水痘") -> name.contains("水痘")
             item.vaccineName.contains("流感") -> name.contains("流感")
             else -> name.contains(target) || target.contains(name)
         }
     }
-    val expectedDose = doseNumber(item.dose) ?: return false
+    val expectedDose = doseNumber(item.dose) ?: return matches.isNotEmpty()
     val explicitDoses = matches.mapNotNull { doseNumber(it.second) }.toSet()
     return expectedDose in explicitDoses || (explicitDoses.isEmpty() && matches.size >= expectedDose)
 }
