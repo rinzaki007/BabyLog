@@ -140,6 +140,10 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
             raise HTTPException(422,"快照包含不支持的数据类型或操作")
         if key in seen:
             raise HTTPException(422,"快照中存在重复数据")
+        try:
+            uuid.UUID(item.entity_id)
+        except ValueError:
+            raise HTTPException(422,"快照包含无效的数据 ID")
         seen.add(key)
     now=int(time.time())
     with connect() as db:
@@ -182,12 +186,14 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
             changes_to_append.append((entity_type,entity_id,"delete",payload,version))
             if entity_type=="photo":
                 db.execute("DELETE FROM photos WHERE id=? AND family_id=?",(entity_id,body.family_id))
+        versions=[]
         for entity_type,entity_id,operation,payload,version in changes_to_append:
             operation_id="snapshot:"+str(uuid.uuid4())
             change_payload=json.dumps({"operation":operation,"payload":payload},ensure_ascii=False,separators=(",",":"))
             db.execute("INSERT INTO changes(family_id,entity_type,entity_id,operation_id,payload,version,created_at) VALUES (?,?,?,?,?,?,?)",(body.family_id,entity_type,entity_id,operation_id,change_payload,version,now))
+            versions.append({"entity_type":entity_type,"entity_id":entity_id,"version":version,"operation":operation})
         latest=db.execute("SELECT COALESCE(MAX(seq),0) AS cursor FROM changes WHERE family_id=?",(body.family_id,)).fetchone()["cursor"]
-    return {"replaced":True,"items":len(body.items),"changes":len(changes_to_append),"cursor":latest}
+    return {"replaced":True,"items":len(body.items),"changes":len(changes_to_append),"cursor":latest,"versions":versions}
 
 @app.get("/api/sync/pull")
 def pull(family_id:str,cursor:int=0,limit:int=500,uid:str=Depends(current_user)):
