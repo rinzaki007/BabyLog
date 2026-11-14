@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.data.BabyLogDao
 import com.rinzaki.babylog.data.SyncOperationEntity
@@ -84,7 +85,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 ) { Text("保存服务器地址") }
 
                 OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("邮箱") }, singleLine = true)
-                OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("密码（至少 10 位）") }, singleLine = true)
+                OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("密码（至少 10 位）") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
                 Text("账号", fontWeight = FontWeight.SemiBold)
                 OutlinedButton(
                     onClick = {

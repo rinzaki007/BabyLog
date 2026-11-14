@@ -29,6 +29,9 @@ interface BabyLogDao {
     @Query("SELECT * FROM baby_events WHERE id = :eventId LIMIT 1")
     suspend fun getEvent(eventId: String): BabyEventEntity?
 
+    @Query("SELECT * FROM babies WHERE id = :babyId LIMIT 1")
+    suspend fun getBaby(babyId: String): BabyEntity?
+
     @Query("SELECT * FROM babies")
     suspend fun getAllBabies(): List<BabyEntity>
 

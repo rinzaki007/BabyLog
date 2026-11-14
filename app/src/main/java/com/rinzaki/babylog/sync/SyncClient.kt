@@ -161,7 +161,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                     createdAt = payload.optLong("createdAt"),
                     updatedAt = payload.optLong("updatedAt"),
                     sex = payload.optString("sex").takeIf { it.isNotBlank() && it != "null" },
-                    avatarUri = payload.optString("avatarUri").takeIf { it.isNotBlank() && it != "null" },
+                    avatarUri = dao.getBaby(id)?.avatarUri,
                     birthWeightGrams = if (payload.isNull("birthWeightGrams")) null else payload.optInt("birthWeightGrams"),
                     birthLengthCm = if (payload.isNull("birthLengthCm")) null else payload.optDouble("birthLengthCm"),
                     birthHeadCircumferenceCm = if (payload.isNull("birthHeadCircumferenceCm")) null else payload.optDouble("birthHeadCircumferenceCm"),
@@ -202,7 +202,7 @@ private object RoomAccess {
 fun babySyncPayload(baby: BabyEntity): JSONObject = JSONObject()
     .put("id", baby.id).put("familyId", baby.familyId).put("displayName", baby.displayName)
     .put("birthTime", baby.birthTime).put("createdAt", baby.createdAt).put("updatedAt", baby.updatedAt)
-    .put("sex", baby.sex).put("avatarUri", baby.avatarUri)
+    .put("sex", baby.sex)
     .put("birthWeightGrams", baby.birthWeightGrams)
     .put("birthLengthCm", baby.birthLengthCm)
     .put("birthHeadCircumferenceCm", baby.birthHeadCircumferenceCm)
