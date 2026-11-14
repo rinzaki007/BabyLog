@@ -67,6 +67,73 @@ object SyncHttp {
         }
     }
 
+    fun uploadAvatar(base: String, familyId: String, babyId: String, token: String, file: File) {
+        val boundary = "BabyLogAvatar-${java.util.UUID.randomUUID()}"
+        val connection = (URL(base.trimEnd('/') + "/api/babies/$babyId/avatar?family_id=$familyId").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 60000
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $token")
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            setChunkedStreamingMode(64 * 1024)
+        }
+        try {
+            DataOutputStream(connection.outputStream).use { output ->
+                output.writeBytes("--$boundary\\r\\n")
+                output.writeBytes("Content-Disposition: form-data; name=" + 34.toChar() + "file" + 34.toChar() + "; filename=" + 34.toChar() + "avatar.jpg" + 34.toChar() + "\\r\\n")
+                output.writeBytes("Content-Type: image/jpeg\\r\\n\\r\\n")
+                file.inputStream().use { it.copyTo(output) }
+                output.writeBytes("\\r\\n--$boundary--\\r\\n")
+            }
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                val response = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                throw SyncHttpException(code, "头像上传失败 HTTP $code: $response")
+            }
+        } finally { connection.disconnect() }
+    }
+
+    fun downloadAvatar(base: String, familyId: String, babyId: String, token: String, destination: File) {
+        val connection = (URL(base.trimEnd('/') + "/api/babies/$babyId/avatar?family_id=$familyId").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 60000
+            setRequestProperty("Authorization", "Bearer $token")
+        }
+        try {
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                val response = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                throw SyncHttpException(code, "头像下载失败 HTTP $code: $response")
+            }
+            destination.parentFile?.mkdirs()
+            val temp = File(destination.parentFile, destination.name + ".part")
+            try {
+                connection.inputStream.use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
+                if (temp.length() <= 0L) throw java.io.IOException("头像下载内容为空")
+                if (destination.exists() && !destination.delete()) throw java.io.IOException("无法替换旧头像")
+                if (!temp.renameTo(destination)) throw java.io.IOException("无法保存头像")
+            } catch (error: Exception) {
+                temp.delete()
+                throw error
+            }
+        } finally { connection.disconnect() }
+    }
+
+    fun deleteAvatar(base: String, familyId: String, babyId: String, token: String) {
+        val connection = (URL(base.trimEnd('/') + "/api/babies/$babyId/avatar?family_id=$familyId").openConnection() as HttpURLConnection).apply {
+            requestMethod = "DELETE"
+            connectTimeout = 12000
+            readTimeout = 20000
+            setRequestProperty("Authorization", "Bearer $token")
+        }
+        try {
+            val code = connection.responseCode
+            if (code !in 200..299) throw SyncHttpException(code, "头像删除失败 HTTP $code")
+        } finally { connection.disconnect() }
+    }
+
     fun uploadPhoto(base: String, familyId: String, photoId: String, token: String, file: File, mimeType: String) {
         val boundary = "BabyLog-${java.util.UUID.randomUUID()}"
         val connection = (URL(base.trimEnd('/') + "/api/photos/upload?family_id=$familyId&photo_id=$photoId").openConnection() as HttpURLConnection).apply {
@@ -155,6 +222,17 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 if (pending.isEmpty()) break
                 val changes = JSONArray()
                 pending.forEach { operation ->
+                    if (operation.entityType == "baby" && operation.operation == "upsert") {
+                        val baby = dao.getBaby(operation.entityId)
+                        if (baby != null) {
+                            val avatarFile = baby.avatarUri?.let { File(it) }
+                            if (avatarFile != null && avatarFile.isFile) {
+                                SyncHttp.uploadAvatar(base, familyId, baby.id, token, avatarFile)
+                            } else {
+                                SyncHttp.deleteAvatar(base, familyId, baby.id, token)
+                            }
+                        }
+                    }
                     if (operation.entityType == "photo" && operation.operation == "upsert") {
                         val photo = dao.getPhoto(operation.entityId)
                         if (photo == null) {
@@ -270,7 +348,15 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                     createdAt = payload.optLong("createdAt"),
                     updatedAt = payload.optLong("updatedAt"),
                     sex = payload.optString("sex").takeIf { it.isNotBlank() && it != "null" },
-                    avatarUri = dao.getBaby(id)?.avatarUri,
+                    avatarUri = if (payload.optBoolean("hasAvatar", false)) {
+                        val avatarFile = File(applicationContext.filesDir, "baby_avatars/$id.jpg")
+                        SyncHttp.downloadAvatar(SyncPreferences.server(applicationContext), familyId, id,
+                            SyncPreferences.token(applicationContext), avatarFile)
+                        avatarFile.absolutePath
+                    } else {
+                        File(applicationContext.filesDir, "baby_avatars/$id.jpg").delete()
+                        null
+                    },
                     birthWeightGrams = if (payload.isNull("birthWeightGrams")) null else payload.optInt("birthWeightGrams"),
                     birthLengthCm = if (payload.isNull("birthLengthCm")) null else payload.optDouble("birthLengthCm"),
                     birthHeadCircumferenceCm = if (payload.isNull("birthHeadCircumferenceCm")) null else payload.optDouble("birthHeadCircumferenceCm"),
@@ -359,6 +445,7 @@ fun babySyncPayload(baby: BabyEntity): JSONObject = JSONObject()
     .put("id", baby.id).put("familyId", baby.familyId).put("displayName", baby.displayName)
     .put("birthTime", baby.birthTime).put("createdAt", baby.createdAt).put("updatedAt", baby.updatedAt)
     .put("sex", baby.sex)
+    .put("hasAvatar", !baby.avatarUri.isNullOrBlank())
     .put("birthWeightGrams", baby.birthWeightGrams)
     .put("birthLengthCm", baby.birthLengthCm)
     .put("birthHeadCircumferenceCm", baby.birthHeadCircumferenceCm)
