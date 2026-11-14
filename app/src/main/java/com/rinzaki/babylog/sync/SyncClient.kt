@@ -307,8 +307,25 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                     val target = if (localFile != null && localFile.isFile && existing?.serverVersion == version) localFile
                         else File(applicationContext.filesDir, "baby_album/$id$extension")
                     if (localFile == null || !localFile.isFile || existing?.serverVersion != version) {
-                        SyncHttp.downloadPhoto(SyncPreferences.server(applicationContext), familyId, id,
-                            SyncPreferences.token(applicationContext), target)
+                        try {
+                            SyncHttp.downloadPhoto(SyncPreferences.server(applicationContext), familyId, id,
+                                SyncPreferences.token(applicationContext), target)
+                        } catch (error: SyncHttpException) {
+                            // The server may retain an old photo-upsert change after its
+                            // photo row/file has disappeared (for example after a restore
+                            // or an incomplete historical sync). Treat only 404 as a
+                            // missing remote photo, record its tombstone locally, and
+                            // continue pulling later changes instead of retrying forever.
+                            if (error.statusCode == 404) {
+                                dao.softDeletePhotoFromServer(
+                                    id,
+                                    item.optLong("created_at", System.currentTimeMillis() / 1000L) * 1000L,
+                                    version
+                                )
+                                return
+                            }
+                            throw error
+                        }
                     }
                     dao.upsertPhoto(BabyPhotoEntity(
                         id = id,
