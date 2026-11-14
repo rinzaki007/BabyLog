@@ -193,12 +193,14 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             val now = System.currentTimeMillis()
                             val birthTime = birthDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
                             scope.launch {
+                                val babyId = baby?.id ?: UUID.randomUUID().toString()
+                                val savedAvatar = persistBabyAvatar(appContext, avatar, babyId)
                                 val updatedBaby = BabyEntity(
-                                    id = baby?.id ?: UUID.randomUUID().toString(),
+                                    id = babyId,
                                     familyId = SyncPreferences.familyId(appContext).ifBlank { baby?.familyId ?: "00000000-0000-0000-0000-000000000000" },
                                     displayName = name.trim(), birthTime = birthTime,
                                     createdAt = baby?.createdAt ?: now, updatedAt = now,
-                                    sex = sex, avatarUri = avatar, birthWeightGrams = weight,
+                                    sex = sex, avatarUri = savedAvatar, birthWeightGrams = weight,
                                     birthLengthCm = length, birthHeadCircumferenceCm = head,
                                     serverVersion = baby?.serverVersion
                                 )
@@ -947,11 +949,8 @@ private fun BabyProfileEditor(
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            avatar = uri.toString()
-        }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) avatar = uri.toString()
     }
     Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
@@ -962,7 +961,9 @@ private fun BabyProfileEditor(
                     Text("宝宝头像", fontWeight = FontWeight.SemiBold)
                     Text("选择一张照片作为档案头像", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                OutlinedButton(onClick = { picker.launch(arrayOf("image/*")) }) { Text("上传图片") }
+                OutlinedButton(onClick = {
+                    picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) { Text("从相册选择") }
             }
             OutlinedTextField(name, { name = it.take(30) }, Modifier.fillMaxWidth(), label = { Text("宝宝昵称") }, singleLine = true)
             Text("性别", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
@@ -1006,11 +1007,37 @@ private fun BabyProfileEditor(
 }
 
 @Composable
+private suspend fun persistBabyAvatar(context: android.content.Context, source: String?, babyId: String): String? {
+    if (source.isNullOrBlank()) return null
+    val existing = File(source)
+    if (existing.isFile) return existing.absolutePath
+    val parsed = runCatching { android.net.Uri.parse(source) }.getOrNull() ?: return null
+    val bitmap = withContext(Dispatchers.IO) {
+        runCatching {
+            context.contentResolver.openInputStream(parsed)?.use { BitmapFactory.decodeStream(it) }
+        }.getOrNull()
+    } ?: return null
+    return withContext(Dispatchers.IO) {
+        val directory = File(context.filesDir, "baby_avatars").apply { mkdirs() }
+        val destination = File(directory, "$babyId.jpg")
+        destination.outputStream().use { output ->
+            if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, output)) {
+                throw java.io.IOException("头像压缩失败")
+            }
+        }
+        bitmap.recycle()
+        destination.absolutePath
+    }
+}
+
+@Composable
 private fun Avatar(uri: String?, size: Int) {
     val context = LocalContext.current
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, uri) {
         value = if (uri.isNullOrBlank()) null else withContext(Dispatchers.IO) {
-            runCatching { context.contentResolver.openInputStream(android.net.Uri.parse(uri))?.use { BitmapFactory.decodeStream(it) } }.getOrNull()
+            val file = File(uri)
+            if (file.isFile) file.inputStream().use { BitmapFactory.decodeStream(it) }
+            else context.contentResolver.openInputStream(android.net.Uri.parse(uri))?.use { BitmapFactory.decodeStream(it) }
         }
     }
     Surface(shape = CircleShape, color = Color(0xFFEDE7F6), modifier = Modifier.size(size.dp)) {
