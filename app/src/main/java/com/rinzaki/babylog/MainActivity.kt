@@ -9,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.room.Room
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
+import com.rinzaki.babylog.data.BabyPhotoEntity
 import com.rinzaki.babylog.data.BabyLogDao
 import com.rinzaki.babylog.data.BabyLogDatabase
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +74,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.io.File
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
 
 private val WarmColors = lightColorScheme(
     primary = Color(0xFF7564A8), onPrimary = Color.White,
@@ -84,7 +90,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         database = Room.databaseBuilder(applicationContext, BabyLogDatabase::class.java, "babylog.db")
-            .addMigrations(BabyLogDatabase.MIGRATION_1_2).build()
+            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3).build()
         setContent { BabyLogApp(database.babyLogDao()) }
     }
     override fun onDestroy() {
@@ -99,6 +105,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val baby = babies.firstOrNull()
     val eventsFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observeEvents(baby.id) }
     val events by eventsFlow.collectAsState(initial = emptyList())
+    val photosFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observePhotos(baby.id) }
+    val photos by photosFlow.collectAsState(initial = emptyList())
     var editingProfile by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -138,6 +146,22 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 }
                 if (baby != null) {
                     item { TodaySummary(events) }
+                    item { GrowthSection(baby, events) }
+                    item { BabyAlbumSection(baby, photos) { uri ->
+                        scope.launch {
+                            runCatching {
+                                val folder = File(applicationContext.filesDir, "baby_album").apply { mkdirs() }
+                                val destination = File(folder, "${UUID.randomUUID()}.jpg")
+                                withContext(Dispatchers.IO) {
+                                    applicationContext.contentResolver.openInputStream(uri)?.use { input ->
+                                        destination.outputStream().use { output -> input.copyTo(output) }
+                                    } ?: error("无法读取所选照片")
+                                }
+                                val now = System.currentTimeMillis()
+                                dao.upsertPhoto(BabyPhotoEntity(UUID.randomUUID().toString(), baby.id, destination.absolutePath, null, now, now, now))
+                            }
+                        }
+                    } }
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("快捷记录", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -172,7 +196,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         EventCard(event) { scope.launch { dao.softDeleteEvent(event.id, System.currentTimeMillis()) } }
                     }
                 } else item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                item { Text("本地优先保存 · 家庭共享与云同步将在后续版本接入", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                item { Text("照片与记录目前保存在本机 · 家庭共享与云同步将在后续阶段接入", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }
@@ -183,6 +207,113 @@ private fun BabyLogApp(dao: BabyLogDao) {
             scope.launch {
                 dao.upsertEvent(BabyEventEntity(UUID.randomUUID().toString(), baby.id, type, occurredAt, payload.toString(), null, now))
                 addingEvent = null
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
+    val points = events.filter { it.eventType == "GROWTH" }.mapNotNull { event ->
+        val grams = runCatching { JSONObject(event.payloadJson).optInt("weightGrams") }.getOrDefault(0)
+        if (grams > 0) event.occurredAt to grams / 1000f else null
+    }.sortedBy { it.first }
+    val latest = points.lastOrNull()
+    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("成长曲线", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("体重变化记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(latest?.let { "${"%.2f".format(Locale.getDefault(), it.second)} kg" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+            if (points.isEmpty()) {
+                Box(Modifier.fillMaxWidth().height(112.dp), contentAlignment = Alignment.Center) {
+                    Text("记录几次体重后，这里就会出现成长曲线", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            } else {
+                val min = (points.minOf { it.second } - 0.3f).coerceAtLeast(0f)
+                val max = points.maxOf { it.second } + 0.3f
+                Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+                    val left = 12f
+                    val right = size.width - 12f
+                    val top = 12f
+                    val bottom = size.height - 12f
+                    repeat(4) { i ->
+                        val y = top + (bottom - top) * i / 3f
+                        drawLine(Color(0xFFEDE7F6), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
+                    }
+                    val span = (max - min).coerceAtLeast(0.1f)
+                    val coords = points.mapIndexed { index, point ->
+                        val x = if (points.size == 1) (left + right) / 2f else left + (right - left) * index / (points.size - 1)
+                        val y = bottom - (point.second - min) / span * (bottom - top)
+                        Offset(x, y)
+                    }
+                    if (coords.size > 1) {
+                        val path = Path().apply {
+                            moveTo(coords.first().x, coords.first().y)
+                            coords.drop(1).forEach { lineTo(it.x, it.y) }
+                        }
+                        drawPath(path, Color(0xFF8874B8), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
+                    }
+                    coords.forEach { drawCircle(Color(0xFF8874B8), radius = 4.dp.toPx(), center = it) }
+                }
+                Text("${points.size} 次测量 · 最近记录 ${SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("曲线仅展示已记录的数据，不代表医学评估。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun BabyAlbumSection(baby: BabyEntity, photos: List<BabyPhotoEntity>, onAdd: (android.net.Uri) -> Unit) {
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) onAdd(uri)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("成长相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("记录每一个值得珍藏的日子", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Button(onClick = { picker.launch(arrayOf("image/*")) }) { Text("添加照片") }
+        }
+        if (photos.isEmpty()) {
+            Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F0))) {
+                Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("📷", style = MaterialTheme.typography.headlineLarge)
+                    Text("收藏宝宝的第一张成长照片", fontWeight = FontWeight.SemiBold)
+                    Text("照片按拍摄记录时间排列，后续可同步到家庭相册。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else {
+            photos.forEach { photo ->
+                val day = (java.time.temporal.ChronoUnit.DAYS.between(
+                    java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(),
+                    java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
+                ) + 1).coerceAtLeast(1)
+                val milestone = when (day) { 1L -> "初见"; 7L -> "第一周"; 30L -> "满月"; 100L -> "百日"; 180L -> "半岁"; 365L -> "一周岁"; else -> "第 ${day} 天" }
+                AlbumPhotoCard(photo, milestone)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumPhotoCard(photo: BabyPhotoEntity, milestone: String) {
+    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
+        value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(photo.localPath) }.getOrNull() }
+    }
+    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = milestone, modifier = Modifier.size(104.dp))
+            else Box(Modifier.size(104.dp).background(Color(0xFFF2EDF7), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Text("📷") }
+            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(milestone, fontWeight = FontWeight.Bold)
+                Text(SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()).format(Date(photo.takenAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("成长瞬间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
         }
     }
