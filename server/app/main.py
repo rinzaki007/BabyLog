@@ -74,7 +74,16 @@ def login(body:Credentials):
     return {"access_token":issue_token(user["id"]),"token_type":"bearer","user_id":user["id"]}
 @app.get("/api/me")
 def me(uid:str=Depends(current_user)):
-    with connect() as db: rows=db.execute("SELECT f.id,f.name,m.role FROM families f JOIN family_members m ON m.family_id=f.id WHERE m.user_id=?",(uid,)).fetchall()
+    # Provision a default data space for legacy accounts on first profile lookup.
+    # Every device logging into the same account will reuse this family ID.
+    with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        rows=db.execute("SELECT f.id,f.name,m.role FROM families f JOIN family_members m ON m.family_id=f.id WHERE m.user_id=? ORDER BY m.joined_at,f.created_at",(uid,)).fetchall()
+        if not rows:
+            fid=str(uuid.uuid4()); now=int(time.time())
+            db.execute("INSERT INTO families VALUES (?,?,?)",(fid,"我的家庭",now))
+            db.execute("INSERT INTO family_members VALUES (?,?,?,?)",(fid,uid,"owner",now))
+            rows=db.execute("SELECT f.id,f.name,m.role FROM families f JOIN family_members m ON m.family_id=f.id WHERE m.user_id=? ORDER BY m.joined_at,f.created_at",(uid,)).fetchall()
     return {"user_id":uid,"families":[dict(r) for r in rows]}
 @app.post("/api/families")
 def create_family(body:FamilyCreate,uid:str=Depends(current_user)):

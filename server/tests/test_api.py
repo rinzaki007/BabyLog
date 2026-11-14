@@ -273,3 +273,22 @@ def test_owner_authoritative_snapshot_replaces_family_records(client):
     assert latest[("baby", baby_id)]["payload"]["displayName"] == "第一台手机"
     assert latest[("event", old_event_id)]["operation"] == "delete"
     assert latest[("event", new_event_id)]["payload"]["amountMl"] == 120
+
+
+def test_same_account_devices_resolve_to_one_automatic_family(client):
+    token = register(client, "same-account@example.test")
+
+    first = client.get("/api/me", headers=auth(token))
+    assert first.status_code == 200
+    first_families = first.json()["families"]
+    assert len(first_families) == 1
+    family_id = first_families[0]["id"]
+
+    login = client.post("/api/auth/login", json={
+        "email": "same-account@example.test", "password": "correct-horse-battery"
+    })
+    assert login.status_code == 200
+    second = client.get("/api/me", headers=auth(login.json()["access_token"]))
+    assert second.status_code == 200
+    assert len(second.json()["families"]) == 1
+    assert second.json()["families"][0]["id"] == family_id
