@@ -131,7 +131,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var showSyncSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
+    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
     val vaccineEvents = events.filter { it.eventType == "VACCINE" }
@@ -155,7 +155,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     destinations.forEachIndexed { index, label ->
                         NavigationBarItem(
                             selected = selectedNav == index,
-                            onClick = { selectedNav = index; scope.launch { listState.scrollToItem(0) } },
+                            onClick = { selectedNav = index },
                             icon = { Text(listOf("⌂", "＋", "✚", "⌁", "▦")[index], style = MaterialTheme.typography.titleLarge) },
                             label = { Text(label) }
                         )
@@ -164,7 +164,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
             }
         ) { scaffoldPadding ->
             LazyColumn(
-                state = listState,
+                state = pageListStates[selectedNav],
                 modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
                 contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 36.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
