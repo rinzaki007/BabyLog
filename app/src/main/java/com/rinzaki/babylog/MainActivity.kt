@@ -180,18 +180,44 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (selectedNav == 0) item {
-                    Column {
-                        Text("BABYLOG", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        Text("成长的每一天", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        Text("把细碎日常，变成温柔的回忆", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(if (SyncPreferences.familyId(appContext).isBlank()) "离线模式 · 本机安全保存" else "家庭同步已连接", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                                Text(if (lastSyncAt > 0L) "最近成功同步 " + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt)) else "尚未同步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                if (!syncError.isNullOrBlank()) Text("同步提示：" + syncError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                Text("BABYLOG", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                Text("成长的每一天", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(onClick = { showSyncSettings = true }, contentPadding = PaddingValues(horizontal = 13.dp, vertical = 7.dp)) {
+                                Text("⚙ 设置")
                             }
                         }
-                        OutlinedButton(onClick = { showSyncSettings = true }) { Text("家庭同步设置") }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                if (SyncPreferences.familyId(appContext).isBlank()) "● 离线保存" else "● 家庭同步已连接",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                if (lastSyncAt > 0L) "最近同步 " + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt)) else "尚未同步",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (!syncError.isNullOrBlank()) Text("同步提示：" + syncError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                if (selectedNav == 0 && baby != null) item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("快捷记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ActionCard("🍼", "喂养", "配方奶 · ml", Modifier.weight(1f)) { addingEvent = "FEEDING" }
+                            ActionCard("🌿", "大小便", "护理情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
+                            ActionCard("📏", "成长测量", "体重身长", Modifier.weight(1f)) { addingEvent = "GROWTH" }
+                        }
                     }
                 }
                 if (selectedNav == 0) item {
@@ -224,20 +250,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 }
                 if (baby != null) {
                     if (selectedNav == 0) item { TodaySummary(normalEvents) }
-                    if (selectedNav == 0) item {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("快捷记录", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionCard("🍼", "喂养", "奶量与时间", Modifier.weight(1f)) { addingEvent = "FEEDING" }
-                                ActionCard("🌿", "日常护理", "大小便情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
-                                ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionCard("📏", "成长记录", "体重变化", Modifier.weight(1f)) { addingEvent = "GROWTH" }
-                                Spacer(Modifier.weight(2f))
-                            }
-                        }
-                    }
+
                     if (selectedNav == 3) item { TrendsSummary(normalEvents) }
                     if (selectedNav == 3) item { GrowthSection(baby, normalEvents) }
                     if (selectedNav == 4) item {
