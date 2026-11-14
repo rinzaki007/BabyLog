@@ -16,7 +16,8 @@ data class BabyEntity(
     val avatarUri: String? = null,
     val birthWeightGrams: Int? = null,
     val birthLengthCm: Double? = null,
-    val birthHeadCircumferenceCm: Double? = null
+    val birthHeadCircumferenceCm: Double? = null,
+    val serverVersion: Long? = null
 )
 
 @Entity(
@@ -51,4 +52,17 @@ data class BabyPhotoEntity(
     val syncStatus: String = "PENDING",
     val remotePath: String? = null,
     val deletedAt: Long? = null
+)
+
+@Entity(tableName = "sync_operations", indices = [Index("createdAt"), Index("status")])
+data class SyncOperationEntity(
+    @PrimaryKey val operationId: String,
+    val entityType: String,
+    val entityId: String,
+    val operation: String,
+    val payloadJson: String,
+    val baseVersion: Long?,
+    val createdAt: Long,
+    val status: String = "PENDING",
+    val error: String? = null
 )

@@ -22,12 +22,46 @@ interface BabyLogDao {
 
     @Query("UPDATE baby_events SET deletedAt = :deletedAt, updatedAt = :deletedAt, syncStatus = 'PENDING' WHERE id = :eventId")
     suspend fun softDeleteEvent(eventId: String, deletedAt: Long)
-    @Query("SELECT * FROM baby_photos WHERE babyId = :babyId AND deletedAt IS NULL ORDER BY takenAt DESC")
-    fun observePhotos(babyId: String): Flow<List<BabyPhotoEntity>>
+
+    @Query("UPDATE baby_events SET deletedAt = :deletedAt, updatedAt = :deletedAt, syncStatus = 'SYNCED' WHERE id = :eventId")
+    suspend fun softDeleteEventFromServer(eventId: String, deletedAt: Long)
+
+    @Query("SELECT * FROM baby_events WHERE id = :eventId LIMIT 1")
+    suspend fun getEvent(eventId: String): BabyEventEntity?
+
+    @Query("SELECT * FROM babies")
+    suspend fun getAllBabies(): List<BabyEntity>
+
+    @Query("SELECT * FROM baby_events")
+    suspend fun getAllEvents(): List<BabyEventEntity>
+
+    @Query("UPDATE babies SET familyId = :familyId WHERE id = :babyId")
+    suspend fun setBabyFamily(babyId: String, familyId: String)
+
+    @Query("UPDATE babies SET serverVersion = :version WHERE id = :babyId")
+    suspend fun setBabyServerVersion(babyId: String, version: Long)
+
+    @Query("UPDATE baby_events SET serverVersion = :version, syncStatus = 'SYNCED' WHERE id = :eventId")
+    suspend fun setEventServerVersion(eventId: String, version: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertPhoto(photo: BabyPhotoEntity)
 
+    @Query("SELECT * FROM baby_photos WHERE babyId = :babyId AND deletedAt IS NULL ORDER BY takenAt DESC")
+    fun observePhotos(babyId: String): Flow<List<BabyPhotoEntity>>
+
     @Query("UPDATE baby_photos SET deletedAt = :deletedAt, updatedAt = :deletedAt, syncStatus = 'PENDING' WHERE id = :photoId")
     suspend fun softDeletePhoto(photoId: String, deletedAt: Long)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun enqueueOperation(operation: SyncOperationEntity)
+
+    @Query("SELECT * FROM sync_operations WHERE status = 'PENDING' ORDER BY createdAt LIMIT 200")
+    suspend fun pendingOperations(): List<SyncOperationEntity>
+
+    @Query("DELETE FROM sync_operations WHERE operationId = :operationId")
+    suspend fun removeOperation(operationId: String)
+
+    @Query("UPDATE sync_operations SET status = 'CONFLICT', error = :reason WHERE operationId = :operationId")
+    suspend fun markOperationConflict(operationId: String, reason: String)
 }

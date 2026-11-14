@@ -6,8 +6,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [BabyEntity::class, BabyEventEntity::class, BabyPhotoEntity::class],
-    version = 3,
+    entities = [BabyEntity::class, BabyEventEntity::class, BabyPhotoEntity::class, SyncOperationEntity::class],
+    version = 4,
     exportSchema = true
 )
 abstract class BabyLogDatabase : RoomDatabase() {
@@ -30,6 +30,15 @@ abstract class BabyLogDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_photos_babyId ON baby_photos(babyId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_photos_takenAt ON baby_photos(takenAt)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_photos_syncStatus ON baby_photos(syncStatus)")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE babies ADD COLUMN serverVersion INTEGER")
+                db.execSQL("CREATE TABLE IF NOT EXISTS sync_operations (operationId TEXT NOT NULL PRIMARY KEY, entityType TEXT NOT NULL, entityId TEXT NOT NULL, operation TEXT NOT NULL, payloadJson TEXT NOT NULL, baseVersion INTEGER, createdAt INTEGER NOT NULL, status TEXT NOT NULL, error TEXT)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_operations_createdAt ON sync_operations(createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_operations_status ON sync_operations(status)")
             }
         }
     }
