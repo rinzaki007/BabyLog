@@ -77,7 +77,7 @@ private object BabyUpdater {
             connection.setRequestProperty("User-Agent", "BabyLog-Android")
             check(connection.responseCode == 200) { "更新检查失败（HTTP ${connection.responseCode}），请稍后重试" }
             val html = connection.inputStream.bufferedReader().use { it.readText() }
-            val tag = connection.url.path.substringAfterLast("/tag/", "")
+            val tag = Regex("/releases/tag/([^\\\"?#]+)").find(html)?.groupValues?.get(1).orEmpty()
             require(tag.isNotBlank()) { "暂时没有可用的正式 Release" }
             val pattern = Regex("href=\\\"([^\\\"]*/releases/download/" + Regex.escape(tag) + "/[^\\\"]+\\.apk)", RegexOption.IGNORE_CASE)
             val assetPath = pattern.find(html)?.groupValues?.get(1)?.replace("&amp;", "&") ?: error("最新 Release 尚未附带 APK")
