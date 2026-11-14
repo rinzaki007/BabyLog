@@ -128,3 +128,37 @@ def test_photo_metadata_sync_and_delete(client):
     assert client.get(f"/api/photos/{photo_id}", headers=auth(token), params={"family_id": family_id}).status_code == 404
     pulled = client.get("/api/sync/pull", headers=auth(token), params={"family_id": family_id, "cursor": 0})
     assert pulled.json()["items"][-1]["operation"] == "delete"
+
+
+def test_pull_skips_photo_upsert_after_photo_was_deleted(client):
+    token = register(client, "deleted-photo@example.test")
+    family_id = client.post("/api/families", headers=auth(token), json={"name": "photos"}).json()["family_id"]
+    photo_id = str(uuid.uuid4())
+    uploaded = client.post(
+        "/api/photos/upload", headers=auth(token),
+        params={"family_id": family_id, "photo_id": photo_id},
+        files={"file": ("old.jpg", b"old-photo-bytes", "image/jpeg")}
+    )
+    assert uploaded.status_code == 200, uploaded.text
+
+    metadata = {"id": photo_id, "babyId": str(uuid.uuid4()), "caption": "已删除照片",
+                "takenAt": 123456789, "createdAt": 123456789, "updatedAt": 123456789,
+                "mimeType": "image/jpeg"}
+    pushed = client.post("/api/sync/push", headers=auth(token), json={"family_id": family_id, "changes": [{
+        "operation_id": str(uuid.uuid4()), "entity_type": "photo", "entity_id": photo_id,
+        "operation": "upsert", "payload": metadata, "base_version": 0
+    }]})
+    assert pushed.status_code == 200
+
+    deleted = client.post("/api/sync/push", headers=auth(token), json={"family_id": family_id, "changes": [{
+        "operation_id": str(uuid.uuid4()), "entity_type": "photo", "entity_id": photo_id,
+        "operation": "delete", "payload": {"id": photo_id}, "base_version": 1
+    }]})
+    assert deleted.status_code == 200
+
+    pulled = client.get("/api/sync/pull", headers=auth(token), params={"family_id": family_id, "cursor": 0})
+    assert pulled.status_code == 200
+    assert [item["operation"] for item in pulled.json()["items"]] == ["delete"]
+    assert pulled.json()["items"][0]["entity_id"] == photo_id
+    assert pulled.json()["scanned_count"] == 2
+    assert pulled.json()["next_cursor"] > 0
