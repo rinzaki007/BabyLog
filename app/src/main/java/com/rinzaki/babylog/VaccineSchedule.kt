@@ -75,6 +75,6 @@ internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDo
         }
     }
     val expectedDose = doseNumber(item.dose) ?: return false
-    return matches.any { (_, rawDose) -> doseNumber(rawDose) == expectedDose } ||
-        matches.filter { doseNumber(it.second) == null }.size >= expectedDose
+    val explicitDoses = matches.mapNotNull { doseNumber(it.second) }.toSet()
+    return expectedDose in explicitDoses || (explicitDoses.isEmpty() && matches.size >= expectedDose)
 }
