@@ -1027,22 +1027,23 @@ private fun BabyAlbumSection(
                         TextButton(onClick = { viewingPhoto = null }) { Text("关闭") }
                     }
                     Box(
-                        Modifier.fillMaxWidth().weight(1f)
-                            .background(Color(0xFFF0EAF1), RoundedCornerShape(20.dp)),
+                        Modifier.fillMaxWidth().weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         if (bitmap != null) {
+                            // 用同一张照片铺满背景并柔化，填补原图比例与屏幕比例之间的空隙。
+                            // 前景照片保持完整比例，不加卡片底色、圆角或内边距。
                             Image(
                                 bitmap!!.asImageBitmap(),
                                 contentDescription = null,
-                                modifier = Modifier.fillMaxSize().blur(30.dp),
+                                modifier = Modifier.fillMaxSize().blur(36.dp),
                                 contentScale = ContentScale.Crop,
-                                alpha = 0.30f
+                                alpha = 0.58f
                             )
                             Image(
                                 bitmap!!.asImageBitmap(),
                                 contentDescription = "宝宝照片大图",
-                                modifier = Modifier.fillMaxSize().padding(4.dp),
+                                modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Fit
                             )
                         } else {
@@ -1653,13 +1654,6 @@ private fun DateTimeOptionDialog(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OptionPicker("时", "%02d".format(selected.hour), (0..23).toList().map { "%02d".format(it) }) { selected = selected.withHour(it.toInt()) }
                         OptionPicker("分", "%02d".format(selected.minute), (0..59).toList().map { "%02d".format(it) }) { selected = selected.withMinute(it.toInt()) }
-                    }
-                    listOf("现在" to LocalDateTime.now(), "08时00分" to selected.toLocalDate().atTime(8, 0), "12时00分" to selected.toLocalDate().atTime(12, 0), "18时00分" to selected.toLocalDate().atTime(18, 0), "21时00分" to selected.toLocalDate().atTime(21, 0)).chunked(3).forEach { group ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            group.forEach { (label, value) ->
-                                OutlinedButton(onClick = { selected = value }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 5.dp)) { Text(label) }
-                            }
-                        }
                     }
                 }
                 Text(selected.format(DateTimeFormatter.ofPattern(if (includeTime) "yyyy年M月d日 HH时mm分" else "yyyy年M月d日", Locale.CHINA)),
