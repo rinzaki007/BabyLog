@@ -389,16 +389,16 @@ private fun SelectionRow(options: List<String>, selected: String, onSelect: (Str
 private fun EventCard(event: BabyEventEntity, onDelete: () -> Unit) {
     val payload = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
     val (emoji, title, detail) = when (event.eventType) {
-        "FEEDING" -> Triple("🍼", "配方奶", "\${payload.optInt("amountMl")} ml")
+        "FEEDING" -> Triple("🍼", "配方奶", "${payload.optInt("amountMl")} ml")
         "DIAPER" -> {
             val details = mutableListOf<String>()
             if (payload.optBoolean("urine")) details.add("小便")
-            if (payload.optBoolean("stool")) details.add("大便：\${payload.optString("stoolShape", "未记录")} · \${payload.optString("stoolColor", "未记录")} · \${payload.optString("stoolAmount", "未记录")}")
+            if (payload.optBoolean("stool")) details.add("大便：${payload.optString("stoolShape", "未记录")} · ${payload.optString("stoolColor", "未记录")} · ${payload.optString("stoolAmount", "未记录")}")
             Triple("🧷", "大小便", details.joinToString("、"))
         }
         "SLEEP" -> {
             val minutes = payload.optInt("durationMinutes")
-            Triple("🌙", "睡眠", if (minutes >= 60) "\${minutes / 60} 小时 \${minutes % 60} 分钟" else "$minutes 分钟")
+            Triple("🌙", "睡眠", if (minutes >= 60) "${minutes / 60} 小时 ${minutes % 60} 分钟" else "$minutes 分钟")
         }
         else -> Triple("📝", "记录", "")
     }
