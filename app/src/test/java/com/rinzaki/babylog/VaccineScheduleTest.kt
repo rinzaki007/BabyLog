@@ -36,7 +36,7 @@ class VaccineScheduleTest {
     @Test
     fun vaccineRecordAcceptsChineseDoseAndNeedleLabels() {
         val item = VaccineScheduleItem("乙肝疫苗", "第 1 剂", 0)
-        assertTrue(vaccineDoseIsRecorded(item, listOf("乙肝疫苗", "第一针")))
+        assertTrue(vaccineDoseIsRecorded(item, listOf("乙肝疫苗" to "第一针")))
     }
 
     @Test
