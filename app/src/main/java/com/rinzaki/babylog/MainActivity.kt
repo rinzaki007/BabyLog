@@ -365,7 +365,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
 private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: List<BabyEventEntity>) {
     var showAll by remember { mutableStateOf(false) }
     val records = remember(events) {
-        events.mapNotNull { event ->
+        events.sortedBy { it.occurredAt }.mapNotNull { event ->
             runCatching {
                 val payload = JSONObject(event.payloadJson)
                 payload.optString("vaccineName") to payload.optString("dose")
