@@ -9,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.background
@@ -29,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -229,6 +232,17 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                     }
                                 }
                             },
+                            onCaption = { photo, caption ->
+                                scope.launch {
+                                    val updated = photo.copy(caption = caption, updatedAt = System.currentTimeMillis(), syncStatus = "PENDING")
+                                    dao.upsertPhoto(updated)
+                                    if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                        dao.clearPendingOperations("photo", photo.id)
+                                        dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "photo", photo.id, "upsert", photoSyncPayload(updated, mimeTypeForPath(updated.localPath)).toString(), photo.serverVersion, updated.updatedAt))
+                                        SyncScheduler.enqueue(appContext)
+                                    }
+                                }
+                            },
                             onDelete = { photo ->
                                 scope.launch {
                                     val now = System.currentTimeMillis()
@@ -406,9 +420,12 @@ private fun BabyAlbumSection(
     baby: BabyEntity,
     photos: List<BabyPhotoEntity>,
     onAdd: (android.net.Uri) -> Unit,
+    onCaption: (BabyPhotoEntity, String) -> Unit,
     onDelete: (BabyPhotoEntity) -> Unit
 ) {
     var deletingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
+    var viewingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
+    var editingCaption by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) onAdd(uri)
     }
@@ -429,15 +446,43 @@ private fun BabyAlbumSection(
                 }
             }
         } else {
-            photos.forEach { photo ->
-                val day = (java.time.temporal.ChronoUnit.DAYS.between(
-                    java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(),
-                    java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
-                ) + 1).coerceAtLeast(1)
-                val milestone = when (day) { 1L -> "初见"; 7L -> "第一周"; 30L -> "满月"; 100L -> "百日"; 180L -> "半岁"; 365L -> "一周岁"; else -> "第 $day 天" }
-                AlbumPhotoCard(photo, milestone) { deletingPhoto = photo }
+            val grouped = photos.sortedByDescending { it.takenAt }.groupBy {
+                SimpleDateFormat("yyyy年M月", Locale.getDefault()).format(Date(it.takenAt))
+            }
+            grouped.forEach { (month, monthPhotos) ->
+                Text(month, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                monthPhotos.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        pair.forEach { photo ->
+                            AlbumPhotoCard(photo, onClick = { viewingPhoto = photo }, onEdit = { editingCaption = photo }, onDelete = { deletingPhoto = photo }, modifier = Modifier.weight(1f))
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
             }
         }
+    }
+    viewingPhoto?.let { photo ->
+        Dialog(onDismissRequest = { viewingPhoto = null }) {
+            Surface(shape = RoundedCornerShape(24.dp), color = Color.Black, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
+                        value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(photo.localPath) }.getOrNull() }
+                    }
+                    if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = "照片预览", modifier = Modifier.fillMaxWidth().height(420.dp), contentScale = ContentScale.Fit)
+                    Text(SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault()).format(Date(photo.takenAt)), color = Color.White)
+                    if (!photo.caption.isNullOrBlank()) Text(photo.caption!!, color = Color.White)
+                    TextButton(onClick = { viewingPhoto = null }, modifier = Modifier.align(Alignment.End)) { Text("关闭", color = Color.White) }
+                }
+            }
+        }
+    }
+    editingCaption?.let { photo ->
+        var caption by remember(photo.id) { mutableStateOf(photo.caption.orEmpty()) }
+        AlertDialog(onDismissRequest = { editingCaption = null }, title = { Text("照片备注") },
+            text = { OutlinedTextField(caption, { caption = it.take(120) }, modifier = Modifier.fillMaxWidth(), label = { Text("写下这张照片的故事") }) },
+            confirmButton = { TextButton(onClick = { onCaption(photo, caption.trim()); editingCaption = null }) { Text("保存") } },
+            dismissButton = { TextButton(onClick = { editingCaption = null }) { Text("取消") } })
     }
     deletingPhoto?.let { photo ->
         AlertDialog(
@@ -450,19 +495,28 @@ private fun BabyAlbumSection(
     }
 }
 @Composable
-private fun AlbumPhotoCard(photo: BabyPhotoEntity, milestone: String, onDelete: () -> Unit) {
+private fun AlbumPhotoCard(
+    photo: BabyPhotoEntity,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
         value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(photo.localPath) }.getOrNull() }
     }
-    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = milestone, modifier = Modifier.size(104.dp))
-            else Box(Modifier.size(104.dp).background(Color(0xFFF2EDF7), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Text("📷") }
-            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(milestone, fontWeight = FontWeight.Bold)
-                Text(SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()).format(Date(photo.takenAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("成长瞬间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                TextButton(onClick = onDelete) { Text("删除照片") }
+    Card(modifier = modifier.clickable(onClick = onClick), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column {
+            if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = "宝宝照片", modifier = Modifier.fillMaxWidth().height(132.dp), contentScale = ContentScale.Crop)
+            else Box(Modifier.fillMaxWidth().height(132.dp).background(Color(0xFFF2EDF7)), contentAlignment = Alignment.Center) { Text("📷") }
+            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(SimpleDateFormat("MM月dd日", Locale.getDefault()).format(Date(photo.takenAt)), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                Text(photo.caption?.takeIf { it.isNotBlank() } ?: "添加照片备注", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Row {
+                    TextButton(onClick = onEdit) { Text("备注") }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                }
             }
         }
     }
