@@ -59,9 +59,9 @@ private fun BabyLogApp() {
                 item {
                     Text("快捷记录", style = MaterialTheme.typography.titleLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QuickAction("喂养")
-                        QuickAction("尿布")
-                        QuickAction("睡眠")
+                        QuickAction("喂养", Modifier.weight(1f))
+                        QuickAction("尿布", Modifier.weight(1f))
+                        QuickAction("睡眠", Modifier.weight(1f))
                     }
                 }
                 item {
@@ -87,8 +87,8 @@ private fun BabyLogApp() {
 }
 
 @Composable
-private fun QuickAction(label: String) {
-    OutlinedButton(onClick = { }, enabled = false, modifier = Modifier.weight(1f)) {
+private fun QuickAction(label: String, modifier: Modifier = Modifier) {
+    OutlinedButton(onClick = { }, enabled = false, modifier = modifier) {
         Text(label)
     }
 }
