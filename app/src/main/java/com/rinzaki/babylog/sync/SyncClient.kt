@@ -360,20 +360,29 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                     batch++
                     continue
                 }
+                val submittedIds = (0 until changes.length()).map { changes.getJSONObject(it).getString("operation_id") }.toSet()
                 val result = SyncHttp.request(base, "/api/sync/push", "POST", token,
                     JSONObject().put("family_id", familyId).put("changes", changes))
+                val acknowledgedIds = mutableSetOf<String>()
                 val accepted = result.optJSONArray("accepted") ?: JSONArray()
                 for (i in 0 until accepted.length()) {
                     val item = accepted.getJSONObject(i)
                     val opId = item.optString("operation_id")
+                    require(opId.isNotBlank() && opId in submittedIds) {
+                        "同步响应包含未知的已接收操作，已保留本机待同步队列"
+                    }
+                    require(acknowledgedIds.add(opId)) {
+                        "同步响应重复确认同一操作，已保留本机待同步队列"
+                    }
                     val version = item.optLong("version", -1L)
-                    val operation = pending.firstOrNull { it.operationId == opId }
-                    if (operation != null && version >= 0) {
-                        when (operation.entityType) {
-                            "baby" -> dao.setBabyServerVersion(operation.entityId, version)
-                            "event" -> dao.setEventServerVersion(operation.entityId, version)
-                            "photo" -> dao.setPhotoServerVersion(operation.entityId, version, "SYNCED")
-                        }
+                    require(version >= 0L) {
+                        "服务器已接收操作但未返回有效版本号，已保留本机待同步队列"
+                    }
+                    val operation = pending.first { it.operationId == opId }
+                    when (operation.entityType) {
+                        "baby" -> dao.setBabyServerVersion(operation.entityId, version)
+                        "event" -> dao.setEventServerVersion(operation.entityId, version)
+                        "photo" -> dao.setPhotoServerVersion(operation.entityId, version, "SYNCED")
                     }
                     dao.removeOperation(opId)
                 }
@@ -381,9 +390,15 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 for (i in 0 until conflicts.length()) {
                     val item = conflicts.getJSONObject(i)
                     val operationId = item.optString("operation_id")
-                    val operation = pending.firstOrNull { it.operationId == operationId }
+                    require(operationId.isNotBlank() && operationId in submittedIds) {
+                        "同步响应包含未知的冲突操作，已保留本机待同步队列"
+                    }
+                    require(acknowledgedIds.add(operationId)) {
+                        "同步响应重复确认同一操作，已保留本机待同步队列"
+                    }
+                    val operation = pending.first { it.operationId == operationId }
                     val serverVersion = item.optLong("server_version", -1L)
-                    if (operation != null && serverVersion >= 0L) {
+                    if (serverVersion >= 0L) {
                         // Rebase the local write onto the server's current version.
                         // Keep the local payload; never replace it with stale remote data.
                         when (operation.entityType) {
@@ -395,6 +410,10 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                     } else {
                         dao.markOperationConflict(operationId, item.optString("reason", "sync conflict"))
                     }
+                }
+                val unacknowledged = submittedIds - acknowledgedIds
+                require(unacknowledged.isEmpty()) {
+                    "服务器未确认本批 ${unacknowledged.size} 项待同步记录，已安全保留本机数据，稍后将重试"
                 }
                 batch++
             }
@@ -413,6 +432,10 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 // their cursor positions. Use scanned_count, not visible items,
                 // to decide whether another page is available.
                 if (pulled.optInt("scanned_count", items.length()) < 500) break
+            }
+            val remainingPending = dao.pendingOperationCount()
+            require(remainingPending == 0) {
+                "仍有 $remainingPending 项待同步记录未完成上传；本机数据已保留，稍后将安全重试"
             }
             SyncPreferences.markSyncSuccess(applicationContext)
             Result.success()
