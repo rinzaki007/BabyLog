@@ -100,5 +100,8 @@ class VaccineScheduleTest {
         assertTrue(vaccineDoseIsRecorded(item, listOf("五联疫苗" to "第1剂")))
         assertTrue(vaccineDoseIsRecorded(item, listOf("DTaP-IPV-Hib" to "第一针")))
         assertTrue(vaccineDoseIsRecorded(item, listOf("潘太欣" to "第1剂")))
+
+        val hibItem = VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true)
+        assertTrue(vaccineDoseIsRecorded(hibItem, listOf("五联疫苗" to "第1剂")))
     }
 }
