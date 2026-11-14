@@ -117,10 +117,20 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 normalized.startsWith("http://localhost"))) {
                                 message = "请填写 HTTPS 地址；局域网测试可使用内网 HTTP 地址。"
                             } else {
+                                val serverChanged = SyncPreferences.server(context).trimEnd('/') != normalized
                                 SyncPreferences.saveServer(context, normalized)
                                 server = normalized
                                 editingServer = false
-                                message = "服务器地址已保存。"
+                                if (serverChanged && token.isNotBlank()) {
+                                    SyncPreferences.clearSession(context)
+                                    token = ""
+                                    accountEmail = ""
+                                    familyId = ""
+                                    showAccountForm = true
+                                    message = "服务器地址已更换，请重新登录该服务器账号。"
+                                } else {
+                                    message = "服务器地址已保存。"
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth(), enabled = !busy
