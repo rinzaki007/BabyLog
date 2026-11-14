@@ -201,7 +201,7 @@ object SyncScheduler {
         WorkManager.getInstance(context).enqueueUniqueWork("babylog-sync-now", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
     fun schedule(context: Context) {
-        val request = PeriodicWorkRequestBuilder<BabyLogSyncWorker>(6, TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<BabyLogSyncWorker>(15, TimeUnit.MINUTES)
             .setConstraints(constraints).build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork("babylog-sync-periodic", ExistingPeriodicWorkPolicy.UPDATE, request)
         enqueue(context)
