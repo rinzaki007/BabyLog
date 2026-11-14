@@ -9,7 +9,7 @@
 
 ## Docker 部署
 
-服务端位于 `server/`，采用 FastAPI、SQLite WAL 和 NAS 文件系统。Compose 默认映射主机端口 **18765** 到容器内部 8000。只需修改 `BABYLOG_PORT` 即可更换 NAS 主机端口；容器内部端口不需要修改。
+服务端位于 `server/`，采用 FastAPI、SQLite WAL 和 NAS 文件系统。容器内部监听端口 **18765**，Compose 默认映射主机端口 **18765**。如 NAS 主机端口冲突，只需修改 `BABYLOG_PORT`，容器内部端口不需要修改。
 
 1. 复制 `.env.example` 为 `.env`。
 2. 设置唯一的随机 `BABYLOG_JWT_SECRET`，至少 32 字符，不能提交到 Git。

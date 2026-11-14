@@ -23,7 +23,7 @@ A private-by-design Android baby care and growth tracker with optional self-host
 - Android: Kotlin, Jetpack Compose, Room, WorkManager
 - Server: FastAPI, SQLite WAL, NAS filesystem
 - Deployment: Docker Compose / Dockge
-- Default NAS host port: **18765**, configurable with `BABYLOG_PORT`
+- Default NAS/container port: **18765**, configurable host mapping with `BABYLOG_PORT`
 
 See [docs/FAMILY_SYNC.md](docs/FAMILY_SYNC.md) for deployment and implementation status.
 

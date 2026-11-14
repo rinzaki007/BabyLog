@@ -11,7 +11,7 @@ services:
       BABYLOG_TOKEN_TTL_SECONDS: ${BABYLOG_TOKEN_TTL_SECONDS:-2592000}
       BABYLOG_MAX_PHOTO_BYTES: ${BABYLOG_MAX_PHOTO_BYTES:-20971520}
     ports:
-      - "${BABYLOG_PORT:-18765}:8000"
+      - "${BABYLOG_PORT:-18765}:18765"
     volumes:
       - ${BABYLOG_DATA_PATH:-./data}:/data
     security_opt:
