@@ -638,6 +638,7 @@ private fun BabyAlbumSection(
     var viewingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var editingCaption by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var photoDateTime by remember { mutableStateOf(LocalDateTime.now()) }
+    val photoDateTimeLabel = remember(photoDateTime) { photoDateTime.format(DateTimeFormatter.ofPattern("MM-dd HH:mm")) }
     val context = LocalContext.current
     val albumScope = rememberCoroutineScope()
     var galleryMessage by remember { mutableStateOf<String?>(null) }
@@ -657,7 +658,7 @@ private fun BabyAlbumSection(
                         photoDateTime = LocalDate.of(y, m + 1, d).atTime(photoDateTime.toLocalTime())
                         TimePickerDialog(context, { _, h, min -> photoDateTime = photoDateTime.withHour(h).withMinute(min) }, photoDateTime.hour, photoDateTime.minute, true).show()
                     }, photoDateTime.year, photoDateTime.monthValue - 1, photoDateTime.dayOfMonth).show()
-                }) { Text("时间：${photoDateTime.format(DateTimeFormatter.ofPattern(\"MM-dd HH:mm\"))}") }
+                }) { Text("时间：$photoDateTimeLabel")
                 Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("选择照片") }
             }
         }
