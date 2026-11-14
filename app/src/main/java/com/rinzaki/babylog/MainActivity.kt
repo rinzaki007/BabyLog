@@ -198,9 +198,9 @@ private fun BabyProfileEditor(
     var birthDate by remember(existing?.id) { mutableStateOf(existing?.let { java.time.Instant.ofEpochMilli(it.birthTime).atZone(ZoneId.systemDefault()).toLocalDate() } ?: LocalDate.now()) }
     var sex by remember(existing?.id) { mutableStateOf(existing?.sex ?: "未设置") }
     var avatar by remember(existing?.id) { mutableStateOf(existing?.avatarUri) }
-    var birthWeight by remember(existing?.id) { mutableStateOf((existing?.birthWeightGrams ?: 3200).toFloat()) }
-    var birthLength by remember(existing?.id) { mutableStateOf((existing?.birthLengthCm ?: 50.0).toFloat()) }
-    var birthHead by remember(existing?.id) { mutableStateOf((existing?.birthHeadCircumferenceCm ?: 34.0).toFloat()) }
+    var birthWeight by remember(existing?.id) { mutableStateOf((existing?.birthWeightGrams ?: 0).toFloat()) }
+    var birthLength by remember(existing?.id) { mutableStateOf((existing?.birthLengthCm ?: 0.0).toFloat()) }
+    var birthHead by remember(existing?.id) { mutableStateOf((existing?.birthHeadCircumferenceCm ?: 0.0).toFloat()) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -229,12 +229,12 @@ private fun BabyProfileEditor(
                 DatePickerDialog(context, { _, y, m, d -> birthDate = LocalDate.of(y, m + 1, d) },
                     birthDate.year, birthDate.monthValue - 1, birthDate.dayOfMonth).show()
             }, modifier = Modifier.fillMaxWidth()) { Text(birthDate.toString()) }
-            Text("出生体重  ${birthWeight.toInt()} g", fontWeight = FontWeight.SemiBold)
-            Slider(birthWeight, { birthWeight = it }, valueRange = 1500f..5000f, steps = 68)
-            Text("出生身长  ${"%.1f".format(Locale.getDefault(), birthLength)} cm", fontWeight = FontWeight.SemiBold)
-            Slider(birthLength, { birthLength = it }, valueRange = 40f..60f, steps = 39)
-            Text("出生头围  ${"%.1f".format(Locale.getDefault(), birthHead)} cm", fontWeight = FontWeight.SemiBold)
-            Slider(birthHead, { birthHead = it }, valueRange = 28f..40f, steps = 23)
+            Text("出生体重  ${if (birthWeight <= 0f) "未记录" else "${birthWeight.toInt()} g"}", fontWeight = FontWeight.SemiBold)
+            Slider(birthWeight, { birthWeight = it }, valueRange = 0f..5000f, steps = 99)
+            Text("出生身长  ${if (birthLength <= 0f) "未记录" else "${"%.1f".format(Locale.getDefault(), birthLength)} cm"}", fontWeight = FontWeight.SemiBold)
+            Slider(birthLength, { birthLength = it }, valueRange = 0f..60f, steps = 119)
+            Text("出生头围  ${if (birthHead <= 0f) "未记录" else "${"%.1f".format(Locale.getDefault(), birthHead)} cm"}", fontWeight = FontWeight.SemiBold)
+            Slider(birthHead, { birthHead = it }, valueRange = 0f..45f, steps = 89)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(onClick = {
                 when {
@@ -243,7 +243,7 @@ private fun BabyProfileEditor(
                     else -> {
                         saving = true
                         scope.launch {
-                            try { onSave(name, birthDate, sex.takeIf { it != "未设置" }, avatar, birthWeight.toInt(), birthLength.toDouble(), birthHead.toDouble()) }
+                            try { onSave(name, birthDate, sex.takeIf { it != "未设置" }, avatar, birthWeight.toInt().takeIf { it > 0 }, birthLength.toDouble().takeIf { it > 0 }, birthHead.toDouble().takeIf { it > 0 }) }
                             finally { saving = false }
                         }
                     }
@@ -277,7 +277,8 @@ private fun BabyProfileCard(baby: BabyEntity, onEdit: () -> Unit) {
             Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(baby.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text("${baby.sex ?: "宝宝"} · 第 $days 天", style = MaterialTheme.typography.bodySmall)
-                Text("出生 ${baby.birthWeightGrams?.let { "$it g" } ?: "体重未记录"} · $birthDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("出生体重 ${baby.birthWeightGrams?.let { "$it g" } ?: "未记录"} · $birthDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(listOfNotNull(baby.birthLengthCm?.let { "身长 ${"%.1f".format(Locale.getDefault(), it)} cm" }, baby.birthHeadCircumferenceCm?.let { "头围 ${"%.1f".format(Locale.getDefault(), it)} cm" }).joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = onEdit) { Text("编辑") }
         }
