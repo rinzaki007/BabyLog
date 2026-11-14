@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +34,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -121,11 +125,33 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var showSyncSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    var selectedNav by remember { mutableStateOf(0) }
 
     MaterialTheme(colorScheme = WarmColors) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = {
+                NavigationBar(containerColor = Color.White) {
+                    val destinations = listOf("首页", "记录", "趋势", "相册")
+                    val targets = listOf(0, 5, 3, 4)
+                    destinations.forEachIndexed { index, label ->
+                        NavigationBarItem(
+                            selected = selectedNav == index,
+                            onClick = {
+                                selectedNav = index
+                                scope.launch { listState.animateScrollToItem(targets[index].coerceAtMost(if (baby == null) 1 else 6)) }
+                            },
+                            icon = { Text(listOf("⌂", "＋", "⌁", "▦")[index], style = MaterialTheme.typography.titleLarge) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+            }
+        ) { scaffoldPadding ->
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
                 contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 36.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -134,6 +160,16 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         Text("BABYLOG", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         Text("成长的每一天", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                         Text("把细碎日常，变成温柔的回忆", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(if (SyncPreferences.familyId(appContext).isBlank()) "离线模式 · 本机安全保存" else "家庭同步已连接", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                val last = SyncPreferences.lastSyncAt(appContext)
+                                Text(if (last > 0L) "上次同步 " + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(last)) else "尚未同步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                FilledTonalButton(onClick = { SyncScheduler.enqueue(appContext) }) { Text("立即同步") }
+                            }
+                        }
                         OutlinedButton(onClick = { showSyncSettings = true }) { Text("家庭同步设置") }
                     }
                 }
