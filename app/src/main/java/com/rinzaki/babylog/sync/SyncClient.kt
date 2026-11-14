@@ -41,8 +41,16 @@ object SyncPreferences {
     fun clearSession(context: Context) { prefs(context).edit().remove("token").remove("family_id").remove("account_email").putLong("cursor", 0L).apply() }
     fun lastSyncAt(context: Context) = prefs(context).getLong("last_sync_at", 0L)
     fun lastSyncError(context: Context) = prefs(context).getString("last_sync_error", null)
-    fun markSyncSuccess(context: Context) { prefs(context).edit().putLong("last_sync_at", System.currentTimeMillis()).remove("last_sync_error").apply() }
-    fun markSyncFailure(context: Context, reason: String) { prefs(context).edit().putString("last_sync_error", reason.take(240)).apply() }
+    fun isSyncing(context: Context) = prefs(context).getBoolean("sync_in_progress", false)
+    fun markSyncStarted(context: Context) { prefs(context).edit().putBoolean("sync_in_progress", true).apply() }
+    fun markSyncSuccess(context: Context) {
+        prefs(context).edit().putLong("last_sync_at", System.currentTimeMillis())
+            .putBoolean("sync_in_progress", false).remove("last_sync_error").apply()
+    }
+    fun markSyncFailure(context: Context, reason: String) {
+        prefs(context).edit().putBoolean("sync_in_progress", false)
+            .putString("last_sync_error", reason.take(240)).apply()
+    }
 }
 
 class SyncHttpException(val statusCode: Int, message: String) : IllegalStateException(message)
@@ -289,6 +297,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
         val token = SyncPreferences.token(applicationContext)
         val familyId = SyncPreferences.familyId(applicationContext)
         if (base.isBlank() || token.isBlank() || familyId.isBlank()) return Result.success()
+        SyncPreferences.markSyncStarted(applicationContext)
         return try {
             val dao = RoomAccess.database(applicationContext).babyLogDao()
             var batch = 0
