@@ -11,7 +11,12 @@ data class BabyEntity(
     val displayName: String,
     val birthTime: Long,
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val sex: String? = null,
+    val avatarUri: String? = null,
+    val birthWeightGrams: Int? = null,
+    val birthLengthCm: Double? = null,
+    val birthHeadCircumferenceCm: Double? = null
 )
 
 @Entity(
