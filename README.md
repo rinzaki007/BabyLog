@@ -1,31 +1,30 @@
 # BabyLog
 
-A private-by-design family baby care and growth tracker for Android.
+A private-by-design Android baby care and growth tracker with optional self-hosted family sync.
 
-## Project status
+## Principles
 
-🚧 Initial project scaffold — implementation is being built in small, verifiable stages.
+- **Offline by default:** no account, server, or internet connection is required for local records.
+- **Optional self-hosted sync:** users can configure their own HTTPS NAS endpoint.
+- **Family sharing:** parents use separate accounts and join one family.
+- **Local-first:** Room remains the Android source of truth; background sync is optional.
 
-## Goals
+## Features
 
-- Record feeding (breastfeeding, expressed breast milk, formula, mixed feeding)
-- Track diaper changes, urine and stool observations
-- Track sleep sessions
-- Keep a chronological, editable care timeline
-- Record growth measurements and health notes
-- Share one baby's records between parents
-- Work offline first, then synchronize safely when a connection is available
+- Formula feeding volume and time (ml)
+- Urine and stool observations
+- Sleep records and editable timeline
+- Growth measurements and charts
+- Local baby photo album
+- NAS sync server scaffold (Android client integration pending)
 
 ## Technology
 
-- Kotlin, Jetpack Compose
-- Room for local-first storage
-- WorkManager for background synchronization
-- Supabase Auth + PostgreSQL with strict Row Level Security (RLS)
-- GitHub Actions for Android build verification
+- Android: Kotlin, Jetpack Compose, Room, WorkManager
+- Server: FastAPI, SQLite WAL, NAS filesystem
+- Deployment: Docker Compose / Dockge
+- Default NAS host port: **18765**, configurable with `BABYLOG_PORT`
 
-## Privacy
+See [docs/FAMILY_SYNC.md](docs/FAMILY_SYNC.md) for deployment and implementation status.
 
-BabyLog may contain sensitive family and child-related information. Keep real records out of source control, logs, screenshots, and issue reports. Never commit Supabase service-role keys or other secrets. The Android client must use only a publishable/anon key, protected by database RLS.
-
-> Repository visibility is currently controlled by the GitHub repository settings. Private visibility is strongly recommended before storing any real family data.
+Keep real baby records, passwords, tokens, and secrets out of source control. Do not expose the SQLite database or NAS management ports to the internet.
