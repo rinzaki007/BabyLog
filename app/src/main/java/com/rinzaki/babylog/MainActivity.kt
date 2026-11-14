@@ -38,6 +38,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -872,7 +873,7 @@ private fun BabyAlbumSection(
     var editingCaption by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var photoDateTime by remember { mutableStateOf(LocalDateTime.now()) }
     val photoDateTimeLabel = remember(photoDateTime) {
-        photoDateTime.format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
+        photoDateTime.format(DateTimeFormatter.ofPattern("M月d日 HH时mm分", Locale.CHINA))
     }
     val context = LocalContext.current
     val albumScope = rememberCoroutineScope()
@@ -928,35 +929,60 @@ private fun BabyAlbumSection(
             }
         } else {
             val grouped = photos.sortedByDescending { it.takenAt }.groupBy {
-                SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(it.takenAt))
+                SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(it.takenAt))
             }
             grouped.forEach { (day, dayPhotos) ->
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(day, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            "${dayPhotos.size} 张",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                val photoRows = dayPhotos.chunked(3)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Box(
+                        Modifier.width(18.dp).height((photoRows.size * 123 + 34).dp)
+                            .background(Color.Transparent)
+                    ) {
+                        Box(
+                            Modifier.align(Alignment.TopCenter).padding(top = 5.dp)
+                                .width(2.dp).fillMaxSize()
+                                .background(Color(0xFFE4DCEF), RoundedCornerShape(2.dp))
                         )
+                        Surface(
+                            modifier = Modifier.align(Alignment.TopCenter).padding(top = 3.dp).size(11.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary
+                        ) {}
                     }
-                    dayPhotos.chunked(3).forEach { rowPhotos ->
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(7.dp)
-                        ) {
-                            rowPhotos.forEach { photo ->
-                                AlbumPhotoCard(
-                                    photo = photo,
-                                    onClick = {
-                                        viewingPhoto = photo
-                                        galleryMessage = null
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(day, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                "${dayPhotos.size} 张",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        photoRows.forEach { rowPhotos ->
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                            ) {
+                                rowPhotos.forEach { photo ->
+                                    AlbumPhotoCard(
+                                        photo = photo,
+                                        onClick = {
+                                            viewingPhoto = photo
+                                            galleryMessage = null
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                repeat(3 - rowPhotos.size) { Spacer(Modifier.weight(1f)) }
                             }
-                            repeat(3 - rowPhotos.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 }
@@ -965,71 +991,82 @@ private fun BabyAlbumSection(
     }
 
     viewingPhoto?.let { photo ->
-        Dialog(onDismissRequest = { viewingPhoto = null }) {
+        Dialog(
+            onDismissRequest = { viewingPhoto = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
+                value = withContext(Dispatchers.IO) {
+                    runCatching { decodeSampledPhoto(photo.localPath, 1600, 2000) }.getOrNull()
+                }
+            }
             Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = Color(0xFF211E25),
-                modifier = Modifier.fillMaxWidth()
+                shape = RoundedCornerShape(0.dp),
+                color = Color(0xFFFFF9F5),
+                modifier = Modifier.fillMaxSize()
             ) {
                 Column(
-                    Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
-                        value = withContext(Dispatchers.IO) {
-                            runCatching { decodeSampledPhoto(photo.localPath, 1200, 1600) }.getOrNull()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(photo.takenAt)),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF302B38)
+                            )
+                            Text(
+                                SimpleDateFormat("HH时mm分", Locale.CHINA).format(Date(photo.takenAt)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF716B78)
+                            )
                         }
+                        TextButton(onClick = { viewingPhoto = null }) { Text("关闭") }
                     }
-                    if (bitmap != null) {
-                        Box(
-                            Modifier.fillMaxWidth().height(430.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    Box(
+                        Modifier.fillMaxWidth().weight(1f)
+                            .background(Color(0xFFF0EAF1), RoundedCornerShape(20.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (bitmap != null) {
                             Image(
                                 bitmap!!.asImageBitmap(),
                                 contentDescription = null,
-                                modifier = Modifier.fillMaxSize().blur(26.dp),
+                                modifier = Modifier.fillMaxSize().blur(30.dp),
                                 contentScale = ContentScale.Crop,
-                                alpha = 0.55f
+                                alpha = 0.30f
                             )
                             Image(
                                 bitmap!!.asImageBitmap(),
                                 contentDescription = "宝宝照片大图",
-                                modifier = Modifier.fillMaxWidth().height(430.dp),
+                                modifier = Modifier.fillMaxSize().padding(4.dp),
                                 contentScale = ContentScale.Fit
                             )
-                        }
-                    } else {
-                        Box(
-                            Modifier.fillMaxWidth().height(240.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("照片暂时无法读取", color = Color.White)
+                        } else {
+                            Text("照片暂时无法读取", color = Color(0xFF716B78))
                         }
                     }
-                    Text(
-                        SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault()).format(Date(photo.takenAt)),
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        photo.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注",
-                        color = Color(0xFFD8D1DE),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    galleryMessage?.let {
-                        Text(it, color = Color(0xFFD8D1DE), style = MaterialTheme.typography.bodySmall)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            photo.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注",
+                            color = Color(0xFF514A58),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        galleryMessage?.let {
+                            Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = {
                             editingCaption = photo
                             viewingPhoto = null
-                        }) { Text("编辑备注", color = Color.White) }
+                        }) { Text("编辑备注") }
                         TextButton(onClick = {
                             albumScope.launch {
                                 galleryMessage = runCatching {
@@ -1037,15 +1074,11 @@ private fun BabyAlbumSection(
                                     "已保存到手机相册"
                                 }.getOrElse { "保存失败：${it.message}" }
                             }
-                        }) { Text("保存到手机", color = Color.White) }
+                        }) { Text("保存到手机") }
                         TextButton(onClick = { deletingPhoto = photo; viewingPhoto = null }) {
-                            Text("删除", color = Color(0xFFFFA99F))
+                            Text("删除", color = MaterialTheme.colorScheme.error)
                         }
                     }
-                    TextButton(
-                        onClick = { viewingPhoto = null },
-                        modifier = Modifier.align(Alignment.End)
-                    ) { Text("关闭", color = Color.White) }
                 }
             }
         }
@@ -1216,7 +1249,7 @@ private fun BabyProfileEditor(
             Text("性别", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("男宝", "女宝", "未设置"), sex) { sex = it }
             Text("出生日期", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-            OutlinedButton(onClick = { showBirthDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(birthDate.toString()) }
+            OutlinedButton(onClick = { showBirthDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(birthDate.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA))) }
             OutlinedTextField(
                 value = if (birthWeight <= 0f) "" else birthWeight.toInt().toString(),
                 onValueChange = { birthWeight = it.filter(Char::isDigit).toFloatOrNull()?.coerceIn(0f, 8000f) ?: 0f },
@@ -1413,7 +1446,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("记录时间", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 OutlinedButton(onClick = { showEventTimePicker = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("$date · %02d:%02d".format(hour, minute))
+                    Text(date.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA)) + " · %02d时%02d分".format(hour, minute))
                 }
                 when (eventType) {
                     "FEEDING" -> {
@@ -1551,7 +1584,7 @@ private fun EventCard(event: BabyEventEntity, onEdit: () -> Unit, onDelete: () -
         ).joinToString(" · "))
         else -> Triple("📝", "记录", "")
     }
-    val time = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(event.occurredAt))
+    val time = SimpleDateFormat("yyyy年M月d日 HH时mm分", Locale.CHINA).format(Date(event.occurredAt))
     Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(shape = CircleShape, color = Color(0xFFF2EDF7), modifier = Modifier.size(42.dp)) {
@@ -1612,12 +1645,15 @@ private fun DateTimeOptionDialog(
                     }
                 }
                 if (includeTime) {
-                    Text("时间", fontWeight = FontWeight.SemiBold)
+                    Text("时间（24小时制）", fontWeight = FontWeight.SemiBold)
+                    Surface(color = Color(0xFFF2EDF7), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                        Text(selected.format(DateTimeFormatter.ofPattern("HH时mm分", Locale.CHINA)), modifier = Modifier.padding(vertical = 12.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OptionPicker("时", "%02d".format(selected.hour), (0..23).toList().map { "%02d".format(it) }) { selected = selected.withHour(it.toInt()) }
                         OptionPicker("分", "%02d".format(selected.minute), (0..59).toList().map { "%02d".format(it) }) { selected = selected.withMinute(it.toInt()) }
                     }
-                    listOf("现在" to LocalDateTime.now(), "08:00" to selected.toLocalDate().atTime(8, 0), "12:00" to selected.toLocalDate().atTime(12, 0), "18:00" to selected.toLocalDate().atTime(18, 0), "21:00" to selected.toLocalDate().atTime(21, 0)).chunked(3).forEach { group ->
+                    listOf("现在" to LocalDateTime.now(), "08时00分" to selected.toLocalDate().atTime(8, 0), "12时00分" to selected.toLocalDate().atTime(12, 0), "18时00分" to selected.toLocalDate().atTime(18, 0), "21时00分" to selected.toLocalDate().atTime(21, 0)).chunked(3).forEach { group ->
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             group.forEach { (label, value) ->
                                 OutlinedButton(onClick = { selected = value }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 5.dp)) { Text(label) }
@@ -1625,7 +1661,7 @@ private fun DateTimeOptionDialog(
                         }
                     }
                 }
-                Text(selected.format(DateTimeFormatter.ofPattern(if (includeTime) "yyyy年M月d日 HH:mm" else "yyyy年M月d日")),
+                Text(selected.format(DateTimeFormatter.ofPattern(if (includeTime) "yyyy年M月d日 HH时mm分" else "yyyy年M月d日", Locale.CHINA)),
                     color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
         },
@@ -1639,7 +1675,7 @@ private fun OptionPicker(label: String, selected: String, options: List<String>,
     var expanded by remember { mutableStateOf(false) }
     Box {
         OutlinedButton(onClick = { expanded = true }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
-            Text("$label $selected")
+            Text("$selected$label")
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
