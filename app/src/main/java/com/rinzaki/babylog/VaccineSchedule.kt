@@ -48,7 +48,6 @@ internal fun chinaNationalVaccineSchedule(birthDate: LocalDate, sex: String?): L
         VaccineScheduleItem("双价 HPV 疫苗", "第 2 剂", 168, "第 1 剂后 12 个月内")
     ) else emptyList()
 
-    val jeRecorded = itemsForRoute("乙脑", "乙脑减毒活疫苗", "乙脑灭活疫苗", birthDate, emptyList())
     return items.map { it to birthDate.plusMonths(it.ageMonths) }
 }
 
