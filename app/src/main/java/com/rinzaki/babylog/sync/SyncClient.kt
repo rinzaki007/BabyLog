@@ -144,9 +144,13 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 val changes = JSONArray()
                 pending.forEach { operation ->
                     if (operation.entityType == "photo" && operation.operation == "upsert") {
-                        val photo = dao.getPhoto(operation.entityId) ?: throw java.io.IOException("找不到待同步照片：${operation.entityId}")
-                        val localFile = File(photo.localPath)
-                        if (!localFile.isFile) throw java.io.IOException("本地照片文件不存在：${photo.id}")
+                        val photo = dao.getPhoto(operation.entityId)
+                        val localFile = photo?.let { File(it.localPath) }
+                        if (photo == null || localFile == null || !localFile.isFile) {
+                            dao.markOperationConflict(operation.operationId, "本地照片文件不存在，无法上传")
+                            if (photo != null) dao.setPhotoServerVersion(photo.id, -1L, "CONFLICT")
+                            return@forEach
+                        }
                         SyncHttp.uploadPhoto(base, familyId, photo.id, token, localFile, mimeTypeForPath(photo.localPath))
                     }
                     val item = JSONObject()
@@ -210,7 +214,8 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
             Result.retry()
         } catch (error: Exception) {
             SyncPreferences.markSyncFailure(applicationContext, error.message ?: "同步失败")
-            if (error.message?.contains("HTTP 401") == true) Result.failure() else Result.retry()
+            val message = error.message.orEmpty()
+            if (message.contains("HTTP 401") || Regex("HTTP 4[0-9]{2}").containsMatchIn(message)) Result.failure() else Result.retry()
         }
     }
 
