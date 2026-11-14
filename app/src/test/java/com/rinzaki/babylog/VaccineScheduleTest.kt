@@ -80,4 +80,25 @@ class VaccineScheduleTest {
         assertTrue(vaccineDoseIsRecorded(second, records))
     }
 
+
+    @Test
+    fun selfPaidPlanIncludesPentavalentVaccineDoses() {
+        val birthDate = LocalDate.of(2026, 1, 15)
+        val doses = chinaSelfPaidVaccineSchedule(birthDate)
+            .filter { it.first.vaccineName.contains("五联") }
+        assertEquals(listOf("第 1 剂", "第 2 剂", "第 3 剂", "加强剂"), doses.map { it.first.dose })
+        assertEquals(
+            listOf(2L, 3L, 4L, 18L),
+            doses.map { java.time.temporal.ChronoUnit.MONTHS.between(birthDate, it.second) }
+        )
+        assertTrue(doses.all { it.first.isSelfPaid })
+    }
+
+    @Test
+    fun pentavalentVaccineRecordMatchesCommonNamesAndBrandAlias() {
+        val item = VaccineScheduleItem("五联疫苗（DTaP-IPV-Hib）", "第 1 剂", 2, isSelfPaid = true)
+        assertTrue(vaccineDoseIsRecorded(item, listOf("五联疫苗" to "第1剂")))
+        assertTrue(vaccineDoseIsRecorded(item, listOf("DTaP-IPV-Hib" to "第一针")))
+        assertTrue(vaccineDoseIsRecorded(item, listOf("潘太欣" to "第1剂")))
+    }
 }
