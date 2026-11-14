@@ -86,7 +86,7 @@ def test_photo_upload_and_download(client):
     photo_id = str(uuid.uuid4())
     uploaded = client.post(
         "/api/photos/upload", headers=auth(token),
-        data={"family_id": family_id, "photo_id": photo_id},
+        params={"family_id": family_id, "photo_id": photo_id},
         files={"file": ("test.jpg", b"\xff\xd8\xfftest-image", "image/jpeg")}
     )
     assert uploaded.status_code == 200, uploaded.text
