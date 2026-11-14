@@ -246,7 +246,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !busy && familyId.isNotBlank() && queueStateLoaded
                     ) { Text("清空本机数据并重新下载") }
-                    Text("用于另一台手机：清除本机业务数据后，从家庭云端完整重新下载。不会删除账号或家庭。", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    Text("用于需要重置的设备：清除这台手机的业务数据后，从家庭云端完整重新下载。两台手机即使登录同一个账号也可以使用。请务必只在第二台手机执行；第一台主设备不要操作。不会删除账号、家庭或云端数据。", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
                     Button(
                         onClick = {
                             runAction {
@@ -392,7 +392,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
         AlertDialog(
             onDismissRequest = { if (!busy) showDeviceResetConfirm = false },
             title = { Text("清空本机并重新下载？") },
-            text = { Text("这会删除当前手机上的宝宝档案、记录、照片缓存和未同步队列，然后从家庭云端重新下载。不会删除账号、家庭或云端数据。请只在第一台手机完成云端覆盖后，在第二台手机执行。") },
+            text = { Text("危险操作：这会删除当前手机上的宝宝档案、喂养护理等记录、照片缓存和未同步队列，然后从家庭云端重新下载。不会删除账号、家庭或云端数据。必须先在第一台手机完成「以本机数据覆盖家庭云端」，再仅在第二台手机执行。两台手机使用同一个账号也可以执行；请确认当前拿的是第二台手机。") },
             confirmButton = {
                 Button(onClick = {
                     showDeviceResetConfirm = false
@@ -402,7 +402,9 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                         val currentFamily = (0 until families.length()).map { families.getJSONObject(it) }
                             .firstOrNull { it.optString("id") == SyncPreferences.familyId(context) }
                         require(currentFamily != null) { "当前账号已不属于这个家庭空间" }
-                        require(currentFamily.optString("role") != "owner") { "这是家庭创建者设备。为避免误删唯一原始数据，请不要在第一台手机执行清空操作。" }
+                        // This action only clears this device's local Room data and media cache.
+                        // Account role cannot identify the physical primary device: both phones
+                        // may be owners when they share the same login.
                         SyncPreferences.setRecoveryInProgress(context, true)
                         SyncScheduler.cancel(context)
                         try {
