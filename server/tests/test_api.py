@@ -81,6 +81,23 @@ def test_family_data_isolation(client):
     assert response.status_code == 403
 
 
+def test_baby_avatar_upload_download_and_delete(client):
+    token = register(client, "baby-avatar@example.test")
+    family_id = client.post("/api/families", headers=auth(token), json={"name": "avatar"}).json()["family_id"]
+    baby_id = str(uuid.uuid4())
+    uploaded = client.post(
+        f"/api/babies/{baby_id}/avatar", headers=auth(token), params={"family_id": family_id},
+        files={"file": ("avatar.jpg", b"\xff\xd8\xffavatar", "image/jpeg")}
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    downloaded = client.get(f"/api/babies/{baby_id}/avatar", headers=auth(token), params={"family_id": family_id})
+    assert downloaded.status_code == 200
+    assert downloaded.content == b"\xff\xd8\xffavatar"
+    deleted = client.delete(f"/api/babies/{baby_id}/avatar", headers=auth(token), params={"family_id": family_id})
+    assert deleted.status_code == 200
+    assert client.get(f"/api/babies/{baby_id}/avatar", headers=auth(token), params={"family_id": family_id}).status_code == 404
+
+
 def test_photo_upload_and_download(client):
     token = register(client, "photos@example.test")
     family_id = client.post("/api/families", headers=auth(token), json={"name": "photos"}).json()["family_id"]

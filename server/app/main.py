@@ -7,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field
 
-DATA_DIR=Path(os.getenv("BABYLOG_DATA_DIR","/data")); DB_PATH=DATA_DIR/"babylog.db"; PHOTO_DIR=DATA_DIR/"photos"
+DATA_DIR=Path(os.getenv("BABYLOG_DATA_DIR","/data")); DB_PATH=DATA_DIR/"babylog.db"; PHOTO_DIR=DATA_DIR/"photos"; AVATAR_DIR=DATA_DIR/"avatars"
 JWT_SECRET=os.getenv("BABYLOG_JWT_SECRET",""); JWT_ISSUER="babylog-sync"
 TOKEN_TTL=int(os.getenv("BABYLOG_TOKEN_TTL_SECONDS","2592000")); MAX_PHOTO_BYTES=int(os.getenv("BABYLOG_MAX_PHOTO_BYTES",str(20*1024*1024)))
 password_hash=PasswordHash.recommended(); bearer=HTTPBearer(auto_error=False)
@@ -182,6 +182,42 @@ def download_photo(photo_id:str,family_id:str,uid:str=Depends(current_user)):
     path=(PHOTO_DIR/row["relative_path"]).resolve()
     if PHOTO_DIR.resolve() not in path.parents or not path.is_file(): raise HTTPException(404,"照片文件不存在")
     return FileResponse(path,media_type=row["mime_type"])
+@app.post("/api/babies/{baby_id}/avatar")
+async def upload_baby_avatar(baby_id:str,family_id:str,file:UploadFile=File(...),uid:str=Depends(current_user)):
+    try: safe_baby_id=str(uuid.UUID(baby_id))
+    except ValueError: raise HTTPException(422,"宝宝 ID 无效")
+    if file.content_type!="image/jpeg": raise HTTPException(415,"头像仅支持 JPEG 格式")
+    with connect() as db: require_member(db,family_id,uid)
+    data=await file.read(MAX_PHOTO_BYTES+1)
+    if not data: raise HTTPException(400,"头像文件为空")
+    if len(data)>MAX_PHOTO_BYTES: raise HTTPException(413,"头像超过服务器大小限制")
+    folder=AVATAR_DIR/str(uuid.UUID(family_id)); folder.mkdir(parents=True,exist_ok=True)
+    target=folder/f"{safe_baby_id}.jpg"; temp=target.with_suffix(".jpg.part")
+    try:
+        temp.write_bytes(data); temp.replace(target)
+    except Exception:
+        temp.unlink(missing_ok=True); raise
+    return {"baby_id":safe_baby_id,"size_bytes":len(data)}
+
+@app.get("/api/babies/{baby_id}/avatar")
+def download_baby_avatar(baby_id:str,family_id:str,uid:str=Depends(current_user)):
+    from fastapi.responses import FileResponse
+    try: safe_baby_id=str(uuid.UUID(baby_id))
+    except ValueError: raise HTTPException(422,"宝宝 ID 无效")
+    with connect() as db: require_member(db,family_id,uid)
+    path=(AVATAR_DIR/str(uuid.UUID(family_id))/f"{safe_baby_id}.jpg").resolve()
+    if AVATAR_DIR.resolve() not in path.parents or not path.is_file(): raise HTTPException(404,"宝宝头像不存在")
+    return FileResponse(path,media_type="image/jpeg")
+
+@app.delete("/api/babies/{baby_id}/avatar")
+def delete_baby_avatar(baby_id:str,family_id:str,uid:str=Depends(current_user)):
+    try: safe_baby_id=str(uuid.UUID(baby_id))
+    except ValueError: raise HTTPException(422,"宝宝 ID 无效")
+    with connect() as db: require_member(db,family_id,uid)
+    path=(AVATAR_DIR/str(uuid.UUID(family_id))/f"{safe_baby_id}.jpg").resolve()
+    if AVATAR_DIR.resolve() in path.parents: path.unlink(missing_ok=True)
+    return {"deleted":True}
+
 @app.on_event("startup")
 def validate_secret():
     if len(JWT_SECRET)<32: raise RuntimeError("请设置至少 32 字符的 BABYLOG_JWT_SECRET")
