@@ -6,8 +6,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [BabyEntity::class, BabyEventEntity::class],
-    version = 2,
+    entities = [BabyEntity::class, BabyEventEntity::class, BabyPhotoEntity::class],
+    version = 3,
     exportSchema = true
 )
 abstract class BabyLogDatabase : RoomDatabase() {
@@ -21,6 +21,15 @@ abstract class BabyLogDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE babies ADD COLUMN birthWeightGrams INTEGER")
                 db.execSQL("ALTER TABLE babies ADD COLUMN birthLengthCm REAL")
                 db.execSQL("ALTER TABLE babies ADD COLUMN birthHeadCircumferenceCm REAL")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS baby_photos (id TEXT NOT NULL PRIMARY KEY, babyId TEXT NOT NULL, localPath TEXT NOT NULL, caption TEXT, takenAt INTEGER NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, syncStatus TEXT NOT NULL DEFAULT 'PENDING', remotePath TEXT, deletedAt INTEGER)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_photos_babyId ON baby_photos(babyId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_photos_takenAt ON baby_photos(takenAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_photos_syncStatus ON baby_photos(syncStatus)")
             }
         }
     }
