@@ -75,6 +75,8 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             finally { busy = false }
             token = SyncPreferences.token(context)
             accountEmail = SyncPreferences.accountEmail(context)
+            server = SyncPreferences.server(context)
+            if (token.isNotBlank()) { showAccountForm = false; editingServer = false; password = "" }
             familyId = SyncPreferences.familyId(context)
             pendingCount = withContext(Dispatchers.IO) { dao.pendingOperationCount() }
             conflictCount = withContext(Dispatchers.IO) { dao.conflictOperationCount() }
@@ -162,8 +164,6 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 }
                                 "注册成功，账号已登录。"
                             }
-                            showAccountForm = false
-                            password = ""
                         }, modifier = Modifier.fillMaxWidth(), enabled = !busy && email.isNotBlank() && password.length >= 10
                     ) { Text("注册新账号") }
                     OutlinedButton(
@@ -185,8 +185,6 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 }
                                 "登录成功。"
                             }
-                            showAccountForm = false
-                            password = ""
                         }, modifier = Modifier.fillMaxWidth(), enabled = !busy && email.isNotBlank() && password.isNotBlank()
                     ) { Text("登录已有账号") }
                 } else {
