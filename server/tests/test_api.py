@@ -229,8 +229,6 @@ def test_owner_authoritative_snapshot_replaces_family_records(client):
     assert snapshot.json()["replaced"] is True
     assert snapshot.json()["changes"] == 3
 
-    with client.app.state  if False else open(os.path.join(os.environ["BABYLOG_DATA_DIR"], "babylog.db"), "rb"):
-        pass
     pulled = client.get("/api/sync/pull", headers=auth(member), params={"family_id": family_id, "cursor": 0})
     assert pulled.status_code == 200
     latest = {}
