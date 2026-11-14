@@ -598,7 +598,7 @@ private fun BabyAlbumSection(
             Surface(shape = RoundedCornerShape(24.dp), color = Color.Black, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
-                        value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(photo.localPath) }.getOrNull() }
+                        value = withContext(Dispatchers.IO) { runCatching { decodeSampledPhoto(photo.localPath, 900, 900) }.getOrNull() }
                     }
                     if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = "照片预览", modifier = Modifier.fillMaxWidth().height(420.dp), contentScale = ContentScale.Fit)
                     Text(SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault()).format(Date(photo.takenAt)), color = Color.White)
@@ -625,6 +625,20 @@ private fun BabyAlbumSection(
         )
     }
 }
+private fun decodeSampledPhoto(path: String, reqWidth: Int, reqHeight: Int): android.graphics.Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > reqWidth * 2 || bounds.outHeight / sampleSize > reqHeight * 2) {
+        sampleSize *= 2
+    }
+    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+    })
+}
+
 @Composable
 private fun AlbumPhotoCard(
     photo: BabyPhotoEntity,
@@ -634,7 +648,7 @@ private fun AlbumPhotoCard(
     modifier: Modifier = Modifier
 ) {
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
-        value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(photo.localPath) }.getOrNull() }
+        value = withContext(Dispatchers.IO) { runCatching { decodeSampledPhoto(photo.localPath, 320, 320) }.getOrNull() }
     }
     Card(modifier = modifier.clickable(onClick = onClick), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column {
