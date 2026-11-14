@@ -62,6 +62,9 @@ interface BabyLogDao {
     @Query("SELECT COUNT(*) FROM sync_operations WHERE status = 'CONFLICT'")
     suspend fun conflictOperationCount(): Int
 
+    @Query("SELECT * FROM sync_operations WHERE status = 'CONFLICT' ORDER BY createdAt DESC LIMIT 20")
+    suspend fun conflictOperations(): List<SyncOperationEntity>
+
     @Query("UPDATE baby_photos SET serverVersion = :version, syncStatus = :status WHERE id = :photoId")
     suspend fun setPhotoServerVersion(photoId: String, version: Long, status: String)
 
@@ -91,4 +94,7 @@ interface BabyLogDao {
 
     @Query("UPDATE sync_operations SET status = 'CONFLICT', error = :reason WHERE operationId = :operationId")
     suspend fun markOperationConflict(operationId: String, reason: String)
+
+    @Query("UPDATE sync_operations SET status = 'PENDING', error = NULL WHERE operationId = :operationId AND status = 'CONFLICT'")
+    suspend fun retryConflict(operationId: String)
 }

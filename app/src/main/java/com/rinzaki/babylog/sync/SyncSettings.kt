@@ -58,12 +58,16 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var familyId by remember { mutableStateOf(SyncPreferences.familyId(context)) }
     var pendingCount by remember { mutableStateOf(0) }
     var conflictCount by remember { mutableStateOf(0) }
+    var conflicts by remember { mutableStateOf(emptyList<SyncOperationEntity>()) }
+    var queueStateLoaded by remember { mutableStateOf(false) }
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(context)) }
     var lastSyncError by remember { mutableStateOf(SyncPreferences.lastSyncError(context)) }
 
     LaunchedEffect(Unit) {
         pendingCount = dao.pendingOperationCount()
         conflictCount = dao.conflictOperationCount()
+        conflicts = dao.conflictOperations()
+        queueStateLoaded = true
     }
 
     fun runAction(action: suspend () -> String) {
@@ -80,6 +84,8 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             familyId = SyncPreferences.familyId(context)
             pendingCount = withContext(Dispatchers.IO) { dao.pendingOperationCount() }
             conflictCount = withContext(Dispatchers.IO) { dao.conflictOperationCount() }
+            conflicts = withContext(Dispatchers.IO) { dao.conflictOperations() }
+            queueStateLoaded = true
             lastSyncAt = SyncPreferences.lastSyncAt(context)
             lastSyncError = SyncPreferences.lastSyncError(context)
         }
@@ -118,22 +124,26 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 message = "请填写 HTTPS 地址；局域网测试可使用内网 HTTP 地址。"
                             } else {
                                 val serverChanged = SyncPreferences.server(context).trimEnd('/') != normalized
-                                SyncPreferences.saveServer(context, normalized)
-                                server = normalized
-                                editingServer = false
-                                if (serverChanged && token.isNotBlank()) {
-                                    SyncPreferences.clearSession(context)
-                                    token = ""
-                                    accountEmail = ""
-                                    familyId = ""
-                                    showAccountForm = true
-                                    message = "服务器地址已更换，请重新登录该服务器账号。"
+                                if (serverChanged && pendingCount > 0) {
+                                    message = "还有 $pendingCount 项待同步。请先完成同步后再更换服务器；已隔离的冲突数据会继续保留在本机。"
                                 } else {
-                                    message = "服务器地址已保存。"
+                                    SyncPreferences.saveServer(context, normalized)
+                                    server = normalized
+                                    editingServer = false
+                                    if (serverChanged && token.isNotBlank()) {
+                                        SyncPreferences.clearSession(context)
+                                        token = ""
+                                        accountEmail = ""
+                                        familyId = ""
+                                        showAccountForm = true
+                                        message = "服务器地址已更换，请重新登录该服务器账号。"
+                                    } else {
+                                        message = "服务器地址已保存。"
+                                    }
                                 }
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(), enabled = !busy
+                        modifier = Modifier.fillMaxWidth(), enabled = !busy && queueStateLoaded
                     ) { Text("保存服务器地址") }
                     if (SyncPreferences.server(context).isNotBlank()) {
                         TextButton(onClick = { server = SyncPreferences.server(context); editingServer = false }) {
@@ -174,7 +184,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 }
                                 "注册成功，账号已登录。"
                             }
-                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && email.isNotBlank() && password.length >= 10
+                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && queueStateLoaded && email.isNotBlank() && password.length >= 10
                     ) { Text("注册新账号") }
                     OutlinedButton(
                         onClick = {
@@ -195,7 +205,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 }
                                 "登录成功。"
                             }
-                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && email.isNotBlank() && password.isNotBlank()
+                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && queueStateLoaded && email.isNotBlank() && password.isNotBlank()
                     ) { Text("登录已有账号") }
                 } else {
                     Text("账号", fontWeight = FontWeight.SemiBold)
@@ -211,8 +221,12 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                             familyId = ""
                             showAccountForm = true
                             message = "已退出同步账号。本机数据不会删除。"
-                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy
+                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && queueStateLoaded && pendingCount == 0
                     ) { Text("退出登录 / 切换账号") }
+                    if (pendingCount > 0) {
+                        Text("为保护本机数据，请先完成待同步项目后再退出或切换账号。冲突数据会保留在本机，可切回原家庭后重新尝试。", color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    }
                 }
 
                 if (token.isNotBlank()) {
@@ -241,7 +255,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 SyncScheduler.schedule(context)
                                 "家庭创建成功，现有宝宝档案和记录已加入首次同步队列。"
                             }
-                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && familyId.isBlank()
+                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && queueStateLoaded && familyId.isBlank() && pendingCount == 0 && conflictCount == 0
                     ) { Text("创建家庭并同步本机数据") }
                     OutlinedTextField(inviteCode, { inviteCode = it }, Modifier.fillMaxWidth(), label = { Text("家庭邀请码") }, singleLine = true)
                     OutlinedButton(
@@ -255,7 +269,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 SyncScheduler.schedule(context)
                                 "加入家庭成功，正在拉取家庭数据。"
                             }
-                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && familyId.isBlank() && inviteCode.isNotBlank()
+                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && queueStateLoaded && familyId.isBlank() && inviteCode.isNotBlank() && pendingCount == 0 && conflictCount == 0
                     ) { Text("使用邀请码加入家庭") }
                     OutlinedButton(
                         onClick = {
@@ -275,6 +289,29 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     }
                     Text("同步状态", fontWeight = FontWeight.SemiBold)
                     Text("待同步 $pendingCount 项 · 冲突 $conflictCount 项")
+                    if (conflicts.isNotEmpty()) {
+                        Text("需要核对的项目", fontWeight = FontWeight.SemiBold)
+                        conflicts.take(5).forEach { item ->
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("${item.entityType} · ${item.operation} · ${item.error ?: "同步冲突"}",
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                    color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                                TextButton(
+                                    onClick = {
+                                        scope.launch {
+                                            dao.retryConflict(item.operationId)
+                                            pendingCount = withContext(Dispatchers.IO) { dao.pendingOperationCount() }
+                                            conflictCount = withContext(Dispatchers.IO) { dao.conflictOperationCount() }
+                                            conflicts = withContext(Dispatchers.IO) { dao.conflictOperations() }
+                                            if (familyId.isNotBlank()) SyncScheduler.enqueue(context)
+                                        }
+                                    },
+                                    enabled = !busy && queueStateLoaded
+                                ) { Text("重新尝试") }
+                            }
+                        }
+                        if (conflicts.size > 5) Text("另有 ${conflicts.size - 5} 项冲突，请稍后继续查看。", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                    }
                     Button(
                         onClick = {
                             runAction {
@@ -285,7 +322,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !busy && familyId.isNotBlank()
+                        enabled = !busy && queueStateLoaded && familyId.isNotBlank()
                     ) { Text(if (busy) "正在处理…" else "立即同步") }
                     Text(if (lastSyncAt > 0L) "上次成功同步：" + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt)) else "尚未成功同步")
                     if (!lastSyncError.isNullOrBlank()) Text("最近错误：$lastSyncError")
@@ -294,6 +331,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                         scope.launch {
                             pendingCount = withContext(Dispatchers.IO) { dao.pendingOperationCount() }
                             conflictCount = withContext(Dispatchers.IO) { dao.conflictOperationCount() }
+                            conflicts = withContext(Dispatchers.IO) { dao.conflictOperations() }
                             lastSyncAt = SyncPreferences.lastSyncAt(context)
                             lastSyncError = SyncPreferences.lastSyncError(context)
                         }

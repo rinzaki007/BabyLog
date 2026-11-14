@@ -210,6 +210,9 @@ object SyncScheduler {
     }
 }
 
+internal fun syncOperationBelongsToFamily(ownerFamilyId: String?, activeFamilyId: String): Boolean =
+    activeFamilyId.isNotBlank() && ownerFamilyId != null && ownerFamilyId == activeFamilyId
+
 class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val base = SyncPreferences.server(applicationContext)
@@ -224,6 +227,16 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 if (pending.isEmpty()) break
                 val changes = JSONArray()
                 pending.forEach { operation ->
+                    val ownerFamilyId = when (operation.entityType) {
+                        "baby" -> dao.getBaby(operation.entityId)?.familyId
+                        "event" -> dao.getEvent(operation.entityId)?.let { dao.getBaby(it.babyId)?.familyId }
+                        "photo" -> dao.getPhoto(operation.entityId)?.let { dao.getBaby(it.babyId)?.familyId }
+                        else -> familyId
+                    }
+                    if (!syncOperationBelongsToFamily(ownerFamilyId, familyId)) {
+                        dao.markOperationConflict(operation.operationId, "这条数据属于其他家庭空间，已暂停上传。请切回原家庭完成同步，或先核对本机数据归属。")
+                        return@forEach
+                    }
                     if (operation.entityType == "baby" && operation.operation == "upsert") {
                         val baby = dao.getBaby(operation.entityId)
                         if (baby != null) {
@@ -272,6 +285,10 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         .put("payload", JSONObject(operation.payloadJson))
                     operation.baseVersion?.let { item.put("base_version", it) }
                     changes.put(item)
+                }
+                if (changes.length() == 0) {
+                    batch++
+                    continue
                 }
                 val result = SyncHttp.request(base, "/api/sync/push", "POST", token,
                     JSONObject().put("family_id", familyId).put("changes", changes))

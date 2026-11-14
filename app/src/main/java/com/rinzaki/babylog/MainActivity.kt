@@ -42,6 +42,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -134,6 +135,9 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var editingProfile by remember { mutableStateOf(false) }
     var showSyncSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
+    var editingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
+    var deletingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
+    var showQuickRecordMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
@@ -151,7 +155,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 SyncScheduler.enqueue(appContext)
                 lastForegroundSync = now
             }
-            kotlinx.coroutines.delay(1500)
+            kotlinx.coroutines.delay(5000)
         }
     }
     var selectedNav by remember { mutableStateOf(0) }
@@ -169,6 +173,16 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             icon = { Text(listOf("⌂", "＋", "✚", "⌁", "▦")[index], style = MaterialTheme.typography.titleLarge) },
                             label = { Text(label) }
                         )
+                    }
+                }
+            },
+            floatingActionButton = {
+                if (baby != null) Box {
+                    FloatingActionButton(onClick = { showQuickRecordMenu = true }) { Text("＋ 记录") }
+                    DropdownMenu(expanded = showQuickRecordMenu, onDismissRequest = { showQuickRecordMenu = false }) {
+                        listOf("FEEDING" to "🍼 喂养", "DIAPER" to "🌿 大小便", "SLEEP" to "🌙 睡眠", "GROWTH" to "📏 成长测量").forEach { (type, label) ->
+                            DropdownMenuItem(text = { Text(label) }, onClick = { addingEvent = type; showQuickRecordMenu = false })
+                        }
                     }
                 }
             }
@@ -321,18 +335,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     } else if (selectedNav == 1) items(normalEvents, key = { it.id }) { event ->
-                        EventCard(event) { scope.launch {
-                            val now = System.currentTimeMillis()
-                            dao.softDeleteEvent(event.id, now)
-                            if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                                val deleted = dao.getEvent(event.id)
-                                if (deleted != null) {
-                                    dao.clearPendingOperations("event", deleted.id)
-                                    dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", deleted.id, "delete", eventSyncPayload(deleted).toString(), deleted.serverVersion, now))
-                                    SyncScheduler.enqueue(appContext)
-                                }
-                            }
-                        } }
+                        EventCard(event, onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
                     }
                     if (selectedNav == 2) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
@@ -359,15 +362,46 @@ private fun BabyLogApp(dao: BabyLogDao) {
         }
     }
 
+    if (deletingEvent != null) {
+        val target = deletingEvent!!
+        AlertDialog(
+            onDismissRequest = { deletingEvent = null },
+            title = { Text("删除这条记录？") },
+            text = { Text("删除后会从本机记录中隐藏；如果已启用家庭同步，也会同步删除。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val now = System.currentTimeMillis()
+                        dao.softDeleteEvent(target.id, now)
+                        if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                            val deleted = dao.getEvent(target.id)
+                            if (deleted != null) {
+                                dao.clearPendingOperations("event", deleted.id)
+                                dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", deleted.id, "delete", eventSyncPayload(deleted).toString(), deleted.serverVersion, now))
+                                SyncScheduler.enqueue(appContext)
+                            }
+                        }
+                        deletingEvent = null
+                    }
+                }) { Text("确认删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { deletingEvent = null }) { Text("取消") } }
+        )
+    }
+
     if (showSyncSettings) {
         SyncSettingsDialog(dao = dao, onDismiss = { showSyncSettings = false })
     }
 
-    if (addingEvent != null && baby != null) {
-        EventEditor(addingEvent!!, onDismiss = { addingEvent = null }) { type, payload, occurredAt ->
+    if ((addingEvent != null || editingEvent != null) && baby != null) {
+        val currentEvent = editingEvent
+        EventEditor(currentEvent?.eventType ?: addingEvent!!, existing = currentEvent, onDismiss = { addingEvent = null; editingEvent = null }) { type, payload, occurredAt ->
             val now = System.currentTimeMillis()
             scope.launch {
-                val event = BabyEventEntity(UUID.randomUUID().toString(), baby.id, type, occurredAt, payload.toString(), null, now)
+                val event = currentEvent?.copy(
+                    eventType = type, occurredAt = occurredAt, payloadJson = payload.toString(),
+                    updatedAt = now, syncStatus = "PENDING", deletedAt = null
+                ) ?: BabyEventEntity(UUID.randomUUID().toString(), baby.id, type, occurredAt, payload.toString(), null, now)
                 dao.upsertEvent(event)
                 if (SyncPreferences.familyId(appContext).isNotBlank()) {
                     dao.clearPendingOperations("event", event.id)
@@ -375,6 +409,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     SyncScheduler.enqueue(appContext)
                 }
                 addingEvent = null
+                editingEvent = null
             }
         }
     }
@@ -1246,23 +1281,25 @@ private fun ActionCard(emoji: String, title: String, subtitle: String, modifier:
 }
 
 @Composable
-private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (String, JSONObject, Long) -> Unit) {
-    val context = LocalContext.current
-    val now = remember { LocalDateTime.now() }
-    var date by remember { mutableStateOf(now.toLocalDate()) }
-    var hour by remember { mutableStateOf(now.hour) }
-    var minute by remember { mutableStateOf(now.minute) }
-    var amount by remember { mutableStateOf(120f) }
-    var urine by remember { mutableStateOf(true) }
-    var stool by remember { mutableStateOf(false) }
-    var stoolShape by remember { mutableStateOf("糊状") }
-    var stoolColor by remember { mutableStateOf("黄色") }
-    var stoolAmount by remember { mutableStateOf("中量") }
-    var sleepMinutes by remember { mutableStateOf(60f) }
-    var weightKg by remember { mutableStateOf("") }
-    var lengthCm by remember { mutableStateOf("") }
-    var headCm by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
+private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, onDismiss: () -> Unit, onSave: (String, JSONObject, Long) -> Unit) {
+    val initialPayload = remember(existing?.id) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
+    val initialTime = remember(existing?.id) {
+        existing?.occurredAt?.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime() } ?: LocalDateTime.now()
+    }
+    var date by remember(existing?.id) { mutableStateOf(initialTime.toLocalDate()) }
+    var hour by remember(existing?.id) { mutableStateOf(initialTime.hour) }
+    var minute by remember(existing?.id) { mutableStateOf(initialTime.minute) }
+    var amount by remember(existing?.id) { mutableStateOf(initialPayload.optInt("amountMl", 120).toFloat()) }
+    var urine by remember(existing?.id) { mutableStateOf(if (existing == null) true else initialPayload.optBoolean("urine")) }
+    var stool by remember(existing?.id) { mutableStateOf(initialPayload.optBoolean("stool")) }
+    var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", "糊状")) }
+    var stoolColor by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolColor", "黄色")) }
+    var stoolAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolAmount", "中量")) }
+    var sleepMinutes by remember(existing?.id) { mutableStateOf(initialPayload.optInt("durationMinutes", 60).toFloat().coerceIn(10f, 720f)) }
+    var weightKg by remember(existing?.id) { mutableStateOf(initialPayload.optInt("weightGrams").takeIf { it > 0 }?.div(1000.0)?.toString().orEmpty()) }
+    var lengthCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("lengthCm").takeIf { it > 0 }?.toString().orEmpty()) }
+    var headCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.toString().orEmpty()) }
+    var note by remember(existing?.id) { mutableStateOf(initialPayload.optString("note")) }
     var error by remember { mutableStateOf<String?>(null) }
     var showEventTimePicker by remember { mutableStateOf(false) }
     val title = when (eventType) { "FEEDING" -> "喂养记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; else -> "成长记录" }
@@ -1391,7 +1428,7 @@ private fun SelectionRow(options: List<String>, selected: String, onSelect: (Str
 }
 
 @Composable
-private fun EventCard(event: BabyEventEntity, onDelete: () -> Unit) {
+private fun EventCard(event: BabyEventEntity, onEdit: () -> Unit, onDelete: () -> Unit) {
     val payload = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
     val (emoji, title, detail) = when (event.eventType) {
         "FEEDING" -> Triple("🍼", "喂养", "${payload.optInt("amountMl")} ml 配方奶")
@@ -1423,7 +1460,10 @@ private fun EventCard(event: BabyEventEntity, onDelete: () -> Unit) {
                 Text(detail + if (payload.optString("note").isNotBlank()) " · " + payload.optString("note") else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            Column(horizontalAlignment = Alignment.End) {
+                TextButton(onClick = onEdit) { Text("编辑") }
+                TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            }
         }
     }
 }
