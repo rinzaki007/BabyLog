@@ -27,13 +27,15 @@ object SyncPreferences {
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     fun server(context: Context) = prefs(context).getString("server", "") ?: ""
     fun token(context: Context) = prefs(context).getString("token", "") ?: ""
+    fun accountEmail(context: Context) = prefs(context).getString("account_email", "") ?: ""
+    fun saveAccountEmail(context: Context, value: String) { prefs(context).edit().putString("account_email", value.trim().lowercase()).apply() }
     fun familyId(context: Context) = prefs(context).getString("family_id", "") ?: ""
     fun cursor(context: Context) = prefs(context).getLong("cursor", 0L)
     fun saveServer(context: Context, value: String) { prefs(context).edit().putString("server", value.trim().trimEnd('/')).apply() }
     fun saveSession(context: Context, token: String) { prefs(context).edit().putString("token", token).remove("family_id").putLong("cursor", 0L).apply() }
     fun saveFamily(context: Context, id: String) { prefs(context).edit().putString("family_id", id).putLong("cursor", 0L).apply() }
     fun saveCursor(context: Context, value: Long) { prefs(context).edit().putLong("cursor", value).apply() }
-    fun clearSession(context: Context) { prefs(context).edit().remove("token").remove("family_id").putLong("cursor", 0L).apply() }
+    fun clearSession(context: Context) { prefs(context).edit().remove("token").remove("family_id").remove("account_email").putLong("cursor", 0L).apply() }
     fun lastSyncAt(context: Context) = prefs(context).getLong("last_sync_at", 0L)
     fun lastSyncError(context: Context) = prefs(context).getString("last_sync_error", null)
     fun markSyncSuccess(context: Context) { prefs(context).edit().putLong("last_sync_at", System.currentTimeMillis()).remove("last_sync_error").apply() }
