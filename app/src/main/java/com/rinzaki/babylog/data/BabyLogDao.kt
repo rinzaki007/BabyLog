@@ -47,6 +47,9 @@ interface BabyLogDao {
     @Query("UPDATE baby_events SET serverVersion = :version, syncStatus = 'SYNCED' WHERE id = :eventId")
     suspend fun setEventServerVersion(eventId: String, version: Long)
 
+    @Query("UPDATE baby_events SET serverVersion = :version WHERE id = :eventId")
+    suspend fun updateEventServerVersionForRetry(eventId: String, version: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertPhoto(photo: BabyPhotoEntity)
 
