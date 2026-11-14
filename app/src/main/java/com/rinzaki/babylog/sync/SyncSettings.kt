@@ -392,6 +392,12 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 Button(onClick = {
                     showDeviceResetConfirm = false
                     runAction {
+                        val profile = SyncHttp.request(SyncPreferences.server(context), "/api/me", token = SyncPreferences.token(context))
+                        val families = profile.optJSONArray("families") ?: org.json.JSONArray()
+                        val currentFamily = (0 until families.length()).map { families.getJSONObject(it) }
+                            .firstOrNull { it.optString("id") == SyncPreferences.familyId(context) }
+                        require(currentFamily != null) { "当前账号已不属于这个家庭空间" }
+                        require(currentFamily.optString("role") != "owner") { "这是家庭创建者设备。为避免误删唯一原始数据，请不要在第一台手机执行清空操作。" }
                         SyncPreferences.setRecoveryInProgress(context, true)
                         SyncScheduler.cancel(context)
                         try {
