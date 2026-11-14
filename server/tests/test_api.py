@@ -73,6 +73,15 @@ def test_family_invite_and_membership_sync(client):
     assert conflict.json()["conflicts"][0]["reason"] == "version_conflict"
     assert conflict.json()["conflicts"][0]["server_version"] == 1
 
+    # Retrying the unchanged local payload with the returned version is safe.
+    rebased = {**stale, "changes": [{
+        **stale["changes"][0], "base_version": conflict.json()["conflicts"][0]["server_version"]
+    }]}
+    retried = client.post("/api/sync/push", headers=auth(guest), json=rebased)
+    assert retried.status_code == 200
+    assert len(retried.json()["accepted"]) == 1
+    assert retried.json()["accepted"][0]["version"] == 2
+
 
 def test_family_data_isolation(client):
     first = register(client, "first@example.test")
