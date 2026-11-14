@@ -198,7 +198,7 @@ object SyncScheduler {
     private val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
     fun enqueue(context: Context) {
         val request = OneTimeWorkRequestBuilder<BabyLogSyncWorker>().setConstraints(constraints).build()
-        WorkManager.getInstance(context).enqueueUniqueWork("babylog-sync-now", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+        WorkManager.getInstance(context).enqueueUniqueWork("babylog-sync-now", ExistingWorkPolicy.KEEP, request)
     }
     fun schedule(context: Context) {
         val request = PeriodicWorkRequestBuilder<BabyLogSyncWorker>(15, TimeUnit.MINUTES)
