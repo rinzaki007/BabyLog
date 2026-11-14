@@ -137,7 +137,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
             bottomBar = {
                 NavigationBar(containerColor = Color.White) {
                     val destinations = listOf("首页", "记录", "趋势", "相册")
-                    val targets = listOf(0, 6, 3, 5)
+                    val targets = listOf(0, 3, 4, 6)
                     destinations.forEachIndexed { index, label ->
                         NavigationBarItem(
                             selected = selectedNav == index,
@@ -204,6 +204,20 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 }
                 if (baby != null) {
                     item { TodaySummary(events) }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("快捷记录", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ActionCard("🍼", "喂养", "奶量与时间", Modifier.weight(1f)) { addingEvent = "FEEDING" }
+                                ActionCard("🌿", "日常护理", "大小便情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
+                                ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ActionCard("📏", "成长记录", "体重变化", Modifier.weight(1f)) { addingEvent = "GROWTH" }
+                                Spacer(Modifier.weight(2f))
+                            }
+                        }
+                    }
                     item { TrendsSummary(events) }
                     item { GrowthSection(baby, events) }
                     item {
@@ -256,20 +270,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                         )
-                    }
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("快捷记录", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionCard("🍼", "喂养", "奶量与时间", Modifier.weight(1f)) { addingEvent = "FEEDING" }
-                                ActionCard("🌿", "日常护理", "大小便情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
-                                ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionCard("📏", "成长记录", "体重变化", Modifier.weight(1f)) { addingEvent = "GROWTH" }
-                                Spacer(Modifier.weight(2f))
-                            }
-                        }
                     }
                     item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
