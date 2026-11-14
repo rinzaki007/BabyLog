@@ -129,11 +129,32 @@ def push(body:PushRequest,uid:str=Depends(current_user)):
 def pull(family_id:str,cursor:int=0,limit:int=500,uid:str=Depends(current_user)):
     limit=max(1,min(limit,1000))
     with connect() as db:
-        require_member(db,family_id,uid); rows=db.execute("SELECT seq,entity_type,entity_id,payload,version,created_at FROM changes WHERE family_id=? AND seq>? ORDER BY seq LIMIT ?",(family_id,max(0,cursor),limit)).fetchall()
-    items=[]
-    for r in rows:
-        p=json.loads(r["payload"]); items.append({"cursor":r["seq"],"entity_type":r["entity_type"],"entity_id":r["entity_id"],"operation":p["operation"],"payload":p["payload"],"version":r["version"],"created_at":r["created_at"]})
-    return {"items":items,"next_cursor":items[-1]["cursor"] if items else cursor}
+        require_member(db,family_id,uid)
+        rows=db.execute(
+            "SELECT seq,entity_type,entity_id,payload,version,created_at FROM changes WHERE family_id=? AND seq>? ORDER BY seq LIMIT ?",
+            (family_id,max(0,cursor),limit)
+        ).fetchall()
+        items=[]
+        for r in rows:
+            p=json.loads(r["payload"])
+            operation=p["operation"]
+            # A fresh device/session may replay the entire change history. Do not
+            # download an old photo-upsert when that photo has since been deleted:
+            # its file and photos row are intentionally removed by the delete.
+            if r["entity_type"]=="photo" and operation=="upsert":
+                latest=db.execute(
+                    "SELECT deleted FROM records WHERE family_id=? AND entity_type='photo' AND entity_id=?",
+                    (family_id,r["entity_id"])
+                ).fetchone()
+                if latest and latest["deleted"]:
+                    continue
+            items.append({"cursor":r["seq"],"entity_type":r["entity_type"],"entity_id":r["entity_id"],"operation":operation,"payload":p["payload"],"version":r["version"],"created_at":r["created_at"]})
+    return {
+        "items":items,
+        # Advance across filtered history too, otherwise clients would loop forever.
+        "next_cursor":rows[-1]["seq"] if rows else cursor,
+        "scanned_count":len(rows)
+    }
 @app.post("/api/photos/upload")
 async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:str=Depends(current_user)):
     types={"image/jpeg":".jpg","image/png":".png","image/webp":".webp","image/heic":".heic","image/heif":".heif"}; mime=file.content_type or ""
