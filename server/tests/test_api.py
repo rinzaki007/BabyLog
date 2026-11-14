@@ -71,6 +71,7 @@ def test_family_invite_and_membership_sync(client):
     conflict = client.post("/api/sync/push", headers=auth(guest), json=stale)
     assert conflict.status_code == 200
     assert conflict.json()["conflicts"][0]["reason"] == "version_conflict"
+    assert conflict.json()["conflicts"][0]["server_version"] == 1
 
 
 def test_family_data_isolation(client):
