@@ -72,7 +72,7 @@ private object BabyUpdater {
 
     private fun fetchPublicReleasePage(): BabyRelease {
         val connection = URL("https://github.com/rinzaki007/BabyLog/releases/latest").openConnection() as HttpURLConnection
-        try {
+        return try {
             connection.connectTimeout = 12000; connection.readTimeout = 20000
             connection.setRequestProperty("User-Agent", "BabyLog-Android")
             check(connection.responseCode == 200) { "更新检查失败（HTTP ${connection.responseCode}），请稍后重试" }
