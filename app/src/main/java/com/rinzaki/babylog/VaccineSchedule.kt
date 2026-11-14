@@ -85,8 +85,7 @@ internal fun chinaSelfPaidVaccineSchedule(birthDate: LocalDate): List<Pair<Vacci
         VaccineScheduleItem("水痘疫苗", "第 1 剂", 12, "自费；第 2 剂时间以当地程序和产品说明为准", isSelfPaid = true, requires28DayInterval = true),
         VaccineScheduleItem("Hib 疫苗", "加强剂", 18, "是否需要加强取决于前期接种程序", isSelfPaid = true),
         VaccineScheduleItem("13 价肺炎球菌结合疫苗", "加强剂", 12, "常见加强窗口为 12–15 月龄", isSelfPaid = true),
-        VaccineScheduleItem("水痘疫苗", "第 2 剂", 48, "常见加强节点；具体以当地接种门诊安排为准", isSelfPaid = true, requires28DayInterval = true),
-        VaccineScheduleItem("23 价肺炎球菌多糖疫苗", "评估接种", 24, "仅适用于符合条件的高风险儿童，需医生评估", isSelfPaid = true)
+        VaccineScheduleItem("水痘疫苗", "第 2 剂", 48, "常见加强节点；具体以当地接种门诊安排为准", isSelfPaid = true, requires28DayInterval = true)
     )
     return items.map { it to birthDate.plusMonths(it.ageMonths).plusDays(it.offsetDays) }
 }
@@ -140,6 +139,7 @@ internal fun chinaOptionalVaccineCatalog(): List<VaccineCatalogEntry> = listOf(
     VaccineCatalogEntry("流脑系列", "A+C 群流脑结合疫苗", "可作为部分流脑程序的替代选择；是否抵扣国家免规剂次需按年龄、接种日期和当地接种门诊规则核对。"),
     VaccineCatalogEntry("流脑系列", "ACYW135 四价流脑结合疫苗", "不同产品适用月龄和剂次差异较大，不统一生成倒计时。"),
     VaccineCatalogEntry("流脑系列", "ACYW135 四价流脑多糖疫苗", "通常用于符合年龄条件的人群；是否适用需结合产品说明书和风险评估。"),
+    VaccineCatalogEntry("肺炎球菌系列", "23 价肺炎球菌多糖疫苗", "仅适用于符合条件的特定高风险人群，不作为普通婴幼儿常规月龄倒计时；需医生评估。"),
     VaccineCatalogEntry("联合疫苗", "DTaP-Hib 四联疫苗", "含百白破和 Hib 成分；记录可用于对应成分核对，具体剂次仍需门诊确认。"),
     VaccineCatalogEntry("联合疫苗", "AC-Hib 联合疫苗", "含 A、C 群流脑和 Hib 成分；不能仅凭名称自动判定所有剂次已完成。"),
     VaccineCatalogEntry("联合疫苗", "甲乙肝联合疫苗", "可选产品，接种程序依产品说明书及既往甲肝、乙肝接种情况确定。"),
@@ -165,27 +165,23 @@ internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDo
     val target = normalize(item.vaccineName)
     fun isPentavalent(name: String) =
         name.contains("五联") || name.contains("dtapipvhib") || name.contains("pentaxim") || name.contains("潘太欣")
-    fun isQuadrivalent(name: String) =
-        name.contains("四联") || name.contains("dtaphib")
-    fun isAcHib(name: String) =
-        name.contains("ac hib") || name.contains("achib") || name.contains("ac-hib")
+    fun isQuadrivalent(name: String) = name.contains("四联") || name.contains("dtaphib")
+    fun isAcHib(name: String) = name.contains("achib") || name.contains("ac-hib")
     val matches = recordedNamesAndDoses.filter { (rawName, _) ->
         val name = normalize(rawName)
-        val pentavalent = isPentavalent(name)
-        val quadrivalent = isQuadrivalent(name)
-        val acHib = isAcHib(name)
+        val combination = isPentavalent(name) || isQuadrivalent(name) || isAcHib(name)
         when {
-            item.vaccineName.contains("五联") -> pentavalent
+            item.vaccineName.contains("五联") -> isPentavalent(name)
             item.vaccineName.startsWith("Hib") ->
-                name.contains("hib") || name.contains("流感嗜血杆菌") || pentavalent || quadrivalent || acHib
+                !combination && (name == "hib" || name.contains("流感嗜血杆菌"))
             item.vaccineName.contains("百白破") ->
-                name.contains("百白破") || name.contains("dtap") || pentavalent || quadrivalent
+                !combination && (name.contains("百白破") || name == "dtap")
             item.vaccineName.contains("脊灰灭活") ->
-                name.contains("脊灰灭活") || name.contains("ipv") || pentavalent
+                !combination && (name.contains("脊灰灭活") || name == "ipv")
             item.vaccineName.contains("A 群 C 群流脑") ->
-                name.contains("a+c") || (name.contains("a群") && name.contains("c群")) || acHib
+                !isAcHib(name) && name.contains("多糖") && (name.contains("a+c") || (name.contains("a群") && name.contains("c群")))
             item.vaccineName.contains("A 群流脑") ->
-                name.contains("a群") && !name.contains("c群")
+                !isAcHib(name) && name.contains("多糖") && name.contains("a群") && !name.contains("c群")
             item.group == "乙脑" -> name.contains("乙脑") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
             item.group == "甲肝" -> name.contains("甲肝") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
             item.vaccineName.contains("肺炎球菌") -> name.contains("肺炎球菌") && (Regex("\\d+").find(item.vaccineName)?.value?.let { name.contains(it) } ?: true)
@@ -193,7 +189,7 @@ internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDo
             item.vaccineName.contains("EV71") -> name.contains("ev71") || name.contains("手足口") || name.contains("肠道病毒71")
             item.vaccineName.contains("水痘") -> name.contains("水痘")
             item.vaccineName.contains("流感") -> name.contains("流感")
-            else -> name.contains(target) || target.contains(name)
+            else -> name == target || (target.isNotBlank() && name.contains(target))
         }
     }
     val expectedDose = doseNumber(item.dose) ?: return matches.isNotEmpty()

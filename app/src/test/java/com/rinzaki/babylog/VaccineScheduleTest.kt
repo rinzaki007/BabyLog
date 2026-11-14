@@ -102,24 +102,32 @@ class VaccineScheduleTest {
         assertTrue(vaccineDoseIsRecorded(item, listOf("潘太欣" to "第1剂")))
 
         val hibItem = VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true)
-        assertTrue(vaccineDoseIsRecorded(hibItem, listOf("五联疫苗" to "第1剂")))
+        assertTrue(!vaccineDoseIsRecorded(hibItem, listOf("五联疫苗" to "第1剂")))
     }
 
     @Test
-    fun combinationVaccineRecordsCoverTheirComponents() {
+    fun combinationVaccinesDoNotAutomaticallyCompleteOtherProducts() {
         val pentavalent = listOf("五联疫苗" to "第1剂")
-        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("百白破疫苗", "第 1 剂", 2), pentavalent))
-        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("脊灰灭活疫苗", "第 1 剂", 2), pentavalent))
-        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true), pentavalent))
+        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("五联疫苗（DTaP-IPV-Hib）", "第 1 剂", 2, isSelfPaid = true), pentavalent))
+        assertTrue(!vaccineDoseIsRecorded(VaccineScheduleItem("百白破疫苗", "第 1 剂", 2), pentavalent))
+        assertTrue(!vaccineDoseIsRecorded(VaccineScheduleItem("脊灰灭活疫苗", "第 1 剂", 2), pentavalent))
+        assertTrue(!vaccineDoseIsRecorded(VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true), pentavalent))
 
         val quadrivalent = listOf("DTaP-Hib 四联疫苗" to "第1剂")
-        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("百白破疫苗", "第 1 剂", 2), quadrivalent))
-        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true), quadrivalent))
+        assertTrue(!vaccineDoseIsRecorded(VaccineScheduleItem("百白破疫苗", "第 1 剂", 2), quadrivalent))
+        assertTrue(!vaccineDoseIsRecorded(VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true), quadrivalent))
         assertTrue(!vaccineDoseIsRecorded(VaccineScheduleItem("脊灰灭活疫苗", "第 1 剂", 2), quadrivalent))
 
         val acHib = listOf("AC-Hib 联合疫苗" to "第1剂")
-        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true), acHib))
-        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("A 群 C 群流脑多糖疫苗", "第 1 剂", 36), acHib))
+        assertTrue(!vaccineDoseIsRecorded(VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true), acHib))
+        assertTrue(!vaccineDoseIsRecorded(VaccineScheduleItem("A 群 C 群流脑多糖疫苗", "第 1 剂", 36), acHib))
+    }
+
+    @Test
+    fun twentyThreeValentPneumococcalIsNotInRoutineCountdown() {
+        val plan = chinaSelfPaidVaccineSchedule(LocalDate.of(2026, 1, 15))
+        assertTrue(plan.none { it.first.vaccineName.contains("23 价") })
+        assertTrue(chinaOptionalVaccineCatalog().any { it.name.contains("23 价") && it.category == "肺炎球菌系列" })
     }
 
     @Test
