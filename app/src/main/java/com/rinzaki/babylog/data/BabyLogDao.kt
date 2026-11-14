@@ -35,6 +35,22 @@ interface BabyLogDao {
     @Query("SELECT * FROM babies")
     suspend fun getAllBabies(): List<BabyEntity>
 
+    @Query("DELETE FROM sync_operations")
+    suspend fun clearAllSyncOperations()
+
+    @Query("DELETE FROM baby_photos")
+    suspend fun clearAllPhotos()
+
+    @Query("DELETE FROM baby_events")
+    suspend fun clearAllEvents()
+
+    @Query("DELETE FROM babies")
+    suspend fun clearAllBabies()
+
+    @Query("DELETE FROM babies WHERE id = :babyId")
+    suspend fun deleteBabyFromServer(babyId: String)
+
+
     @Query("SELECT * FROM baby_events")
     suspend fun getAllEvents(): List<BabyEventEntity>
 
@@ -46,6 +62,9 @@ interface BabyLogDao {
 
     @Query("UPDATE baby_events SET serverVersion = :version, syncStatus = 'SYNCED' WHERE id = :eventId")
     suspend fun setEventServerVersion(eventId: String, version: Long)
+
+    @Query("UPDATE baby_events SET serverVersion = :version WHERE id = :eventId")
+    suspend fun updateEventServerVersionForRetry(eventId: String, version: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertPhoto(photo: BabyPhotoEntity)
@@ -86,8 +105,11 @@ interface BabyLogDao {
     @Query("DELETE FROM sync_operations WHERE entityType = :entityType AND entityId = :entityId AND status = 'PENDING'")
     suspend fun clearPendingOperations(entityType: String, entityId: String)
 
-    @Query("SELECT EXISTS(SELECT 1 FROM sync_operations WHERE entityType = :entityType AND entityId = :entityId AND status = 'CONFLICT')")
-    suspend fun hasConflict(entityType: String, entityId: String): Boolean
+    @Query("SELECT EXISTS(SELECT 1 FROM sync_operations WHERE entityType = :entityType AND entityId = :entityId AND status IN ('PENDING', 'CONFLICT'))")
+    suspend fun hasLocalOperation(entityType: String, entityId: String): Boolean
+
+    @Query("UPDATE sync_operations SET baseVersion = :baseVersion, status = 'PENDING', error = NULL WHERE operationId = :operationId AND status = 'CONFLICT'")
+    suspend fun rebaseConflict(operationId: String, baseVersion: Long)
 
     @Query("DELETE FROM sync_operations WHERE operationId = :operationId")
     suspend fun removeOperation(operationId: String)
