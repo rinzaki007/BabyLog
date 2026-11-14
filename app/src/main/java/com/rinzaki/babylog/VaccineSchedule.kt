@@ -182,8 +182,10 @@ internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDo
                 name.contains("百白破") || name.contains("dtap") || pentavalent || quadrivalent
             item.vaccineName.contains("脊灰灭活") ->
                 name.contains("脊灰灭活") || name.contains("ipv") || pentavalent
-            item.vaccineName.contains("A 群流脑") || item.vaccineName.contains("A 群 C 群流脑") ->
-                name.contains("流脑") || name.contains("mening") || (acHib && item.vaccineName.contains("A 群 C 群"))
+            item.vaccineName.contains("A 群 C 群流脑") ->
+                name.contains("a+c") || (name.contains("a群") && name.contains("c群")) || acHib
+            item.vaccineName.contains("A 群流脑") ->
+                name.contains("a群") && !name.contains("c群")
             item.group == "乙脑" -> name.contains("乙脑") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
             item.group == "甲肝" -> name.contains("甲肝") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
             item.vaccineName.contains("肺炎球菌") -> name.contains("肺炎球菌") && (Regex("\\d+").find(item.vaccineName)?.value?.let { name.contains(it) } ?: true)
