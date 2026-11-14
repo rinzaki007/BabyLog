@@ -97,7 +97,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 AppUpdateSection()
                 Text("服务器", fontWeight = FontWeight.SemiBold)
                 if (server.isNotBlank() && !editingServer) {
-                    Text("已连接服务器", style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                    Text("已配置服务器", style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                         color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
                     Text(server, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
                     OutlinedButton(onClick = { editingServer = true }, modifier = Modifier.fillMaxWidth(), enabled = !busy) {
@@ -217,7 +217,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
 
                 if (token.isNotBlank()) {
                     Text("家庭空间", fontWeight = FontWeight.SemiBold)
-                    Text(if (familyId.isBlank()) "当前账号尚未加入家庭" else "已连接家庭：$familyId")
+                    Text(if (familyId.isBlank()) "当前账号尚未加入家庭空间" else "已加入家庭空间")
                     Button(
                         onClick = {
                             runAction {
