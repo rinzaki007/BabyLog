@@ -40,6 +40,8 @@ object SyncPreferences {
     fun markSyncFailure(context: Context, reason: String) { prefs(context).edit().putString("last_sync_error", reason.take(240)).apply() }
 }
 
+class SyncHttpException(val statusCode: Int, message: String) : IllegalStateException(message)
+
 object SyncHttp {
     fun request(base: String, path: String, method: String = "GET", token: String? = null, body: JSONObject? = null): JSONObject {
         val connection = (URL(base.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
@@ -89,7 +91,7 @@ object SyncHttp {
             val code = connection.responseCode
             val response = (if (code in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) throw IllegalStateException("照片上传失败 HTTP $code: " + runCatching { JSONObject(response).optString("detail") }.getOrDefault(response.take(160)))
+            if (code !in 200..299) throw SyncHttpException(code, "照片上传失败 HTTP $code: " + runCatching { JSONObject(response).optString("detail") }.getOrDefault(response.take(160)))
         } finally { connection.disconnect() }
     }
 
@@ -104,13 +106,23 @@ object SyncHttp {
             val code = connection.responseCode
             if (code !in 200..299) {
                 val message = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                throw IllegalStateException("照片下载失败 HTTP $code: $message")
+                throw SyncHttpException(code, "照片下载失败 HTTP $code: $message")
             }
             destination.parentFile?.mkdirs()
             val temp = File(destination.parentFile, destination.name + ".part")
-            connection.inputStream.use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
-            if (destination.exists()) destination.delete()
-            if (!temp.renameTo(destination)) throw java.io.IOException("无法保存下载的照片")
+            try {
+                connection.inputStream.use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
+                val expectedLength = connection.contentLengthLong
+                if (expectedLength >= 0L && temp.length() != expectedLength) {
+                    throw java.io.IOException("照片下载不完整：期望 ${expectedLength} 字节，实际 ${temp.length()} 字节")
+                }
+                if (temp.length() <= 0L) throw java.io.IOException("照片下载内容为空")
+                if (destination.exists() && !destination.delete()) throw java.io.IOException("无法替换旧照片文件")
+                if (!temp.renameTo(destination)) throw java.io.IOException("无法保存下载的照片")
+            } catch (error: Exception) {
+                temp.delete()
+                throw error
+            }
         } finally { connection.disconnect() }
     }
 }
@@ -119,7 +131,7 @@ object SyncScheduler {
     private val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
     fun enqueue(context: Context) {
         val request = OneTimeWorkRequestBuilder<BabyLogSyncWorker>().setConstraints(constraints).build()
-        WorkManager.getInstance(context).enqueueUniqueWork("babylog-sync-now", ExistingWorkPolicy.REPLACE, request)
+        WorkManager.getInstance(context).enqueueUniqueWork("babylog-sync-now", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
     fun schedule(context: Context) {
         val request = PeriodicWorkRequestBuilder<BabyLogSyncWorker>(6, TimeUnit.HOURS)
@@ -151,7 +163,16 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                             if (photo != null) dao.setPhotoServerVersion(photo.id, -1L, "CONFLICT")
                             return@forEach
                         }
-                        SyncHttp.uploadPhoto(base, familyId, photo.id, token, localFile, mimeTypeForPath(photo.localPath))
+                        try {
+                            SyncHttp.uploadPhoto(base, familyId, photo.id, token, localFile, mimeTypeForPath(photo.localPath))
+                        } catch (error: SyncHttpException) {
+                            if (error.statusCode in 400..499) {
+                                dao.markOperationConflict(operation.operationId, error.message ?: "照片上传被服务器拒绝")
+                                dao.setPhotoServerVersion(photo.id, -1L, "CONFLICT")
+                                return@forEach
+                            }
+                            throw error
+                        }
                     }
                     val item = JSONObject()
                         .put("operation_id", operation.operationId)

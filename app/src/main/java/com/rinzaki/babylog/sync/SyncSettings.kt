@@ -211,12 +211,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     Text("待同步 $pendingCount 项 · 冲突 $conflictCount 项")
                     Text(if (lastSyncAt > 0L) "上次成功同步：" + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt)) else "尚未成功同步")
                     if (!lastSyncError.isNullOrBlank()) Text("最近错误：$lastSyncError")
-                    Button(onClick = {
-                        SyncScheduler.enqueue(context)
-                        message = "已加入后台同步队列。"
-                    }, modifier = Modifier.fillMaxWidth(), enabled = !busy && familyId.isNotBlank()) {
-                        Text("立即同步")
-                    }
+                    Text("记录变更和每次打开 App 时都会自动同步；离线时会保留在本机，联网后自动补传。", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
                     TextButton(onClick = {
                         scope.launch {
                             pendingCount = withContext(Dispatchers.IO) { dao.pendingOperationCount() }
