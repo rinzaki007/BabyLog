@@ -318,7 +318,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         // Keep the local payload; never replace it with stale remote data.
                         when (operation.entityType) {
                             "baby" -> dao.setBabyServerVersion(operation.entityId, serverVersion)
-                            "event" -> dao.setEventServerVersion(operation.entityId, serverVersion)
+                            "event" -> dao.updateEventServerVersionForRetry(operation.entityId, serverVersion)
                             "photo" -> dao.setPhotoServerVersion(operation.entityId, serverVersion, "PENDING")
                         }
                         dao.rebaseConflict(operationId, serverVersion)
