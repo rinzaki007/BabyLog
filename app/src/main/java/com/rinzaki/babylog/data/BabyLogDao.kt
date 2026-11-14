@@ -35,6 +35,22 @@ interface BabyLogDao {
     @Query("SELECT * FROM babies")
     suspend fun getAllBabies(): List<BabyEntity>
 
+    @Query("DELETE FROM sync_operations")
+    suspend fun clearAllSyncOperations()
+
+    @Query("DELETE FROM baby_photos")
+    suspend fun clearAllPhotos()
+
+    @Query("DELETE FROM baby_events")
+    suspend fun clearAllEvents()
+
+    @Query("DELETE FROM babies")
+    suspend fun clearAllBabies()
+
+    @Query("DELETE FROM babies WHERE id = :babyId")
+    suspend fun deleteBabyFromServer(babyId: String)
+
+
     @Query("SELECT * FROM baby_events")
     suspend fun getAllEvents(): List<BabyEventEntity>
 
