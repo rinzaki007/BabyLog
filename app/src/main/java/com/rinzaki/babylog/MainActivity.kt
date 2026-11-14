@@ -643,8 +643,13 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                 }
                 when (eventType) {
                     "FEEDING" -> {
-                        Text("本次奶量  ${amount.toInt()} ml", fontWeight = FontWeight.SemiBold)
-                        Slider(amount, { amount = it }, valueRange = 30f..300f, steps = 26)
+                        OutlinedTextField(
+                            value = amount.toInt().toString(),
+                            onValueChange = { raw -> raw.filter(Char::isDigit).toIntOrNull()?.let { amount = it.coerceIn(0, 1000).toFloat() } },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("本次奶量（ml）") },
+                            singleLine = true
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf(60f, 90f, 120f, 150f, 180f, 210f).forEach { v ->
                                 if (amount.toInt() == v.toInt()) FilledTonalButton(onClick = { amount = v }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)) { Text(v.toInt().toString()) }
@@ -670,8 +675,13 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                         Slider(sleepMinutes, { sleepMinutes = it }, valueRange = 10f..720f, steps = 70)
                     }
                     "GROWTH" -> {
-                        Text("当前体重  ${"%.2f".format(Locale.getDefault(), weightKg)} kg", fontWeight = FontWeight.SemiBold)
-                        Slider(weightKg, { weightKg = it }, valueRange = 2f..20f, steps = 179)
+                        OutlinedTextField(
+                            value = "%.2f".format(Locale.getDefault(), weightKg),
+                            onValueChange = { raw -> raw.replace(',', '.').toFloatOrNull()?.let { weightKg = it.coerceIn(0.1f, 80f) } },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("当前体重（kg）") },
+                            singleLine = true
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(3f, 4f, 5f, 6f, 8f, 10f).forEach { v ->
                                 if (weightKg == v) FilledTonalButton(onClick = { weightKg = v }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) { Text("$v") }
