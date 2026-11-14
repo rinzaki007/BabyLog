@@ -682,6 +682,8 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
     var stoolAmount by remember { mutableStateOf("中量") }
     var sleepMinutes by remember { mutableStateOf(60f) }
     var weightKg by remember { mutableStateOf(5f) }
+    var lengthCm by remember { mutableStateOf(55f) }
+    var headCm by remember { mutableStateOf(38f) }
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val title = when (eventType) { "FEEDING" -> "喂养记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; else -> "成长记录" }
@@ -741,12 +743,16 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                             label = { Text("当前体重（kg）") },
                             singleLine = true
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(3f, 4f, 5f, 6f, 8f, 10f).forEach { v ->
-                                if (weightKg == v) FilledTonalButton(onClick = { weightKg = v }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) { Text("$v") }
-                                else OutlinedButton(onClick = { weightKg = v }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) { Text("$v") }
-                            }
-                        }
+                        OutlinedTextField(
+                            value = "%.1f".format(Locale.getDefault(), lengthCm),
+                            onValueChange = { it.replace(',', '.').toFloatOrNull()?.let { v -> lengthCm = v.coerceIn(20f, 120f) } },
+                            modifier = Modifier.fillMaxWidth(), label = { Text("身长（cm）") }, singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = "%.1f".format(Locale.getDefault(), headCm),
+                            onValueChange = { it.replace(',', '.').toFloatOrNull()?.let { v -> headCm = v.coerceIn(20f, 70f) } },
+                            modifier = Modifier.fillMaxWidth(), label = { Text("头围（cm）") }, singleLine = true
+                        )
                     }
                 }
                 OutlinedTextField(note, { note = it.take(120) }, Modifier.fillMaxWidth(), label = { Text("备注（可选）") }, minLines = 1, maxLines = 2)
@@ -765,7 +771,7 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                         if (stool) payload.put("stoolShape", stoolShape).put("stoolColor", stoolColor).put("stoolAmount", stoolAmount)
                     }
                     "SLEEP" -> payload.put("durationMinutes", sleepMinutes.toInt())
-                    "GROWTH" -> payload.put("weightGrams", (weightKg * 1000).toInt())
+                    "GROWTH" -> payload.put("weightGrams", (weightKg * 1000).toInt()).put("lengthCm", lengthCm.toDouble()).put("headCircumferenceCm", headCm.toDouble())
                 }
                 if (note.isNotBlank()) payload.put("note", note.trim())
                 onSave(eventType, payload, timestamp)
@@ -804,7 +810,11 @@ private fun EventCard(event: BabyEventEntity, onDelete: () -> Unit) {
             val mins = payload.optInt("durationMinutes")
             Triple("🌙", "睡眠", if (mins >= 60) "${mins / 60} 小时 ${mins % 60} 分钟" else "$mins 分钟")
         }
-        "GROWTH" -> Triple("📏", "体重记录", "${"%.2f".format(Locale.getDefault(), payload.optInt("weightGrams") / 1000.0)} kg")
+        "GROWTH" -> Triple("📏", "成长测量", listOfNotNull(
+            payload.optInt("weightGrams").takeIf { it > 0 }?.let { "${"%.2f".format(Locale.getDefault(), it / 1000.0)} kg" },
+            payload.optDouble("lengthCm").takeIf { it > 0 }?.let { "${"%.1f".format(Locale.getDefault(), it)} cm 身长" },
+            payload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.let { "${"%.1f".format(Locale.getDefault(), it)} cm 头围" }
+        ).joinToString(" · "))
         else -> Triple("📝", "记录", "")
     }
     val time = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(event.occurredAt))
