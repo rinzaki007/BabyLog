@@ -52,6 +52,9 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var message by remember { mutableStateOf("未配置服务器时，BabyLog 完全离线运行。") }
     var busy by remember { mutableStateOf(false) }
     var token by remember { mutableStateOf(SyncPreferences.token(context)) }
+    var accountEmail by remember { mutableStateOf(SyncPreferences.accountEmail(context)) }
+    var editingServer by remember { mutableStateOf(SyncPreferences.server(context).isBlank()) }
+    var showAccountForm by remember { mutableStateOf(SyncPreferences.token(context).isBlank()) }
     var familyId by remember { mutableStateOf(SyncPreferences.familyId(context)) }
     var pendingCount by remember { mutableStateOf(0) }
     var conflictCount by remember { mutableStateOf(0) }
@@ -71,6 +74,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             catch (error: Exception) { error.message ?: "操作失败，请检查服务器地址和网络" }
             finally { busy = false }
             token = SyncPreferences.token(context)
+            accountEmail = SyncPreferences.accountEmail(context)
             familyId = SyncPreferences.familyId(context)
             pendingCount = withContext(Dispatchers.IO) { dao.pendingOperationCount() }
             conflictCount = withContext(Dispatchers.IO) { dao.conflictOperationCount() }
@@ -89,67 +93,119 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             ) {
                 Text("默认离线使用。只有填写自己的 NAS 地址并登录后，才会启用同步。")
                 AppUpdateSection()
-                OutlinedTextField(server, { server = it }, Modifier.fillMaxWidth(), label = { Text("NAS 同步地址") }, placeholder = { Text("https://sync.example.com") }, singleLine = true)
-                Button(
-                    onClick = {
-                        val normalized = server.trim().trimEnd('/')
-                        if (!(normalized.startsWith("https://") || normalized.startsWith("http://10.") ||
-                            normalized.startsWith("http://192.168.") || normalized.startsWith("http://127.0.0.1") ||
-                            normalized.startsWith("http://localhost"))) {
-                            message = "请填写 HTTPS 地址；局域网测试可使用内网 HTTP 地址。"
-                        } else {
-                            SyncPreferences.saveServer(context, normalized)
-                            message = "服务器地址已保存。"
+                Text("服务器", fontWeight = FontWeight.SemiBold)
+                if (server.isNotBlank() && !editingServer) {
+                    Text("已连接服务器", style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
+                    Text(server, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                    OutlinedButton(onClick = { editingServer = true }, modifier = Modifier.fillMaxWidth(), enabled = !busy) {
+                        Text("更换服务器地址")
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = server, onValueChange = { server = it }, modifier = Modifier.fillMaxWidth(),
+                        label = { Text("NAS 同步地址") }, placeholder = { Text("https://sync.example.com") },
+                        singleLine = true, enabled = !busy
+                    )
+                    Button(
+                        onClick = {
+                            val normalized = server.trim().trimEnd('/')
+                            if (!(normalized.startsWith("https://") || normalized.startsWith("http://10.") ||
+                                normalized.startsWith("http://192.168.") || normalized.startsWith("http://127.0.0.1") ||
+                                normalized.startsWith("http://localhost"))) {
+                                message = "请填写 HTTPS 地址；局域网测试可使用内网 HTTP 地址。"
+                            } else {
+                                SyncPreferences.saveServer(context, normalized)
+                                server = normalized
+                                editingServer = false
+                                message = "服务器地址已保存。"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(), enabled = !busy
+                    ) { Text("保存服务器地址") }
+                    if (SyncPreferences.server(context).isNotBlank()) {
+                        TextButton(onClick = { server = SyncPreferences.server(context); editingServer = false }) {
+                            Text("取消修改")
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth(), enabled = !busy
-                ) { Text("保存服务器地址") }
+                    }
+                }
 
-                OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("邮箱") }, singleLine = true)
-                OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("密码（至少 10 位）") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
-                Text("账号", fontWeight = FontWeight.SemiBold)
-                OutlinedButton(
-                    onClick = {
-                        runAction {
-                            val base = server.trim().trimEnd('/')
-                            require(base.startsWith("https://") || base.startsWith("http://10.") ||
-                                base.startsWith("http://192.168.") || base.startsWith("http://127.0.0.1") ||
-                                base.startsWith("http://localhost")) { "请先填写有效的服务器地址" }
-                            val result = SyncHttp.request(base, "/api/auth/register", "POST", body =
-                                JSONObject().put("email", email.trim()).put("password", password))
-                            SyncPreferences.saveServer(context, base)
-                            val accessToken = result.getString("access_token")
-                            SyncPreferences.saveSession(context, accessToken)
-                            val profile = SyncHttp.request(base, "/api/me", token = accessToken)
-                            val linkedFamilies = profile.optJSONArray("families")
-                            if (linkedFamilies != null && linkedFamilies.length() == 1) {
-                                SyncPreferences.saveFamily(context, linkedFamilies.getJSONObject(0).getString("id"))
-                                SyncScheduler.schedule(context)
+                if (token.isBlank() || showAccountForm) {
+                    Text("账号登录", fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(
+                        value = email, onValueChange = { email = it }, modifier = Modifier.fillMaxWidth(),
+                        label = { Text("邮箱") }, singleLine = true, enabled = !busy
+                    )
+                    OutlinedTextField(
+                        value = password, onValueChange = { password = it }, modifier = Modifier.fillMaxWidth(),
+                        label = { Text("密码（至少 10 位）") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(), enabled = !busy
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            runAction {
+                                val base = server.trim().trimEnd('/')
+                                require(base.startsWith("https://") || base.startsWith("http://10.") ||
+                                    base.startsWith("http://192.168.") || base.startsWith("http://127.0.0.1") ||
+                                    base.startsWith("http://localhost")) { "请先填写有效的服务器地址" }
+                                val result = SyncHttp.request(base, "/api/auth/register", "POST", body =
+                                    JSONObject().put("email", email.trim()).put("password", password))
+                                SyncPreferences.saveServer(context, base)
+                                SyncPreferences.saveAccountEmail(context, email)
+                                val accessToken = result.getString("access_token")
+                                SyncPreferences.saveSession(context, accessToken)
+                                val profile = SyncHttp.request(base, "/api/me", token = accessToken)
+                                val linkedFamilies = profile.optJSONArray("families")
+                                if (linkedFamilies != null && linkedFamilies.length() == 1) {
+                                    SyncPreferences.saveFamily(context, linkedFamilies.getJSONObject(0).getString("id"))
+                                    SyncScheduler.schedule(context)
+                                }
+                                "注册成功，账号已登录。"
                             }
-                            "注册成功，账号已登录。"
-                        }
-                    }, modifier = Modifier.fillMaxWidth(), enabled = !busy
-                ) { Text("注册新账号") }
-                OutlinedButton(
-                    onClick = {
-                        runAction {
-                            val base = server.trim().trimEnd('/')
-                            require(base.isNotBlank()) { "请先填写服务器地址" }
-                            val result = SyncHttp.request(base, "/api/auth/login", "POST", body =
-                                JSONObject().put("email", email.trim()).put("password", password))
-                            SyncPreferences.saveServer(context, base)
-                            val accessToken = result.getString("access_token")
-                            SyncPreferences.saveSession(context, accessToken)
-                            val profile = SyncHttp.request(base, "/api/me", token = accessToken)
-                            val linkedFamilies = profile.optJSONArray("families")
-                            if (linkedFamilies != null && linkedFamilies.length() == 1) {
-                                SyncPreferences.saveFamily(context, linkedFamilies.getJSONObject(0).getString("id"))
-                                SyncScheduler.schedule(context)
+                            showAccountForm = false
+                            password = ""
+                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && email.isNotBlank() && password.length >= 10
+                    ) { Text("注册新账号") }
+                    OutlinedButton(
+                        onClick = {
+                            runAction {
+                                val base = server.trim().trimEnd('/')
+                                require(base.isNotBlank()) { "请先填写服务器地址" }
+                                val result = SyncHttp.request(base, "/api/auth/login", "POST", body =
+                                    JSONObject().put("email", email.trim()).put("password", password))
+                                SyncPreferences.saveServer(context, base)
+                                SyncPreferences.saveAccountEmail(context, email)
+                                val accessToken = result.getString("access_token")
+                                SyncPreferences.saveSession(context, accessToken)
+                                val profile = SyncHttp.request(base, "/api/me", token = accessToken)
+                                val linkedFamilies = profile.optJSONArray("families")
+                                if (linkedFamilies != null && linkedFamilies.length() == 1) {
+                                    SyncPreferences.saveFamily(context, linkedFamilies.getJSONObject(0).getString("id"))
+                                    SyncScheduler.schedule(context)
+                                }
+                                "登录成功。"
                             }
-                            "登录成功。"
-                        }
-                    }, modifier = Modifier.fillMaxWidth(), enabled = !busy
-                ) { Text("登录已有账号") }
+                            showAccountForm = false
+                            password = ""
+                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy && email.isNotBlank() && password.isNotBlank()
+                    ) { Text("登录已有账号") }
+                } else {
+                    Text("账号", fontWeight = FontWeight.SemiBold)
+                    Text(accountEmail.ifBlank { "已登录账户（邮箱信息未保存）" },
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                    Text("账号已登录", style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
+                    OutlinedButton(
+                        onClick = {
+                            SyncPreferences.clearSession(context)
+                            token = ""
+                            accountEmail = ""
+                            familyId = ""
+                            showAccountForm = true
+                            message = "已退出同步账号。本机数据不会删除。"
+                        }, modifier = Modifier.fillMaxWidth(), enabled = !busy
+                    ) { Text("退出登录 / 切换账号") }
+                }
 
                 if (token.isNotBlank()) {
                     Text("家庭空间", fontWeight = FontWeight.SemiBold)
@@ -234,12 +290,6 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                             lastSyncError = SyncPreferences.lastSyncError(context)
                         }
                     }) { Text("刷新同步状态") }
-                    TextButton(onClick = {
-                        SyncPreferences.clearSession(context)
-                        token = ""
-                        familyId = ""
-                        message = "已退出同步账号。本机数据不会删除。"
-                    }, enabled = !busy) { Text("退出同步账号") }
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(message)
