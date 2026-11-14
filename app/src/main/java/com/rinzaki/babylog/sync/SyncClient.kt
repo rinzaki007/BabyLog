@@ -81,8 +81,10 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
         if (base.isBlank() || token.isBlank() || familyId.isBlank()) return Result.success()
         return try {
             val dao = RoomAccess.database(applicationContext).babyLogDao()
-            val pending = dao.pendingOperations()
-            if (pending.isNotEmpty()) {
+            var batch = 0
+            while (batch < 10) {
+                val pending = dao.pendingOperations()
+                if (pending.isEmpty()) break
                 val changes = JSONArray()
                 pending.forEach { operation ->
                     val item = JSONObject()
@@ -115,6 +117,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                     val item = conflicts.getJSONObject(i)
                     dao.markOperationConflict(item.optString("operation_id"), item.optString("reason", "sync conflict"))
                 }
+                batch++
             }
             var cursor = SyncPreferences.cursor(applicationContext)
             var page = 0
@@ -146,6 +149,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
         val operation = item.optString("operation")
         val payload = item.optJSONObject("payload") ?: JSONObject()
         val version = item.optLong("version", 0L)
+        if (dao.hasConflict(type, id)) return
         when (type) {
             "baby" -> {
                 if (operation == "delete") return
