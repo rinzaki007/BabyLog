@@ -70,10 +70,10 @@ internal fun chinaSelfPaidVaccineSchedule(birthDate: LocalDate): List<Pair<Vacci
         VaccineScheduleItem("EV71 手足口病疫苗", "第 1 剂", 6, "自费；适龄儿童通常接种 2 剂，间隔不少于 1 个月", isSelfPaid = true),
         VaccineScheduleItem("流感疫苗", "年度接种", 6, "满 6 月龄后按流行季每年接种；首次接种儿童可能需 2 剂", isSelfPaid = true),
         VaccineScheduleItem("EV71 手足口病疫苗", "第 2 剂", 7, "与第 1 剂间隔不少于 1 个月", isSelfPaid = true),
-        VaccineScheduleItem("水痘疫苗", "第 1 剂", 12, "自费；第 2 剂时间以当地程序和产品说明为准", isSelfPaid = true),
+        VaccineScheduleItem("水痘疫苗", "第 1 剂", 12, "自费；第 2 剂时间以当地程序和产品说明为准", isSelfPaid = true, requires28DayInterval = true),
         VaccineScheduleItem("Hib 疫苗", "加强剂", 18, "是否需要加强取决于前期接种程序", isSelfPaid = true),
         VaccineScheduleItem("13 价肺炎球菌结合疫苗", "加强剂", 12, "常见加强窗口为 12–15 月龄", isSelfPaid = true),
-        VaccineScheduleItem("水痘疫苗", "第 2 剂", 48, "常见加强节点；具体以当地接种门诊安排为准", isSelfPaid = true),
+        VaccineScheduleItem("水痘疫苗", "第 2 剂", 48, "常见加强节点；具体以当地接种门诊安排为准", isSelfPaid = true, requires28DayInterval = true),
         VaccineScheduleItem("23 价肺炎球菌多糖疫苗", "评估接种", 24, "仅适用于符合条件的高风险儿童，需医生评估", isSelfPaid = true)
     )
     return items.map { it to birthDate.plusMonths(it.ageMonths).plusDays(it.offsetDays) }
@@ -137,7 +137,7 @@ internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDo
             item.group == "乙脑" -> name.contains("乙脑") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
             item.group == "甲肝" -> name.contains("甲肝") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
             item.vaccineName.startsWith("Hib") -> name.contains("hib") || name.contains("流感嗜血杆菌")
-            item.vaccineName.contains("肺炎球菌") -> name.contains("肺炎球菌") && (!item.vaccineName.contains("13 价") || name.contains("13价") || name.contains("13价肺炎"))
+            item.vaccineName.contains("肺炎球菌") -> name.contains("肺炎球菌") && (Regex("\\d+").find(item.vaccineName)?.value?.let { name.contains(it) } ?: true)
             item.vaccineName.contains("轮状病毒") -> name.contains("轮状病毒")
             item.vaccineName.contains("EV71") -> name.contains("ev71") || name.contains("手足口") || name.contains("肠道病毒71")
             item.vaccineName.contains("水痘") -> name.contains("水痘")
