@@ -58,6 +58,12 @@ internal fun chinaSelfPaidVaccineSchedule(birthDate: LocalDate): List<Pair<Vacci
     // Common non-National-Immunization-Program vaccines in mainland China.
     // Product-specific dose counts and age windows vary; these are planning reminders, not prescriptions.
     val items = listOf(
+        // 五联疫苗（DTaP-IPV-Hib）：常见程序为 2、3、4 月龄基础免疫及 18 月龄加强；
+        // 不同产品/既往接种程序可能不同，最终以具体产品说明书和接种门诊安排为准。
+        VaccineScheduleItem("五联疫苗（DTaP-IPV-Hib）", "第 1 剂", 2, "自费；常见程序为 2、3、4 月龄基础免疫及 18 月龄加强", isSelfPaid = true),
+        VaccineScheduleItem("五联疫苗（DTaP-IPV-Hib）", "第 2 剂", 3, "与前剂间隔及适用月龄以产品说明书为准", isSelfPaid = true),
+        VaccineScheduleItem("五联疫苗（DTaP-IPV-Hib）", "第 3 剂", 4, "完成基础免疫；具体程序以产品说明书为准", isSelfPaid = true),
+        VaccineScheduleItem("五联疫苗（DTaP-IPV-Hib）", "加强剂", 18, "常见加强节点；是否适用及时间以产品说明书和门诊安排为准", isSelfPaid = true),
         VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, "自费；常见程序为 2、3、4 月龄及 18 月龄加强", isSelfPaid = true),
         VaccineScheduleItem("13 价肺炎球菌结合疫苗", "第 1 剂", 2, "自费；常见程序为 2、4、6 月龄及 12–15 月龄加强", isSelfPaid = true),
         VaccineScheduleItem("口服轮状病毒疫苗", "第 1 剂", 2, "自费；不同价型和厂家剂次数不同，以说明书为准", isSelfPaid = true),
@@ -120,6 +126,7 @@ internal fun recordedLiveVaccineConflicts(records: List<Pair<String, LocalDate>>
 internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDoses: List<Pair<String, String>>): Boolean {
     fun normalize(value: String) = value.lowercase()
         .replace(" ", "").replace("（", "(").replace("）", ")")
+        .replace("-", "").replace("_", "").replace("/", "")
         .replace("疫苗", "").replace("接种", "")
     fun doseNumber(value: String): Int? {
         Regex("\\d+").find(value)?.value?.toIntOrNull()?.let { return it }
@@ -134,6 +141,7 @@ internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDo
     val matches = recordedNamesAndDoses.filter { (rawName, _) ->
         val name = normalize(rawName)
         when {
+            item.vaccineName.contains("五联") -> name.contains("五联") || name.contains("dtapipvhib") || name.contains("pentaxim") || name.contains("潘太欣")
             item.group == "乙脑" -> name.contains("乙脑") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
             item.group == "甲肝" -> name.contains("甲肝") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
             item.vaccineName.startsWith("Hib") -> name.contains("hib") || name.contains("流感嗜血杆菌")
