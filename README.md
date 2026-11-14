@@ -16,7 +16,7 @@ A private-by-design Android baby care and growth tracker with optional self-host
 - Sleep records and editable timeline
 - Growth measurements and charts
 - Local baby photo album
-- NAS sync server scaffold (Android client integration pending)
+- Optional NAS sync for baby profiles and care events (photo binary sync is still being completed)
 
 ## Technology
 
@@ -25,6 +25,6 @@ A private-by-design Android baby care and growth tracker with optional self-host
 - Deployment: Docker Compose / Dockge
 - Default NAS/container port: **18765**, configurable host mapping with `BABYLOG_PORT`
 
-See [docs/FAMILY_SYNC.md](docs/FAMILY_SYNC.md) for deployment and implementation status.
+See [docs/FAMILY_SYNC.md](docs/FAMILY_SYNC.md) and [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-Keep real baby records, passwords, tokens, and secrets out of source control. Do not expose the SQLite database or NAS management ports to the internet.
+The container starts as root only to prepare the mounted data directory, then drops privileges to UID/GID 10001 before starting the API. Keep real baby records, passwords, tokens, and secrets out of source control. Do not expose the SQLite database or NAS management ports to the internet.

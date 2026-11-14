@@ -21,3 +21,7 @@ services:
       - /tmp:size=32m,noexec,nosuid
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID

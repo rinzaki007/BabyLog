@@ -9,7 +9,7 @@
 
 ## Docker 部署
 
-服务端位于 `server/`，采用 FastAPI、SQLite WAL 和 NAS 文件系统。容器内部监听端口 **18765**，Compose 默认映射主机端口 **18765**。如 NAS 主机端口冲突，只需修改 `BABYLOG_PORT`，容器内部端口不需要修改。
+服务端位于 `server/`，采用 FastAPI、SQLite WAL 和 NAS 文件系统。容器内部监听端口 **18765**，Compose 默认映射主机端口 **18765**。如 NAS 主机端口冲突，只需修改 `BABYLOG_PORT`。
 
 1. 复制 `.env.example` 为 `.env`。
 2. 设置唯一的随机 `BABYLOG_JWT_SECRET`，至少 32 字符，不能提交到 Git。
@@ -18,7 +18,7 @@
 5. 将专用 HTTPS 域名反向代理到 NAS 的 18765 端口。
 6. 检查 `https://你的域名/health`。
 
-不要暴露数据库文件或 NAS 管理端口。备份应使用 SQLite 在线备份方式，并同时备份照片目录。
+容器启动时会准备挂载目录权限，随后以 UID/GID 10001 的非 root 用户运行 API。不要暴露数据库文件或 NAS 管理端口。备份应使用 SQLite 在线备份方式，并同时备份照片目录。
 
 ## API
 
@@ -34,10 +34,12 @@
 
 所有家庭数据和照片接口都要求 Bearer Token，并在服务端检查家庭成员权限。API 文档端点在生产服务中关闭。
 
+## Android 同步范围
+
+当前 Android 已接入服务器地址配置、账号注册/登录、家庭创建/邀请码加入、Room outbox 和 WorkManager 后台同步。宝宝档案与喂养、护理、睡眠、成长等事件可进行双向同步。首次创建家庭时，会将当前手机的宝宝档案和未删除事件加入首次上传队列；加入已有家庭的设备以拉取家庭数据为主。
+
+照片文件上传/下载、头像文件迁移、冲突处理 UI 和同步状态细化仍在后续阶段；当前不应宣称照片已跨设备同步。
+
 ## 同步协议
 
-每次本地变更生成唯一 operation_id，包含 entity_type、entity_id、operation、payload 和 base_version。服务端以家庭 + operation_id 保证幂等，以记录版本检测并发修改。拉取使用服务端递增 cursor。发生 version_conflict 时客户端必须保留冲突，不得静默覆盖。删除通过 delete 操作形成同步墓碑。
-
-## Android 客户端后续接入
-
-当前 Android 仍是纯本地模式。后续增加设置页服务器地址、账号登录、家庭加入和同步状态；服务器地址为空时不启动同步。Room outbox 与 WorkManager 将负责断网缓存、重试、push/pull 和照片上传。当前服务端尚未与 APK 集成，不能将 Docker 部署成功等同于手机已同步。
+每次本地变更生成唯一 operation_id，包含 entity_type、entity_id、operation、payload 和 base_version。服务端以家庭 + operation_id 保证幂等，以记录版本检测并发修改。拉取使用服务端递增 cursor。发生 version_conflict 时客户端保留冲突队列，不静默覆盖。删除通过 delete 操作形成同步墓碑。
