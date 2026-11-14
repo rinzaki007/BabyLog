@@ -402,8 +402,14 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("🌱", style = MaterialTheme.typography.headlineLarge)
-                                    Text("第一条记录，等你来写", fontWeight = FontWeight.SemiBold)
-                                    Text("从一次喂养、一段好觉或一次成长测量开始。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        if (selectedEventFilter == "全部") "第一条记录，等你来写" else "还没有${selectedEventFilter}记录",
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        if (selectedEventFilter == "全部") "从一次喂养、一段好觉或一次成长测量开始。" else "试试切换其他分类，查看宝宝的成长足迹。",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
