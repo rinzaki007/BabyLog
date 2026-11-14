@@ -31,6 +31,9 @@
 - `GET /api/sync/pull?family_id=...&cursor=0`
 - `POST /api/photos/upload`
 - `GET /api/photos/{photo_id}?family_id=...`
+- `POST /api/babies/{baby_id}/avatar?family_id=...`
+- `GET /api/babies/{baby_id}/avatar?family_id=...`
+- `DELETE /api/babies/{baby_id}/avatar?family_id=...`
 
 所有家庭数据和照片接口都要求 Bearer Token，并在服务端检查家庭成员权限。API 文档端点在生产服务中关闭。
 
