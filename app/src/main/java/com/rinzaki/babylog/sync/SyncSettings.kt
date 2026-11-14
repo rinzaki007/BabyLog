@@ -369,6 +369,11 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 Button(onClick = {
                     showSnapshotConfirm = false
                     runAction {
+                        val profile = SyncHttp.request(SyncPreferences.server(context), "/api/me", token = SyncPreferences.token(context))
+                        val families = profile.optJSONArray("families") ?: org.json.JSONArray()
+                        val currentFamily = (0 until families.length()).map { families.getJSONObject(it) }
+                            .firstOrNull { it.optString("id") == SyncPreferences.familyId(context) }
+                        require(currentFamily?.optString("role") == "owner") { "只有家庭创建者可以覆盖云端数据。" }
                         SyncPreferences.setRecoveryInProgress(context, true)
                         SyncScheduler.cancel(context)
                         try {
