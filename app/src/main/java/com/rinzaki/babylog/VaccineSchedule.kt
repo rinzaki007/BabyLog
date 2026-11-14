@@ -111,9 +111,15 @@ internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDo
     val target = normalize(item.vaccineName)
     val matches = recordedNamesAndDoses.filter { (rawName, _) ->
         val name = normalize(rawName)
-        when (item.group) {
-            "乙脑" -> name.contains("乙脑") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
-            "甲肝" -> name.contains("甲肝") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
+        when {
+            item.group == "乙脑" -> name.contains("乙脑") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
+            item.group == "甲肝" -> name.contains("甲肝") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
+            item.vaccineName.startsWith("Hib") -> name.contains("hib") || name.contains("流感嗜血杆菌")
+            item.vaccineName.contains("肺炎球菌") -> name.contains("肺炎球菌") && (!item.vaccineName.contains("13 价") || name.contains("13价") || name.contains("13价肺炎"))
+            item.vaccineName.contains("轮状病毒") -> name.contains("轮状病毒")
+            item.vaccineName.contains("EV71") -> name.contains("ev71") || name.contains("手足口")
+            item.vaccineName.contains("水痘") -> name.contains("水痘")
+            item.vaccineName.contains("流感") -> name.contains("流感")
             else -> name.contains(target) || target.contains(name)
         }
     }
