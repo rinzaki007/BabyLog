@@ -370,9 +370,11 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     showSnapshotConfirm = false
                     runAction {
                         SyncScheduler.cancel(context)
-                        val result = submitAuthoritativeSnapshot(context, dao)
-                        SyncScheduler.schedule(context)
-                        result
+                        try {
+                            submitAuthoritativeSnapshot(context, dao)
+                        } finally {
+                            SyncScheduler.schedule(context)
+                        }
                     }
                 }, enabled = !busy) { Text("确认覆盖") }
             },
@@ -389,15 +391,18 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     showDeviceResetConfirm = false
                     runAction {
                         SyncScheduler.cancel(context)
-                        dao.clearAllSyncOperations()
-                        dao.clearAllPhotos()
-                        dao.clearAllEvents()
-                        dao.clearAllBabies()
-                        File(context.filesDir, "baby_album").deleteRecursively()
-                        File(context.filesDir, "baby_avatars").deleteRecursively()
-                        SyncPreferences.resetCursor(context)
-                        SyncScheduler.schedule(context)
-                        "本机业务数据已清空，正在从家庭云端重新下载。请保持网络连接并稍后刷新同步状态。"
+                        try {
+                            dao.clearAllSyncOperations()
+                            dao.clearAllPhotos()
+                            dao.clearAllEvents()
+                            dao.clearAllBabies()
+                            File(context.filesDir, "baby_album").deleteRecursively()
+                            File(context.filesDir, "baby_avatars").deleteRecursively()
+                            SyncPreferences.resetCursor(context)
+                            "本机业务数据已清空，正在从家庭云端重新下载。请保持网络连接并稍后刷新同步状态。"
+                        } finally {
+                            SyncScheduler.schedule(context)
+                        }
                     }
                 }, enabled = !busy) { Text("确认清空并下载") }
             },
