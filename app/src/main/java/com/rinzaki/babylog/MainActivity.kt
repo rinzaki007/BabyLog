@@ -1,7 +1,5 @@
 package com.rinzaki.babylog
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.content.ContentValues
@@ -36,6 +34,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -520,13 +520,14 @@ private fun VaccineEditor(existing: BabyEventEntity?, onDismiss: () -> Unit, onS
     var note by remember(existing?.id) { mutableStateOf(data.optString("note")) }
     var date by remember(existing?.id) { mutableStateOf(existing?.let { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate() } ?: LocalDate.now()) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showDateTimePicker by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (existing == null) "添加疫苗记录" else "编辑疫苗记录", fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.height(460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name, { name = it.take(60) }, Modifier.fillMaxWidth(), label = { Text("疫苗名称 *") }, singleLine = true)
-                OutlinedButton(onClick = { DatePickerDialog(context, { _, y, m, d -> date = LocalDate.of(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth).show() }, modifier = Modifier.fillMaxWidth()) { Text("接种日期：" + date) }
+                OutlinedButton(onClick = { showDateTimePicker = true }, modifier = Modifier.fillMaxWidth()) { Text("接种日期：" + date) }
                 OutlinedTextField(dose, { dose = it.take(30) }, Modifier.fillMaxWidth(), label = { Text("剂次（如：第 1 剂）") }, singleLine = true)
                 OutlinedTextField(clinic, { clinic = it.take(80) }, Modifier.fillMaxWidth(), label = { Text("接种机构") }, singleLine = true)
                 OutlinedTextField(site, { site = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("接种部位") }, singleLine = true)
@@ -544,6 +545,11 @@ private fun VaccineEditor(existing: BabyEventEntity?, onDismiss: () -> Unit, onS
             }) { Text("保存记录") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+    if (showDateTimePicker) DateTimeOptionDialog(
+        initial = date.atStartOfDay(), includeTime = false,
+        onDismiss = { showDateTimePicker = false },
+        onConfirm = { date = it.toLocalDate(); showDateTimePicker = false }
     )
 }
 
@@ -656,11 +662,15 @@ private fun BabyAlbumSection(
     val context = LocalContext.current
     val albumScope = rememberCoroutineScope()
     var galleryMessage by remember { mutableStateOf<String?>(null) }
+    var pendingPhotoUris by remember { mutableStateOf<List<android.net.Uri>>(emptyList()) }
+    var showPhotoTimePicker by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(20)
     ) { uris ->
-        val timestamp = photoDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        uris.forEach { onAdd(it, timestamp) }
+        if (uris.isNotEmpty()) {
+            pendingPhotoUris = uris
+            showPhotoTimePicker = true
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -674,18 +684,6 @@ private fun BabyAlbumSection(
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
-                OutlinedButton(onClick = {
-                    DatePickerDialog(context, { _, y, m, d ->
-                        photoDateTime = LocalDate.of(y, m + 1, d).atTime(photoDateTime.toLocalTime())
-                        TimePickerDialog(
-                            context,
-                            { _, h, min -> photoDateTime = photoDateTime.withHour(h).withMinute(min) },
-                            photoDateTime.hour,
-                            photoDateTime.minute,
-                            true
-                        ).show()
-                    }, photoDateTime.year, photoDateTime.monthValue - 1, photoDateTime.dayOfMonth).show()
-                }) { Text("时间 $photoDateTimeLabel") }
                 Button(
                     onClick = {
                         picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -865,6 +863,17 @@ private fun BabyAlbumSection(
             dismissButton = { TextButton(onClick = { deletingPhoto = null }) { Text("取消") } }
         )
     }
+    if (showPhotoTimePicker) DateTimeOptionDialog(
+        initial = photoDateTime, includeTime = true,
+        onDismiss = { showPhotoTimePicker = false; pendingPhotoUris = emptyList() },
+        onConfirm = { selected ->
+            photoDateTime = selected
+            val timestamp = selected.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            pendingPhotoUris.forEach { onAdd(it, timestamp) }
+            pendingPhotoUris = emptyList()
+            showPhotoTimePicker = false
+        }
+    )
 }
 private fun savePhotoToGallery(context: android.content.Context, path: String) {
     val source = File(path)
@@ -958,6 +967,7 @@ private fun BabyProfileEditor(
     var birthHead by remember(existing?.id) { mutableStateOf((existing?.birthHeadCircumferenceCm ?: 0.0).toFloat()) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
+    var showBirthDatePicker by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) avatar = uri.toString()
@@ -979,10 +989,7 @@ private fun BabyProfileEditor(
             Text("性别", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("男宝", "女宝", "未设置"), sex) { sex = it }
             Text("出生日期", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-            OutlinedButton(onClick = {
-                DatePickerDialog(context, { _, y, m, d -> birthDate = LocalDate.of(y, m + 1, d) },
-                    birthDate.year, birthDate.monthValue - 1, birthDate.dayOfMonth).show()
-            }, modifier = Modifier.fillMaxWidth()) { Text(birthDate.toString()) }
+            OutlinedButton(onClick = { showBirthDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(birthDate.toString()) }
             OutlinedTextField(
                 value = if (birthWeight <= 0f) "" else birthWeight.toInt().toString(),
                 onValueChange = { birthWeight = it.filter(Char::isDigit).toFloatOrNull()?.coerceIn(0f, 8000f) ?: 0f },
@@ -1014,9 +1021,13 @@ private fun BabyProfileEditor(
             }, enabled = !saving, modifier = Modifier.fillMaxWidth()) { Text(if (saving) "保存中…" else "保存档案") }
         }
     }
+    if (showBirthDatePicker) DateTimeOptionDialog(
+        initial = birthDate.atStartOfDay(), includeTime = false,
+        onDismiss = { showBirthDatePicker = false },
+        onConfirm = { birthDate = it.toLocalDate(); showBirthDatePicker = false }
+    )
 }
 
-@Composable
 private suspend fun persistBabyAvatar(context: android.content.Context, source: String?, babyId: String): String? {
     if (source.isNullOrBlank()) return null
     val existing = File(source)
@@ -1153,6 +1164,7 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
     var headCm by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var showEventTimePicker by remember { mutableStateOf(false) }
     val title = when (eventType) { "FEEDING" -> "喂养记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; else -> "成长记录" }
 
     AlertDialog(
@@ -1161,13 +1173,8 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("记录时间", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        DatePickerDialog(context, { _, y, m, d -> date = LocalDate.of(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth).show()
-                    }, modifier = Modifier.weight(1f)) { Text(date.toString()) }
-                    OutlinedButton(onClick = {
-                        TimePickerDialog(context, { _, h, m -> hour = h; minute = m }, hour, minute, true).show()
-                    }, modifier = Modifier.weight(1f)) { Text("%02d:%02d".format(hour, minute)) }
+                OutlinedButton(onClick = { showEventTimePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("$date · %02d:%02d".format(hour, minute))
                 }
                 when (eventType) {
                     "FEEDING" -> {
@@ -1257,6 +1264,16 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
+    if (showEventTimePicker) DateTimeOptionDialog(
+        initial = date.atTime(hour, minute), includeTime = true,
+        onDismiss = { showEventTimePicker = false },
+        onConfirm = { selected ->
+            date = selected.toLocalDate()
+            hour = selected.hour
+            minute = selected.minute
+            showEventTimePicker = false
+        }
+    )
 }
 
 @Composable
@@ -1307,6 +1324,83 @@ private fun EventCard(event: BabyEventEntity, onDelete: () -> Unit) {
                 Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
+        }
+    }
+}
+
+
+@Composable
+private fun DateTimeOptionDialog(
+    initial: LocalDateTime,
+    includeTime: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (LocalDateTime) -> Unit
+) {
+    var selected by remember(initial) { mutableStateOf(initial) }
+    val currentYear = LocalDate.now().year
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (includeTime) "选择日期和时间" else "选择日期") },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("快捷选择", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("今天" to LocalDate.now(), "昨天" to LocalDate.now().minusDays(1), "前天" to LocalDate.now().minusDays(2)).forEach { (label, day) ->
+                        if (selected.toLocalDate() == day) FilledTonalButton(onClick = { selected = day.atTime(selected.toLocalTime()) }) { Text(label) }
+                        else OutlinedButton(onClick = { selected = day.atTime(selected.toLocalTime()) }) { Text(label) }
+                    }
+                }
+                Text("日期", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    OptionPicker("年", selected.year.toString(), (1900..currentYear).toList().map(Int::toString)) { value ->
+                        val year = value.toInt()
+                        val maxDay = selected.month.length(java.time.Year.isLeap(year.toLong()))
+                        selected = selected.withYear(year).withDayOfMonth(selected.dayOfMonth.coerceAtMost(maxDay))
+                    }
+                    OptionPicker("月", selected.monthValue.toString(), (1..12).toList().map(Int::toString)) { value ->
+                        val month = value.toInt()
+                        val maxDay = selected.withMonth(month).month.length(java.time.Year.isLeap(selected.year.toLong()))
+                        selected = selected.withMonth(month).withDayOfMonth(selected.dayOfMonth.coerceAtMost(maxDay))
+                    }
+                    OptionPicker("日", selected.dayOfMonth.toString(), (1..selected.month.length(java.time.Year.isLeap(selected.year.toLong()))).toList().map(Int::toString)) { value ->
+                        selected = selected.withDayOfMonth(value.toInt())
+                    }
+                }
+                if (includeTime) {
+                    Text("时间", fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OptionPicker("时", "%02d".format(selected.hour), (0..23).toList().map { "%02d".format(it) }) { selected = selected.withHour(it.toInt()) }
+                        OptionPicker("分", "%02d".format(selected.minute), (0..59).toList().map { "%02d".format(it) }) { selected = selected.withMinute(it.toInt()) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf("现在" to LocalDateTime.now(), "08:00" to selected.toLocalDate().atTime(8, 0), "12:00" to selected.toLocalDate().atTime(12, 0), "18:00" to selected.toLocalDate().atTime(18, 0), "21:00" to selected.toLocalDate().atTime(21, 0)).forEach { (label, value) ->
+                            OutlinedButton(onClick = { selected = value }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 5.dp)) { Text(label) }
+                        }
+                    }
+                }
+                Text(selected.format(DateTimeFormatter.ofPattern(if (includeTime) "yyyy年M月d日 HH:mm" else "yyyy年M月d日")),
+                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+        },
+        confirmButton = { Button(onClick = { onConfirm(selected) }) { Text("确定") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+@Composable
+private fun OptionPicker(label: String, selected: String, options: List<String>, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { expanded = true }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
+            Text("$label $selected")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(text = { Text(option) }, onClick = { onSelect(option); expanded = false })
+            }
         }
     }
 }
