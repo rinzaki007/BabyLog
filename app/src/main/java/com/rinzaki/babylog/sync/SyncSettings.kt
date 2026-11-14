@@ -37,6 +37,7 @@ import java.util.UUID
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.io.File
 import com.rinzaki.babylog.sync.photoSyncPayload
 import com.rinzaki.babylog.sync.mimeTypeForPath
 
@@ -62,6 +63,8 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var queueStateLoaded by remember { mutableStateOf(false) }
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(context)) }
     var lastSyncError by remember { mutableStateOf(SyncPreferences.lastSyncError(context)) }
+    var showSnapshotConfirm by remember { mutableStateOf(false) }
+    var showDeviceResetConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         pendingCount = dao.pendingOperationCount()
@@ -232,6 +235,18 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 if (token.isNotBlank()) {
                     Text("家庭空间", fontWeight = FontWeight.SemiBold)
                     Text(if (familyId.isBlank()) "当前账号尚未加入家庭空间" else "已加入家庭空间")
+                    OutlinedButton(
+                        onClick = { showSnapshotConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy && familyId.isNotBlank() && queueStateLoaded
+                    ) { Text("以本机数据覆盖家庭云端") }
+                    Text("仅家庭创建者使用。将以这台手机的宝宝档案、记录、照片和头像为准，覆盖云端当前业务数据。", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    OutlinedButton(
+                        onClick = { showDeviceResetConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy && familyId.isNotBlank() && queueStateLoaded
+                    ) { Text("清空本机数据并重新下载") }
+                    Text("用于另一台手机：清除本机业务数据后，从家庭云端完整重新下载。不会删除账号或家庭。", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
                     Button(
                         onClick = {
                             runAction {
@@ -344,4 +359,49 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } }
     )
+
+    if (showSnapshotConfirm) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) showSnapshotConfirm = false },
+            title = { Text("覆盖家庭云端数据？") },
+            text = { Text("将以当前手机的全部宝宝档案、喂养护理睡眠成长记录、疫苗记录、相册和头像为准。云端及另一台手机的独有数据会被替换或删除。请确认当前手机是你要保留的第一台手机。") },
+            confirmButton = {
+                Button(onClick = {
+                    showSnapshotConfirm = false
+                    runAction {
+                        SyncScheduler.cancel(context)
+                        val result = submitAuthoritativeSnapshot(context, dao)
+                        SyncScheduler.schedule(context)
+                        result
+                    }
+                }, enabled = !busy) { Text("确认覆盖") }
+            },
+            dismissButton = { TextButton(onClick = { showSnapshotConfirm = false }, enabled = !busy) { Text("取消") } }
+        )
+    }
+    if (showDeviceResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) showDeviceResetConfirm = false },
+            title = { Text("清空本机并重新下载？") },
+            text = { Text("这会删除当前手机上的宝宝档案、记录、照片缓存和未同步队列，然后从家庭云端重新下载。不会删除账号、家庭或云端数据。请只在第一台手机完成云端覆盖后，在第二台手机执行。") },
+            confirmButton = {
+                Button(onClick = {
+                    showDeviceResetConfirm = false
+                    runAction {
+                        SyncScheduler.cancel(context)
+                        dao.clearAllSyncOperations()
+                        dao.clearAllPhotos()
+                        dao.clearAllEvents()
+                        dao.clearAllBabies()
+                        File(context.filesDir, "baby_album").deleteRecursively()
+                        File(context.filesDir, "baby_avatars").deleteRecursively()
+                        SyncPreferences.resetCursor(context)
+                        SyncScheduler.schedule(context)
+                        "本机业务数据已清空，正在从家庭云端重新下载。请保持网络连接并稍后刷新同步状态。"
+                    }
+                }, enabled = !busy) { Text("确认清空并下载") }
+            },
+            dismissButton = { TextButton(onClick = { showDeviceResetConfirm = false }, enabled = !busy) { Text("取消") } }
+        )
+    }
 }
