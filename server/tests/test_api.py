@@ -91,6 +91,42 @@ def test_family_data_isolation(client):
     assert response.status_code == 403
 
 
+def test_sync_status_fingerprint_tracks_active_versions_and_family_access(client):
+    owner = register(client, "sync-status@example.test")
+    outsider = register(client, "sync-outsider@example.test")
+    family_id = client.post("/api/families", headers=auth(owner), json={"name": "status"}).json()["family_id"]
+
+    empty = client.get("/api/sync/status", headers=auth(owner), params={"family_id": family_id})
+    assert empty.status_code == 200
+    assert empty.json()["active_count"] == 0
+    empty_digest = empty.json()["digest"]
+    assert len(empty_digest) == 64
+
+    entity_id = str(uuid.uuid4())
+    pushed = client.post("/api/sync/push", headers=auth(owner), json={"family_id": family_id, "changes": [{
+        "operation_id": str(uuid.uuid4()), "entity_type": "event", "entity_id": entity_id,
+        "operation": "upsert", "payload": {"eventType": "FEEDING"}, "base_version": 0
+    }]})
+    assert pushed.status_code == 200
+    status = client.get("/api/sync/status", headers=auth(owner), params={"family_id": family_id})
+    assert status.status_code == 200
+    assert status.json()["active_count"] == 1
+    assert status.json()["active_counts"] == {"event": 1}
+    assert status.json()["digest"] != empty_digest
+
+    denied = client.get("/api/sync/status", headers=auth(outsider), params={"family_id": family_id})
+    assert denied.status_code == 403
+
+    deleted = client.post("/api/sync/push", headers=auth(owner), json={"family_id": family_id, "changes": [{
+        "operation_id": str(uuid.uuid4()), "entity_type": "event", "entity_id": entity_id,
+        "operation": "delete", "payload": {"id": entity_id}, "base_version": 1
+    }]})
+    assert deleted.status_code == 200
+    after_delete = client.get("/api/sync/status", headers=auth(owner), params={"family_id": family_id})
+    assert after_delete.json()["active_count"] == 0
+    assert after_delete.json()["digest"] == empty_digest
+
+
 def test_baby_avatar_upload_download_and_delete(client):
     token = register(client, "baby-avatar@example.test")
     family_id = client.post("/api/families", headers=auth(token), json={"name": "avatar"}).json()["family_id"]
