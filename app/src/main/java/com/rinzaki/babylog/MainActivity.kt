@@ -997,12 +997,6 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                             label = { Text("本次奶量（ml）") },
                             singleLine = true
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf(60f, 90f, 120f, 150f, 180f, 210f).forEach { v ->
-                                if (amount.toInt() == v.toInt()) FilledTonalButton(onClick = { amount = v }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)) { Text(v.toInt().toString()) }
-                                else OutlinedButton(onClick = { amount = v }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)) { Text(v.toInt().toString()) }
-                            }
-                        }
                         Text("单位：毫升（ml）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     "DIAPER" -> {
