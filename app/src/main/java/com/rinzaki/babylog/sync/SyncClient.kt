@@ -210,8 +210,9 @@ object SyncScheduler {
         enqueue(context)
     }
     fun cancel(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork("babylog-sync-now")
-        WorkManager.getInstance(context).cancelUniqueWork("babylog-sync-periodic")
+        val manager = WorkManager.getInstance(context)
+        runCatching { manager.cancelUniqueWork("babylog-sync-now").result.get() }
+        runCatching { manager.cancelUniqueWork("babylog-sync-periodic").result.get() }
     }
 }
 
