@@ -44,7 +44,8 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then VERSION="${{ inputs.version }}"; fi
-          gradle --no-daemon assembleRelease -PappVersionName="$VERSION" -PappVersionCode="${GITHUB_RUN_NUMBER}"
+          VERSION_CODE=$((GITHUB_RUN_NUMBER + 1))
+          gradle --no-daemon assembleRelease -PappVersionName="$VERSION" -PappVersionCode="$VERSION_CODE"
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
