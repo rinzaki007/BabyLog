@@ -658,7 +658,7 @@ private fun BabyAlbumSection(
                         photoDateTime = LocalDate.of(y, m + 1, d).atTime(photoDateTime.toLocalTime())
                         TimePickerDialog(context, { _, h, min -> photoDateTime = photoDateTime.withHour(h).withMinute(min) }, photoDateTime.hour, photoDateTime.minute, true).show()
                     }, photoDateTime.year, photoDateTime.monthValue - 1, photoDateTime.dayOfMonth).show()
-                }) { Text("时间：$photoDateTimeLabel")
+                }) { Text("时间：$photoDateTimeLabel") }
                 Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("选择照片") }
             }
         }
