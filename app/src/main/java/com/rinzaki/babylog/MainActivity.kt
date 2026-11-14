@@ -408,7 +408,7 @@ private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: L
                     Text("接种计划 · 倒计时", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text("国家免疫规划 + 常见自费疫苗参考计划", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text("已记录 $completedCount/${decorated.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text("已接种 $completedCount/${decorated.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
             conflicts.forEach { warning ->
                 Text("⚠ 接种间隔提示：$warning。减毒活疫苗通常需同日接种或间隔至少 28 天，请让接种门诊核对具体产品和日期。",
@@ -444,7 +444,7 @@ private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: L
                     }
                 }
             }
-            if (pending.size > 8 || showAll) {
+            if (decorated.size > visible.size || showAll) {
                 TextButton(onClick = { showAll = !showAll }, modifier = Modifier.align(Alignment.End)) {
                     Text(if (showAll) "收起计划" else "查看全部 ${decorated.size} 项")
                 }
