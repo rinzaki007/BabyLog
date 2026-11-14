@@ -363,32 +363,41 @@ private fun TrendsSummary(events: List<BabyEventEntity>) {
 
 @Composable
 private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
+    var metric by remember { mutableStateOf("体重") }
+    var range by remember { mutableStateOf("全部") }
+    val key = when (metric) { "身长" -> "lengthCm"; "头围" -> "headCircumferenceCm"; else -> "weightGrams" }
+    val unit = if (metric == "体重") "kg" else "cm"
     val points = events.filter { it.eventType == "GROWTH" }.mapNotNull { event ->
-        val grams = runCatching { JSONObject(event.payloadJson).optInt("weightGrams") }.getOrDefault(0)
-        if (grams > 0) event.occurredAt to grams / 1000f else null
-    }.sortedBy { it.first }
+        val value = runCatching { JSONObject(event.payloadJson).let { payload ->
+            if (key == "weightGrams") payload.optDouble(key).takeIf { it > 0 }?.div(1000.0)
+            else payload.optDouble(key).takeIf { it > 0 }
+        } }.getOrNull()
+        value?.let { event.occurredAt to it.toFloat() }
+    }.sortedBy { it.first }.let { all ->
+        val days = when (range) { "近 30 天" -> 30L; "近 90 天" -> 90L; else -> Long.MAX_VALUE }
+        if (days == Long.MAX_VALUE) all else all.filter { it.first >= System.currentTimeMillis() - days * 86400000L }
+    }
     val latest = points.lastOrNull()
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("成长曲线", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("体重变化记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("体重、身长和头围变化", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text(latest?.let { "${"%.2f".format(Locale.getDefault(), it.second)} kg" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text(latest?.let { "\${"%.2f".format(Locale.getDefault(), it.second)} $unit" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
+            SelectionRow(listOf("体重", "身长", "头围"), metric) { metric = it }
+            SelectionRow(listOf("全部", "近 30 天", "近 90 天"), range) { range = it }
             if (points.isEmpty()) {
-                Box(Modifier.fillMaxWidth().height(112.dp), contentAlignment = Alignment.Center) {
-                    Text("记录几次体重后，这里就会出现成长曲线", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Box(Modifier.fillMaxWidth().height(128.dp), contentAlignment = Alignment.Center) {
+                    Text("还没有\${metric}数据，记录几次后就能看到变化", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             } else {
-                val min = (points.minOf { it.second } - 0.3f).coerceAtLeast(0f)
-                val max = points.maxOf { it.second } + 0.3f
-                Canvas(Modifier.fillMaxWidth().height(150.dp)) {
-                    val left = 12f
-                    val right = size.width - 12f
-                    val top = 12f
-                    val bottom = size.height - 12f
+                val min = (points.minOf { it.second } - if (metric == "体重") 0.3f else 1f).coerceAtLeast(0f)
+                val max = points.maxOf { it.second } + if (metric == "体重") 0.3f else 1f
+                Canvas(Modifier.fillMaxWidth().height(164.dp)) {
+                    val left = 14f; val right = size.width - 14f; val top = 12f; val bottom = size.height - 12f
                     repeat(4) { i ->
                         val y = top + (bottom - top) * i / 3f
                         drawLine(Color(0xFFEDE7F6), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
@@ -396,21 +405,17 @@ private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     val span = (max - min).coerceAtLeast(0.1f)
                     val coords = points.mapIndexed { index, point ->
                         val x = if (points.size == 1) (left + right) / 2f else left + (right - left) * index / (points.size - 1)
-                        val y = bottom - (point.second - min) / span * (bottom - top)
-                        Offset(x, y)
+                        Offset(x, bottom - (point.second - min) / span * (bottom - top))
                     }
                     if (coords.size > 1) {
-                        val path = Path().apply {
-                            moveTo(coords.first().x, coords.first().y)
-                            coords.drop(1).forEach { lineTo(it.x, it.y) }
-                        }
+                        val path = Path().apply { moveTo(coords.first().x, coords.first().y); coords.drop(1).forEach { lineTo(it.x, it.y) } }
                         drawPath(path, Color(0xFF8874B8), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
                     }
                     coords.forEach { drawCircle(Color(0xFF8874B8), radius = 4.dp.toPx(), center = it) }
                 }
-                Text("${points.size} 次测量 · 最近记录 ${SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("\${points.size} 次测量 · 最近记录 \${SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text("曲线仅展示已记录的数据，不代表医学评估。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("曲线仅展示已记录的数据，不代表医学评估；建议定期测量并按医生建议解读。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
