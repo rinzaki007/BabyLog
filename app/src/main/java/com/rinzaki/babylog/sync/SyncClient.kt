@@ -117,14 +117,18 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 }
             }
             var cursor = SyncPreferences.cursor(applicationContext)
-            repeat(10) {
+            var page = 0
+            while (page < 10) {
                 val pulled = SyncHttp.request(base, "/api/sync/pull?family_id=$familyId&cursor=$cursor&limit=500", token = token)
                 val items = pulled.optJSONArray("items") ?: JSONArray()
-                if (items.length() == 0) return@repeat
+                if (items.length() == 0) break
                 for (i in 0 until items.length()) applyRemote(dao, items.getJSONObject(i), familyId)
-                cursor = pulled.optLong("next_cursor", cursor)
+                val next = pulled.optLong("next_cursor", cursor)
+                if (next <= cursor) break
+                cursor = next
                 SyncPreferences.saveCursor(applicationContext, cursor)
-                if (items.length() < 500) return@repeat
+                page++
+                if (items.length() < 500) break
             }
             Result.success()
         } catch (_: java.net.SocketTimeoutException) {
@@ -162,7 +166,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
             }
             "event" -> {
                 if (operation == "delete") {
-                    dao.softDeleteEventFromServer(id, item.optLong("created_at", System.currentTimeMillis()))
+                    dao.softDeleteEventFromServer(id, item.optLong("created_at", System.currentTimeMillis()), version)
                 } else {
                     dao.upsertEvent(BabyEventEntity(
                         id = payload.optString("id", id),
@@ -187,7 +191,7 @@ private object RoomAccess {
     fun database(context: Context): BabyLogDatabase = instance ?: synchronized(this) {
         instance ?: androidx.room.Room.databaseBuilder(context, BabyLogDatabase::class.java, "babylog.db")
             .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4)
-            .build().also { instance = it }
+            .enableMultiInstanceInvalidation().build().also { instance = it }
     }
 }
 

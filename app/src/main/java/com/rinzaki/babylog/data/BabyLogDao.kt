@@ -59,6 +59,9 @@ interface BabyLogDao {
     @Query("SELECT * FROM sync_operations WHERE status = 'PENDING' ORDER BY createdAt LIMIT 200")
     suspend fun pendingOperations(): List<SyncOperationEntity>
 
+    @Query("DELETE FROM sync_operations WHERE entityType = :entityType AND entityId = :entityId AND status = 'PENDING'")
+    suspend fun clearPendingOperations(entityType: String, entityId: String)
+
     @Query("DELETE FROM sync_operations WHERE operationId = :operationId")
     suspend fun removeOperation(operationId: String)
 
