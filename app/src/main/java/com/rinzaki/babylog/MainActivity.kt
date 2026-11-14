@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -309,7 +310,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         } }
                     }
-                    if (selectedNav == 2) item { VaccinePage(vaccineEvents, onSave = { existing, payload, timestamp ->
+                    if (selectedNav == 2) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
                         scope.launch {
                             val vaccine = existing?.copy(occurredAt = timestamp, payloadJson = payload.toString(), updatedAt = now, syncStatus = "PENDING")
@@ -357,13 +358,90 @@ private fun BabyLogApp(dao: BabyLogDao) {
 
 
 
+
 @Composable
-private fun VaccinePage(events: List<BabyEventEntity>, onSave: (BabyEventEntity?, JSONObject, Long) -> Unit, onDelete: (BabyEventEntity) -> Unit) {
+private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: List<BabyEventEntity>) {
+    var showAll by remember { mutableStateOf(false) }
+    val records = remember(events) {
+        events.mapNotNull { event ->
+            runCatching {
+                val payload = JSONObject(event.payloadJson)
+                payload.optString("vaccineName") to payload.optString("dose")
+            }.getOrNull()
+        }
+    }
+    val jeInactivated = records.any { it.first.contains("乙脑") && it.first.contains("灭活") }
+    val hepAInactivated = records.any { it.first.contains("甲肝") && it.first.contains("灭活") }
+    val allItems = remember(birthDate, sex, jeInactivated, hepAInactivated) {
+        chinaNationalVaccineSchedule(birthDate, sex).filter { (item, _) ->
+            when (item.group) {
+                "乙脑" -> if (jeInactivated) item.vaccineName.contains("灭活") else item.vaccineName.contains("减毒活")
+                "甲肝" -> if (hepAInactivated) item.vaccineName.contains("灭活") else item.vaccineName.contains("减毒活")
+                else -> true
+            }
+        }
+    }
+    val today = LocalDate.now()
+    val decorated = allItems.map { (item, date) ->
+        Triple(item, date, vaccineDoseIsRecorded(item, records))
+    }.sortedBy { it.second }
+    val pending = decorated.filterNot { it.third }
+    val completedCount = decorated.size - pending.size
+    val visible = if (showAll) decorated else pending.take(8)
+    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EFF8))) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("接种计划 · 倒计时", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("参考中国国家免疫规划 2026 年版", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("已记录 $completedCount/${decorated.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
+            if (visible.isEmpty()) {
+                Text("当前计划剂次均已记录，太棒啦！", color = MaterialTheme.colorScheme.primary)
+            } else {
+                visible.forEach { (item, date, completed) ->
+                    val days = java.time.temporal.ChronoUnit.DAYS.between(today, date)
+                    val status = when {
+                        completed -> "已记录"
+                        days < 0 -> "逾期 ${-days} 天"
+                        days == 0L -> "今天接种"
+                        else -> "还有 ${days} 天"
+                    }
+                    val statusColor = when {
+                        completed -> Color(0xFF54856A)
+                        days <= 0 -> Color(0xFFB65D4A)
+                        days <= 14 -> Color(0xFFB77936)
+                        else -> MaterialTheme.colorScheme.primary
+                    }
+                    Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(14.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(item.vaccineName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                            Text("${item.dose} · $date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (item.note.isNotBlank()) Text(item.note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(status, color = statusColor, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            if (pending.size > 8 || showAll) {
+                TextButton(onClick = { showAll = !showAll }, modifier = Modifier.align(Alignment.End)) {
+                    Text(if (showAll) "收起计划" else "查看全部 ${decorated.size} 项")
+                }
+            }
+            Text("乙脑、甲肝有不同疫苗类型和接种程序；未记录路线时暂按减毒活疫苗显示。实际接种日期、补种及具体路线请以当地接种门诊安排为准。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, sex: String?, onSave: (BabyEventEntity?, JSONObject, Long) -> Unit, onDelete: (BabyEventEntity) -> Unit) {
     var showEditor by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<BabyEventEntity?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("疫苗接种档案", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("独立管理宝宝每一次接种，方便长期查询和核对。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        VaccineScheduleSection(birthDate, sex, events)
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("💉 宝宝疫苗档案", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -557,8 +635,8 @@ private fun BabyAlbumSection(
     var deletingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var viewingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var editingCaption by remember { mutableStateOf<BabyPhotoEntity?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) onAdd(uri)
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
+        uris.forEach(onAdd)
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -566,7 +644,7 @@ private fun BabyAlbumSection(
                 Text("成长相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text("记录每一个值得珍藏的日子", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Button(onClick = { picker.launch(arrayOf("image/*")) }) { Text("添加照片") }
+            Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("从相册选择") }
         }
         if (photos.isEmpty()) {
             Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F0))) {
