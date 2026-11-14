@@ -16,7 +16,7 @@ A private-by-design Android baby care and growth tracker with optional self-host
 - Sleep records and editable timeline
 - Growth measurements and charts
 - Local baby photo album
-- Optional NAS sync for baby profiles and care events (photo binary sync is still being completed)
+- Optional NAS family sync for baby profiles, care events, and growth album photos
 
 ## Technology
 

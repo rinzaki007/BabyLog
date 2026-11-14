@@ -13,10 +13,13 @@ import androidx.work.WorkerParameters
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
 import com.rinzaki.babylog.data.BabyLogDatabase
+import com.rinzaki.babylog.data.BabyPhotoEntity
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.File
+import java.io.DataOutputStream
 import java.util.concurrent.TimeUnit
 
 object SyncPreferences {
@@ -27,10 +30,14 @@ object SyncPreferences {
     fun familyId(context: Context) = prefs(context).getString("family_id", "") ?: ""
     fun cursor(context: Context) = prefs(context).getLong("cursor", 0L)
     fun saveServer(context: Context, value: String) { prefs(context).edit().putString("server", value.trim().trimEnd('/')).apply() }
-    fun saveSession(context: Context, token: String) { prefs(context).edit().putString("token", token).apply() }
+    fun saveSession(context: Context, token: String) { prefs(context).edit().putString("token", token).remove("family_id").putLong("cursor", 0L).apply() }
     fun saveFamily(context: Context, id: String) { prefs(context).edit().putString("family_id", id).putLong("cursor", 0L).apply() }
     fun saveCursor(context: Context, value: Long) { prefs(context).edit().putLong("cursor", value).apply() }
     fun clearSession(context: Context) { prefs(context).edit().remove("token").remove("family_id").putLong("cursor", 0L).apply() }
+    fun lastSyncAt(context: Context) = prefs(context).getLong("last_sync_at", 0L)
+    fun lastSyncError(context: Context) = prefs(context).getString("last_sync_error", null)
+    fun markSyncSuccess(context: Context) { prefs(context).edit().putLong("last_sync_at", System.currentTimeMillis()).remove("last_sync_error").apply() }
+    fun markSyncFailure(context: Context, reason: String) { prefs(context).edit().putString("last_sync_error", reason.take(240)).apply() }
 }
 
 object SyncHttp {
@@ -56,6 +63,55 @@ object SyncHttp {
         } finally {
             connection.disconnect()
         }
+    }
+
+    fun uploadPhoto(base: String, familyId: String, photoId: String, token: String, file: File, mimeType: String) {
+        val boundary = "BabyLog-${java.util.UUID.randomUUID()}"
+        val connection = (URL(base.trimEnd('/') + "/api/photos/upload?family_id=$familyId&photo_id=$photoId").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 60000
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $token")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            setChunkedStreamingMode(64 * 1024)
+        }
+        try {
+            DataOutputStream(connection.outputStream).use { output ->
+                output.writeBytes("--$boundary\r\n")
+                output.writeBytes("Content-Disposition: form-data; name=" + 34.toChar() + "file" + 34.toChar() + "; filename=" + 34.toChar() + file.name + 34.toChar() + "\r\n")
+                output.writeBytes("Content-Type: $mimeType\r\n\r\n")
+                file.inputStream().use { it.copyTo(output) }
+                output.writeBytes("\r\n--$boundary--\r\n")
+                output.flush()
+            }
+            val code = connection.responseCode
+            val response = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) throw IllegalStateException("照片上传失败 HTTP $code: " + runCatching { JSONObject(response).optString("detail") }.getOrDefault(response.take(160)))
+        } finally { connection.disconnect() }
+    }
+
+    fun downloadPhoto(base: String, familyId: String, photoId: String, token: String, destination: File) {
+        val connection = (URL(base.trimEnd('/') + "/api/photos/$photoId?family_id=$familyId").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 60000
+            setRequestProperty("Authorization", "Bearer $token")
+        }
+        try {
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                val message = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                throw IllegalStateException("照片下载失败 HTTP $code: $message")
+            }
+            destination.parentFile?.mkdirs()
+            val temp = File(destination.parentFile, destination.name + ".part")
+            connection.inputStream.use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
+            if (destination.exists()) destination.delete()
+            if (!temp.renameTo(destination)) throw java.io.IOException("无法保存下载的照片")
+        } finally { connection.disconnect() }
     }
 }
 
@@ -87,6 +143,12 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 if (pending.isEmpty()) break
                 val changes = JSONArray()
                 pending.forEach { operation ->
+                    if (operation.entityType == "photo" && operation.operation == "upsert") {
+                        val photo = dao.getPhoto(operation.entityId) ?: throw java.io.IOException("找不到待同步照片：${operation.entityId}")
+                        val localFile = File(photo.localPath)
+                        if (!localFile.isFile) throw java.io.IOException("本地照片文件不存在：${photo.id}")
+                        SyncHttp.uploadPhoto(base, familyId, photo.id, token, localFile, mimeTypeForPath(photo.localPath))
+                    }
                     val item = JSONObject()
                         .put("operation_id", operation.operationId)
                         .put("entity_type", operation.entityType)
@@ -108,6 +170,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         when (operation.entityType) {
                             "baby" -> dao.setBabyServerVersion(operation.entityId, version)
                             "event" -> dao.setEventServerVersion(operation.entityId, version)
+                            "photo" -> dao.setPhotoServerVersion(operation.entityId, version, "SYNCED")
                         }
                     }
                     dao.removeOperation(opId)
@@ -115,7 +178,11 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 val conflicts = result.optJSONArray("conflicts") ?: JSONArray()
                 for (i in 0 until conflicts.length()) {
                     val item = conflicts.getJSONObject(i)
-                    dao.markOperationConflict(item.optString("operation_id"), item.optString("reason", "sync conflict"))
+                    val operationId = item.optString("operation_id")
+                    dao.markOperationConflict(operationId, item.optString("reason", "sync conflict"))
+                    pending.firstOrNull { it.operationId == operationId }?.let { operation ->
+                        if (operation.entityType == "photo") dao.setPhotoServerVersion(operation.entityId, -1L, "CONFLICT")
+                    }
                 }
                 batch++
             }
@@ -133,12 +200,16 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 page++
                 if (items.length() < 500) break
             }
+            SyncPreferences.markSyncSuccess(applicationContext)
             Result.success()
-        } catch (_: java.net.SocketTimeoutException) {
+        } catch (error: java.net.SocketTimeoutException) {
+            SyncPreferences.markSyncFailure(applicationContext, error.message ?: "连接超时")
             Result.retry()
-        } catch (_: java.io.IOException) {
+        } catch (error: java.io.IOException) {
+            SyncPreferences.markSyncFailure(applicationContext, error.message ?: "网络连接失败")
             Result.retry()
         } catch (error: Exception) {
+            SyncPreferences.markSyncFailure(applicationContext, error.message ?: "同步失败")
             if (error.message?.contains("HTTP 401") == true) Result.failure() else Result.retry()
         }
     }
@@ -170,7 +241,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
             }
             "event" -> {
                 if (operation == "delete") {
-                    dao.softDeleteEventFromServer(id, item.optLong("created_at", System.currentTimeMillis()), version)
+                    dao.softDeleteEventFromServer(id, item.optLong("created_at", System.currentTimeMillis() / 1000L) * 1000L, version)
                 } else {
                     dao.upsertEvent(BabyEventEntity(
                         id = payload.optString("id", id),
@@ -186,6 +257,36 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                     ))
                 }
             }
+            "photo" -> {
+                val existing = dao.getPhoto(id)
+                if (operation == "delete") {
+                    dao.softDeletePhotoFromServer(id, item.optLong("created_at", System.currentTimeMillis() / 1000L) * 1000L, version)
+                    existing?.let { File(it.localPath).delete() }
+                } else {
+                    val mime = payload.optString("mimeType", "image/jpeg")
+                    val extension = extensionForMime(mime)
+                    val localFile = existing?.let { File(it.localPath) }
+                    val target = if (localFile != null && localFile.isFile && existing.serverVersion == version) localFile
+                        else File(applicationContext.filesDir, "baby_album/$id$extension")
+                    if (localFile == null || !localFile.isFile || existing.serverVersion != version) {
+                        SyncHttp.downloadPhoto(SyncPreferences.server(applicationContext), familyId, id,
+                            SyncPreferences.token(applicationContext), target)
+                    }
+                    dao.upsertPhoto(BabyPhotoEntity(
+                        id = id,
+                        babyId = payload.optString("babyId"),
+                        localPath = target.absolutePath,
+                        caption = payload.optString("caption").takeIf { it.isNotBlank() && it != "null" },
+                        takenAt = payload.optLong("takenAt"),
+                        createdAt = payload.optLong("createdAt"),
+                        updatedAt = payload.optLong("updatedAt"),
+                        syncStatus = "SYNCED",
+                        remotePath = "/api/photos/$id",
+                        deletedAt = null,
+                        serverVersion = version
+                    ))
+                }
+            }
         }
     }
 }
@@ -194,7 +295,7 @@ private object RoomAccess {
     @Volatile private var instance: BabyLogDatabase? = null
     fun database(context: Context): BabyLogDatabase = instance ?: synchronized(this) {
         instance ?: androidx.room.Room.databaseBuilder(context, BabyLogDatabase::class.java, "babylog.db")
-            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4)
+            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4, BabyLogDatabase.MIGRATION_4_5)
             .enableMultiInstanceInvalidation().build().also { instance = it }
     }
 }
@@ -212,3 +313,28 @@ fun eventSyncPayload(event: BabyEventEntity): JSONObject = JSONObject()
     .put("occurredAt", event.occurredAt).put("payloadJson", event.payloadJson)
     .put("createdBy", event.createdBy).put("updatedAt", event.updatedAt)
     .put("deletedAt", event.deletedAt)
+
+fun mimeTypeForPath(path: String): String = when (path.substringAfterLast('.', "").lowercase()) {
+    "png" -> "image/png"
+    "webp" -> "image/webp"
+    "heic" -> "image/heic"
+    "heif" -> "image/heif"
+    else -> "image/jpeg"
+}
+
+fun extensionForMime(mime: String): String = when (mime.lowercase()) {
+    "image/png" -> ".png"
+    "image/webp" -> ".webp"
+    "image/heic" -> ".heic"
+    "image/heif" -> ".heif"
+    else -> ".jpg"
+}
+
+fun photoSyncPayload(photo: BabyPhotoEntity, mimeType: String): JSONObject = JSONObject()
+    .put("id", photo.id)
+    .put("babyId", photo.babyId)
+    .put("caption", photo.caption)
+    .put("takenAt", photo.takenAt)
+    .put("createdAt", photo.createdAt)
+    .put("updatedAt", photo.updatedAt)
+    .put("mimeType", mimeType)

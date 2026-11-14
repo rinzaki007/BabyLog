@@ -50,6 +50,24 @@ interface BabyLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertPhoto(photo: BabyPhotoEntity)
 
+    @Query("SELECT * FROM baby_photos WHERE id = :photoId LIMIT 1")
+    suspend fun getPhoto(photoId: String): BabyPhotoEntity?
+
+    @Query("SELECT * FROM baby_photos")
+    suspend fun getAllPhotos(): List<BabyPhotoEntity>
+
+    @Query("SELECT COUNT(*) FROM sync_operations WHERE status = 'PENDING'")
+    suspend fun pendingOperationCount(): Int
+
+    @Query("SELECT COUNT(*) FROM sync_operations WHERE status = 'CONFLICT'")
+    suspend fun conflictOperationCount(): Int
+
+    @Query("UPDATE baby_photos SET serverVersion = :version, syncStatus = :status WHERE id = :photoId")
+    suspend fun setPhotoServerVersion(photoId: String, version: Long, status: String)
+
+    @Query("UPDATE baby_photos SET deletedAt = :deletedAt, updatedAt = :deletedAt, syncStatus = 'SYNCED', serverVersion = :version WHERE id = :photoId")
+    suspend fun softDeletePhotoFromServer(photoId: String, deletedAt: Long, version: Long)
+
     @Query("SELECT * FROM baby_photos WHERE babyId = :babyId AND deletedAt IS NULL ORDER BY takenAt DESC")
     fun observePhotos(babyId: String): Flow<List<BabyPhotoEntity>>
 

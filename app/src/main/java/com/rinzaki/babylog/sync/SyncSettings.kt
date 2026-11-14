@@ -15,6 +15,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.util.UUID
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import com.rinzaki.babylog.sync.photoSyncPayload
+import com.rinzaki.babylog.sync.mimeTypeForPath
 
 @Composable
 fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
@@ -46,6 +52,15 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var token by remember { mutableStateOf(SyncPreferences.token(context)) }
     var familyId by remember { mutableStateOf(SyncPreferences.familyId(context)) }
+    var pendingCount by remember { mutableStateOf(0) }
+    var conflictCount by remember { mutableStateOf(0) }
+    var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(context)) }
+    var lastSyncError by remember { mutableStateOf(SyncPreferences.lastSyncError(context)) }
+
+    LaunchedEffect(Unit) {
+        pendingCount = dao.pendingOperationCount()
+        conflictCount = dao.conflictOperationCount()
+    }
 
     fun runAction(action: suspend () -> String) {
         if (busy) return
@@ -56,6 +71,10 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             finally { busy = false }
             token = SyncPreferences.token(context)
             familyId = SyncPreferences.familyId(context)
+            pendingCount = withContext(Dispatchers.IO) { dao.pendingOperationCount() }
+            conflictCount = withContext(Dispatchers.IO) { dao.conflictOperationCount() }
+            lastSyncAt = SyncPreferences.lastSyncAt(context)
+            lastSyncError = SyncPreferences.lastSyncError(context)
         }
     }
 
@@ -150,6 +169,9 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 for (event in dao.getAllEvents().filter { it.deletedAt == null }) {
                                     dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", event.id, "upsert", eventSyncPayload(event).toString(), null, System.currentTimeMillis()))
                                 }
+                                for (photo in dao.getAllPhotos().filter { it.deletedAt == null }) {
+                                    dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "photo", photo.id, "upsert", photoSyncPayload(photo, mimeTypeForPath(photo.localPath)).toString(), photo.serverVersion, System.currentTimeMillis()))
+                                }
                                 SyncScheduler.schedule(context)
                                 "家庭创建成功，现有宝宝档案和记录已加入首次同步队列。"
                             }
@@ -185,9 +207,24 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     if (inviteResult.isNotBlank()) {
                         Text("邀请码：$inviteResult", fontWeight = FontWeight.Bold)
                     }
-                    Button(onClick = { SyncScheduler.enqueue(context); message = "已加入后台同步队列。" }, modifier = Modifier.fillMaxWidth(), enabled = !busy && familyId.isNotBlank()) {
+                    Text("同步状态", fontWeight = FontWeight.SemiBold)
+                    Text("待同步 $pendingCount 项 · 冲突 $conflictCount 项")
+                    Text(if (lastSyncAt > 0L) "上次成功同步：" + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt)) else "尚未成功同步")
+                    if (!lastSyncError.isNullOrBlank()) Text("最近错误：$lastSyncError")
+                    Button(onClick = {
+                        SyncScheduler.enqueue(context)
+                        message = "已加入后台同步队列。"
+                    }, modifier = Modifier.fillMaxWidth(), enabled = !busy && familyId.isNotBlank()) {
                         Text("立即同步")
                     }
+                    TextButton(onClick = {
+                        scope.launch {
+                            pendingCount = withContext(Dispatchers.IO) { dao.pendingOperationCount() }
+                            conflictCount = withContext(Dispatchers.IO) { dao.conflictOperationCount() }
+                            lastSyncAt = SyncPreferences.lastSyncAt(context)
+                            lastSyncError = SyncPreferences.lastSyncError(context)
+                        }
+                    }) { Text("刷新同步状态") }
                     TextButton(onClick = {
                         SyncPreferences.clearSession(context)
                         token = ""

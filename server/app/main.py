@@ -97,7 +97,7 @@ def join_family(body:InviteJoin,uid:str=Depends(current_user)):
     return {"family_id":invite["family_id"],"joined":True}
 @app.post("/api/sync/push")
 def push(body:PushRequest,uid:str=Depends(current_user)):
-    accepted=[]; conflicts=[]; allowed={"baby","event","photo"}
+    accepted=[]; conflicts=[]; allowed={"baby","event","photo"}; photo_files_to_delete=[]
     with connect() as db:
         require_member(db,body.family_id,uid); db.execute("BEGIN IMMEDIATE")
         for c in body.changes:
@@ -105,14 +105,25 @@ def push(body:PushRequest,uid:str=Depends(current_user)):
                 conflicts.append({"operation_id":c.operation_id,"reason":"unsupported_operation"}); continue
             prior=db.execute("SELECT version FROM records WHERE family_id=? AND entity_type=? AND entity_id=?",(body.family_id,c.entity_type,c.entity_id)).fetchone()
             duplicate=db.execute("SELECT seq FROM changes WHERE family_id=? AND operation_id=?",(body.family_id,c.operation_id)).fetchone()
-            if duplicate: accepted.append({"operation_id":c.operation_id,"duplicate":True}); continue
+            if duplicate:
+                current=db.execute("SELECT version FROM records WHERE family_id=? AND entity_type=? AND entity_id=?",(body.family_id,c.entity_type,c.entity_id)).fetchone()
+                accepted.append({"operation_id":c.operation_id,"duplicate":True,"version":current["version"] if current else 0})
+                continue
             version=prior["version"] if prior else 0
             if c.base_version is not None and c.base_version!=version:
                 conflicts.append({"operation_id":c.operation_id,"entity_id":c.entity_id,"server_version":version,"reason":"version_conflict"}); continue
             new_version=version+1; now=int(time.time()); payload=json.dumps(c.payload,ensure_ascii=False,separators=(",",":"))
             db.execute("""INSERT INTO records VALUES (?,?,?,?,?,?,?) ON CONFLICT(family_id,entity_type,entity_id) DO UPDATE SET payload=excluded.payload,version=excluded.version,updated_at=excluded.updated_at,deleted=excluded.deleted""",(body.family_id,c.entity_type,c.entity_id,payload,new_version,now,int(c.operation=="delete")))
             cur=db.execute("INSERT INTO changes(family_id,entity_type,entity_id,operation_id,payload,version,created_at) VALUES (?,?,?,?,?,?,?)",(body.family_id,c.entity_type,c.entity_id,c.operation_id,json.dumps({"operation":c.operation,"payload":c.payload},ensure_ascii=False),new_version,now))
+            if c.entity_type=="photo" and c.operation=="delete":
+                photo=db.execute("SELECT relative_path FROM photos WHERE id=? AND family_id=?",(c.entity_id,body.family_id)).fetchone()
+                if photo: photo_files_to_delete.append(PHOTO_DIR/photo["relative_path"])
+                db.execute("DELETE FROM photos WHERE id=? AND family_id=?",(c.entity_id,body.family_id))
             accepted.append({"operation_id":c.operation_id,"version":new_version,"seq":cur.lastrowid})
+    for photo_path in photo_files_to_delete:
+        resolved=photo_path.resolve()
+        if PHOTO_DIR.resolve() in resolved.parents:
+            resolved.unlink(missing_ok=True)
     return {"accepted":accepted,"conflicts":conflicts}
 @app.get("/api/sync/pull")
 def pull(family_id:str,cursor:int=0,limit:int=500,uid:str=Depends(current_user)):
@@ -125,7 +136,7 @@ def pull(family_id:str,cursor:int=0,limit:int=500,uid:str=Depends(current_user))
     return {"items":items,"next_cursor":items[-1]["cursor"] if items else cursor}
 @app.post("/api/photos/upload")
 async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:str=Depends(current_user)):
-    types={"image/jpeg":".jpg","image/png":".png","image/webp":".webp","image/heic":".heic"}; mime=file.content_type or ""
+    types={"image/jpeg":".jpg","image/png":".png","image/webp":".webp","image/heic":".heic","image/heif":".heif"}; mime=file.content_type or ""
     if mime not in types: raise HTTPException(415,"仅支持 JPEG、PNG、WebP 或 HEIC 图片")
     with connect() as db: require_member(db,family_id,uid)
     folder=PHOTO_DIR/family_id; folder.mkdir(parents=True,exist_ok=True); target=folder/f"{uuid.UUID(photo_id)}{types[mime]}"; temp=target.with_suffix(target.suffix+".part"); total=0

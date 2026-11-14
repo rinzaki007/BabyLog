@@ -61,6 +61,7 @@ def test_family_invite_and_membership_sync(client):
     duplicate = client.post("/api/sync/push", headers=auth(owner), json=body)
     assert duplicate.status_code == 200
     assert duplicate.json()["accepted"][0]["duplicate"] is True
+    assert duplicate.json()["accepted"][0]["version"] == 1
 
     pulled = client.get("/api/sync/pull", headers=auth(guest), params={"family_id": family_id, "cursor": 0})
     assert pulled.status_code == 200
@@ -93,3 +94,37 @@ def test_photo_upload_and_download(client):
     downloaded = client.get(f"/api/photos/{photo_id}", headers=auth(token), params={"family_id": family_id})
     assert downloaded.status_code == 200
     assert downloaded.content == b"\xff\xd8\xfftest-image"
+
+def test_photo_metadata_sync_and_delete(client):
+    token = register(client, "photo-sync@example.test")
+    family_id = client.post("/api/families", headers=auth(token), json={"name": "photos"}).json()["family_id"]
+    photo_id = str(uuid.uuid4())
+    uploaded = client.post(
+        "/api/photos/upload", headers=auth(token),
+        params={"family_id": family_id, "photo_id": photo_id},
+        files={"file": ("test.jpg", b"photo-bytes", "image/jpeg")}
+    )
+    assert uploaded.status_code == 200
+
+    metadata = {"id": photo_id, "babyId": str(uuid.uuid4()), "caption": "满月", "takenAt": 123456789,
+                "createdAt": 123456789, "updatedAt": 123456789, "mimeType": "image/jpeg"}
+    pushed = client.post("/api/sync/push", headers=auth(token), json={"family_id": family_id, "changes": [{
+        "operation_id": str(uuid.uuid4()), "entity_type": "photo", "entity_id": photo_id,
+        "operation": "upsert", "payload": metadata, "base_version": 0
+    }]})
+    assert pushed.status_code == 200
+    assert pushed.json()["accepted"][0]["version"] == 1
+
+    pulled = client.get("/api/sync/pull", headers=auth(token), params={"family_id": family_id, "cursor": 0})
+    assert pulled.json()["items"][0]["entity_type"] == "photo"
+    assert pulled.json()["items"][0]["payload"]["caption"] == "满月"
+
+    deleted = client.post("/api/sync/push", headers=auth(token), json={"family_id": family_id, "changes": [{
+        "operation_id": str(uuid.uuid4()), "entity_type": "photo", "entity_id": photo_id,
+        "operation": "delete", "payload": {"id": photo_id}, "base_version": 1
+    }]})
+    assert deleted.status_code == 200
+    assert deleted.json()["accepted"][0]["version"] == 2
+    assert client.get(f"/api/photos/{photo_id}", headers=auth(token), params={"family_id": family_id}).status_code == 404
+    pulled = client.get("/api/sync/pull", headers=auth(token), params={"family_id": family_id, "cursor": 0})
+    assert pulled.json()["items"][-1]["operation"] == "delete"

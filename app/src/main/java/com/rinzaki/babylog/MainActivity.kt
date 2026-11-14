@@ -67,6 +67,8 @@ import com.rinzaki.babylog.sync.SyncScheduler
 import com.rinzaki.babylog.sync.SyncSettingsDialog
 import com.rinzaki.babylog.sync.babySyncPayload
 import com.rinzaki.babylog.sync.eventSyncPayload
+import com.rinzaki.babylog.sync.photoSyncPayload
+import com.rinzaki.babylog.sync.mimeTypeForPath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -96,7 +98,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         database = Room.databaseBuilder(applicationContext, BabyLogDatabase::class.java, "babylog.db")
-            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4)
+            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4, BabyLogDatabase.MIGRATION_4_5)
             .enableMultiInstanceInvalidation().build()
         setContent { BabyLogApp(database.babyLogDao()) }
     }
@@ -164,21 +166,46 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 if (baby != null) {
                     item { TodaySummary(events) }
                     item { GrowthSection(baby, events) }
-                    item { BabyAlbumSection(baby, photos) { uri ->
-                        scope.launch {
-                            runCatching {
-                                val folder = File(appContext.filesDir, "baby_album").apply { mkdirs() }
-                                val destination = File(folder, "${UUID.randomUUID()}.jpg")
-                                withContext(Dispatchers.IO) {
-                                    appContext.contentResolver.openInputStream(uri)?.use { input ->
-                                        destination.outputStream().use { output -> input.copyTo(output) }
-                                    } ?: error("无法读取所选照片")
+                    item {
+                        BabyAlbumSection(
+                            baby = baby,
+                            photos = photos,
+                            onAdd = { uri ->
+                                scope.launch {
+                                    runCatching {
+                                        val mime = appContext.contentResolver.getType(uri) ?: "image/jpeg"
+                                        require(mime in setOf("image/jpeg", "image/png", "image/webp", "image/heic", "image/heif")) { "暂不支持该照片格式：$mime" }
+                                        val extension = when (mime) { "image/png" -> ".png"; "image/webp" -> ".webp"; "image/heic" -> ".heic"; "image/heif" -> ".heif"; else -> ".jpg" }
+                                        val folder = File(appContext.filesDir, "baby_album").apply { mkdirs() }
+                                        val photoId = UUID.randomUUID().toString()
+                                        val destination = File(folder, photoId + extension)
+                                        withContext(Dispatchers.IO) {
+                                            appContext.contentResolver.openInputStream(uri)?.use { input -> destination.outputStream().use { output -> input.copyTo(output) } } ?: error("无法读取所选照片")
+                                        }
+                                        val now = System.currentTimeMillis()
+                                        val photo = BabyPhotoEntity(photoId, baby.id, destination.absolutePath, null, now, now, now)
+                                        dao.upsertPhoto(photo)
+                                        if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                            dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "photo", photo.id, "upsert", photoSyncPayload(photo, mime).toString(), photo.serverVersion, now))
+                                            SyncScheduler.enqueue(appContext)
+                                        }
+                                    }
                                 }
-                                val now = System.currentTimeMillis()
-                                dao.upsertPhoto(BabyPhotoEntity(UUID.randomUUID().toString(), baby.id, destination.absolutePath, null, now, now, now))
+                            },
+                            onDelete = { photo ->
+                                scope.launch {
+                                    val now = System.currentTimeMillis()
+                                    dao.softDeletePhoto(photo.id, now)
+                                    if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                        dao.clearPendingOperations("photo", photo.id)
+                                        dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "photo", photo.id, "delete", photoSyncPayload(photo, mimeTypeForPath(photo.localPath)).toString(), photo.serverVersion, now))
+                                        SyncScheduler.enqueue(appContext)
+                                    }
+                                    withContext(Dispatchers.IO) { File(photo.localPath).delete() }
+                                }
                             }
-                        }
-                    } }
+                        )
+                    }
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("快捷记录", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -306,7 +333,13 @@ private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
 }
 
 @Composable
-private fun BabyAlbumSection(baby: BabyEntity, photos: List<BabyPhotoEntity>, onAdd: (android.net.Uri) -> Unit) {
+private fun BabyAlbumSection(
+    baby: BabyEntity,
+    photos: List<BabyPhotoEntity>,
+    onAdd: (android.net.Uri) -> Unit,
+    onDelete: (BabyPhotoEntity) -> Unit
+) {
+    var deletingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) onAdd(uri)
     }
@@ -323,7 +356,7 @@ private fun BabyAlbumSection(baby: BabyEntity, photos: List<BabyPhotoEntity>, on
                 Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text("📷", style = MaterialTheme.typography.headlineLarge)
                     Text("收藏宝宝的第一张成长照片", fontWeight = FontWeight.SemiBold)
-                    Text("照片按拍摄记录时间排列，后续可同步到家庭相册。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("照片会保存在本机；加入家庭同步后可共享到 NAS 相册。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -332,15 +365,23 @@ private fun BabyAlbumSection(baby: BabyEntity, photos: List<BabyPhotoEntity>, on
                     java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(),
                     java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
                 ) + 1).coerceAtLeast(1)
-                val milestone = when (day) { 1L -> "初见"; 7L -> "第一周"; 30L -> "满月"; 100L -> "百日"; 180L -> "半岁"; 365L -> "一周岁"; else -> "第 ${day} 天" }
-                AlbumPhotoCard(photo, milestone)
+                val milestone = when (day) { 1L -> "初见"; 7L -> "第一周"; 30L -> "满月"; 100L -> "百日"; 180L -> "半岁"; 365L -> "一周岁"; else -> "第 $day 天" }
+                AlbumPhotoCard(photo, milestone) { deletingPhoto = photo }
             }
         }
     }
+    deletingPhoto?.let { photo ->
+        AlertDialog(
+            onDismissRequest = { deletingPhoto = null },
+            title = { Text("删除这张照片？") },
+            text = { Text("照片会从本机相册移除；如果已加入家庭同步，也会从 NAS 家庭相册中删除。") },
+            confirmButton = { TextButton(onClick = { onDelete(photo); deletingPhoto = null }) { Text("删除") } },
+            dismissButton = { TextButton(onClick = { deletingPhoto = null }) { Text("取消") } }
+        )
+    }
 }
-
 @Composable
-private fun AlbumPhotoCard(photo: BabyPhotoEntity, milestone: String) {
+private fun AlbumPhotoCard(photo: BabyPhotoEntity, milestone: String, onDelete: () -> Unit) {
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
         value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(photo.localPath) }.getOrNull() }
     }
@@ -352,6 +393,7 @@ private fun AlbumPhotoCard(photo: BabyPhotoEntity, milestone: String) {
                 Text(milestone, fontWeight = FontWeight.Bold)
                 Text(SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()).format(Date(photo.takenAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("成长瞬间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                TextButton(onClick = onDelete) { Text("删除照片") }
             }
         }
     }

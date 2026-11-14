@@ -51,7 +51,8 @@ data class BabyPhotoEntity(
     val updatedAt: Long,
     val syncStatus: String = "PENDING",
     val remotePath: String? = null,
-    val deletedAt: Long? = null
+    val deletedAt: Long? = null,
+    val serverVersion: Long? = null
 )
 
 @Entity(tableName = "sync_operations", indices = [Index("createdAt"), Index("status")])
