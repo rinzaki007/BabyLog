@@ -101,6 +101,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun BabyLogApp(dao: BabyLogDao) {
+    val appContext = LocalContext.current.applicationContext
     val babies by dao.observeBabies().collectAsState(initial = emptyList())
     val baby = babies.firstOrNull()
     val eventsFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observeEvents(baby.id) }
@@ -150,10 +151,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     item { BabyAlbumSection(baby, photos) { uri ->
                         scope.launch {
                             runCatching {
-                                val folder = File(applicationContext.filesDir, "baby_album").apply { mkdirs() }
+                                val folder = File(appContext.filesDir, "baby_album").apply { mkdirs() }
                                 val destination = File(folder, "${UUID.randomUUID()}.jpg")
                                 withContext(Dispatchers.IO) {
-                                    applicationContext.contentResolver.openInputStream(uri)?.use { input ->
+                                    appContext.contentResolver.openInputStream(uri)?.use { input ->
                                         destination.outputStream().use { output -> input.copyTo(output) }
                                     } ?: error("无法读取所选照片")
                                 }
