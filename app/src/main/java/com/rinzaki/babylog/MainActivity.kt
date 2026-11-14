@@ -54,6 +54,8 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
@@ -139,7 +141,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("快速记录", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                ActionCard("🍼", "喂养", "母乳 / 奶瓶", Modifier.weight(1f)) { addingEvent = "FEEDING" }
+                                ActionCard("🍼", "配方奶", "记录每次奶量", Modifier.weight(1f)) { addingEvent = "FEEDING" }
                                 ActionCard("🧷", "尿布", "尿液 / 大便", Modifier.weight(1f)) { addingEvent = "DIAPER" }
                                 ActionCard("🌙", "睡眠", "记录睡眠时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
                             }
@@ -177,12 +179,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
 
     if (addingEvent != null && baby != null) {
-        EventEditor(eventType = addingEvent!!, onDismiss = { addingEvent = null }, onSave = { type, payload ->
+        EventEditor(eventType = addingEvent!!, onDismiss = { addingEvent = null }, onSave = { type, payload, occurredAt ->
             val now = System.currentTimeMillis()
             scope.launch {
                 dao.upsertEvent(BabyEventEntity(
                     id = UUID.randomUUID().toString(), babyId = baby.id, eventType = type,
-                    occurredAt = now, payloadJson = payload.toString(), createdBy = null, updatedAt = now
+                    occurredAt = occurredAt, payloadJson = payload.toString(), createdBy = null, updatedAt = now
                 ))
                 addingEvent = null
             }
@@ -286,85 +288,83 @@ private fun ActionCard(emoji: String, title: String, subtitle: String, modifier:
 }
 
 @Composable
-private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (String, JSONObject) -> Unit) {
-    var feedMethod by remember { mutableStateOf("母乳") }
-    var breastSide by remember { mutableStateOf("左侧") }
+private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (String, JSONObject, Long) -> Unit) {
+    val now = remember { LocalDateTime.now() }
+    var date by remember { mutableStateOf(now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
+    var time by remember { mutableStateOf(now.format(DateTimeFormatter.ofPattern("HH:mm"))) }
     var amount by remember { mutableStateOf("") }
-    var duration by remember { mutableStateOf("") }
     var urine by remember { mutableStateOf(true) }
     var stool by remember { mutableStateOf(false) }
+    var stoolShape by remember { mutableStateOf("糊状") }
+    var stoolColor by remember { mutableStateOf("黄色") }
+    var stoolAmount by remember { mutableStateOf("中量") }
+    var sleepMinutes by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    val title = when (eventType) { "FEEDING" -> "记录喂养"; "DIAPER" -> "记录尿布"; else -> "记录睡眠" }
+    val title = when (eventType) { "FEEDING" -> "记录配方奶"; "DIAPER" -> "记录大小便"; else -> "记录睡眠" }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title, fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("发生时间", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(date, { date = it.take(10) }, Modifier.weight(1.2f), label = { Text("日期") }, placeholder = { Text("yyyy-MM-dd") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
+                    OutlinedTextField(time, { time = it.take(5) }, Modifier.weight(0.8f), label = { Text("时间") }, placeholder = { Text("HH:mm") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
+                }
                 when (eventType) {
                     "FEEDING" -> {
-                        Text("喂养方式", style = MaterialTheme.typography.labelLarge)
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            listOf("母乳", "瓶喂", "混合").forEach {
-                                if (feedMethod == it) FilledTonalButton(onClick = { feedMethod = it }) { Text(it) }
-                                else OutlinedButton(onClick = { feedMethod = it }) { Text(it) }
-                            }
-                        }
-                        if (feedMethod == "母乳") {
-                            Text("喂养侧", style = MaterialTheme.typography.labelLarge)
-                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                listOf("左侧", "右侧", "双侧").forEach {
-                                    if (breastSide == it) FilledTonalButton(onClick = { breastSide = it }) { Text(it) }
-                                    else OutlinedButton(onClick = { breastSide = it }) { Text(it) }
-                                }
-                            }
-                            OutlinedTextField(duration, { duration = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("时长（分钟，可选）") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                        } else {
-                            OutlinedTextField(amount, { amount = it.filter(Char::isDigit).take(4) }, Modifier.fillMaxWidth(), label = { Text("奶量（ml）") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                        }
+                        Text("配方奶奶量", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(amount, { amount = it.filter(Char::isDigit).take(4); error = null }, Modifier.fillMaxWidth(), label = { Text("本次喝了多少") }, suffix = { Text("ml") }, placeholder = { Text("例如：120") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
                     }
                     "DIAPER" -> {
-                        Text("这次尿布情况（可多选）")
+                        Text("小便记录", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (urine) FilledTonalButton(onClick = { urine = false }) { Text("✓ 小便") } else OutlinedButton(onClick = { urine = true }) { Text("小便") }
-                            if (stool) FilledTonalButton(onClick = { stool = false }) { Text("✓ 大便") } else OutlinedButton(onClick = { stool = true }) { Text("大便") }
+                            if (urine) FilledTonalButton(onClick = { urine = false }) { Text("✓ 有小便") } else OutlinedButton(onClick = { urine = true }) { Text("有小便") }
+                            if (stool) FilledTonalButton(onClick = { stool = false }) { Text("✓ 有大便") } else OutlinedButton(onClick = { stool = true }) { Text("有大便") }
+                        }
+                        if (stool) {
+                            Text("大便性状", style = MaterialTheme.typography.labelLarge)
+                            SelectionRow(listOf("稀水样", "糊状", "软便", "成形", "干硬"), stoolShape) { stoolShape = it }
+                            Text("大便颜色", style = MaterialTheme.typography.labelLarge)
+                            SelectionRow(listOf("黄色", "金黄色", "绿色", "棕色", "灰白色", "黑色", "红色", "其他"), stoolColor) { stoolColor = it }
+                            Text("大便量", style = MaterialTheme.typography.labelLarge)
+                            SelectionRow(listOf("少量", "中量", "大量"), stoolAmount) { stoolAmount = it }
                         }
                     }
-                    "SLEEP" -> {
-                        Text("记录一段已经结束的睡眠")
-                        OutlinedTextField(duration, { duration = it.filter(Char::isDigit).take(4) }, Modifier.fillMaxWidth(), label = { Text("睡眠时长（分钟）") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                    }
+                    "SLEEP" -> OutlinedTextField(sleepMinutes, { sleepMinutes = it.filter(Char::isDigit).take(4) }, Modifier.fillMaxWidth(), label = { Text("睡眠时长（分钟）") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
                 }
                 OutlinedTextField(note, { note = it.take(120) }, Modifier.fillMaxWidth(), label = { Text("备注（可选）") }, minLines = 1, maxLines = 2)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                Text("记录时间默认为现在；补录和修改功能会在后续完善。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = {
             Button(onClick = {
+                val timestamp = runCatching {
+                    LocalDateTime.parse("$date $time", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                }.getOrNull()
+                if (timestamp == null) { error = "请检查日期和时间格式"; return@Button }
                 val payload = JSONObject()
                 when (eventType) {
                     "FEEDING" -> {
-                        if (feedMethod != "母乳" && amount.isBlank()) { error = "请填写奶量"; return@Button }
-                        payload.put("method", feedMethod)
-                        if (feedMethod == "母乳") {
-                            payload.put("side", breastSide)
-                            if (duration.isNotBlank()) payload.put("durationMinutes", duration.toInt())
-                        } else payload.put("amountMl", amount.toInt())
+                        val ml = amount.toIntOrNull()
+                        if (ml == null || ml <= 0) { error = "请输入有效奶量（毫升）"; return@Button }
+                        payload.put("method", "配方奶").put("amountMl", ml)
                     }
                     "DIAPER" -> {
-                        if (!urine && !stool) { error = "至少选择一项"; return@Button }
+                        if (!urine && !stool) { error = "请至少选择小便或大便"; return@Button }
                         payload.put("urine", urine).put("stool", stool)
+                        if (stool) payload.put("stoolShape", stoolShape).put("stoolColor", stoolColor).put("stoolAmount", stoolAmount)
                     }
                     "SLEEP" -> {
-                        val minutes = duration.toIntOrNull()
-                        if (minutes == null || minutes <= 0) { error = "请填写有效的睡眠分钟数"; return@Button }
+                        val minutes = sleepMinutes.toIntOrNull()
+                        if (minutes == null || minutes <= 0) { error = "请填写有效睡眠时长"; return@Button }
                         payload.put("durationMinutes", minutes)
                     }
                 }
                 if (note.isNotBlank()) payload.put("note", note.trim())
-                onSave(eventType, payload)
+                onSave(eventType, payload, timestamp)
             }) { Text("保存记录") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
@@ -372,24 +372,37 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
 }
 
 @Composable
+private fun SelectionRow(options: List<String>, selected: String, onSelect: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        options.chunked(4).forEach { group ->
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                group.forEach { option ->
+                    if (selected == option) FilledTonalButton(onClick = { onSelect(option) }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp)) { Text(option) }
+                    else OutlinedButton(onClick = { onSelect(option) }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp)) { Text(option) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun EventCard(event: BabyEventEntity, onDelete: () -> Unit) {
     val payload = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
     val (emoji, title, detail) = when (event.eventType) {
-        "FEEDING" -> {
-            val method = payload.optString("method", "喂养")
-            val description = if (method == "母乳") {
-                "母乳 · " + payload.optString("side", "未记录") + if (payload.has("durationMinutes")) " · " + payload.optInt("durationMinutes") + " 分钟" else ""
-            } else "$method · ${payload.optInt("amountMl")} ml"
-            Triple("🍼", "喂养", description)
+        "FEEDING" -> Triple("🍼", "配方奶", "\${payload.optInt("amountMl")} ml")
+        "DIAPER" -> {
+            val details = mutableListOf<String>()
+            if (payload.optBoolean("urine")) details.add("小便")
+            if (payload.optBoolean("stool")) details.add("大便：\${payload.optString("stoolShape", "未记录")} · \${payload.optString("stoolColor", "未记录")} · \${payload.optString("stoolAmount", "未记录")}")
+            Triple("🧷", "大小便", details.joinToString("、"))
         }
-        "DIAPER" -> Triple("🧷", "尿布", listOfNotNull(if (payload.optBoolean("urine")) "小便" else null, if (payload.optBoolean("stool")) "大便" else null).joinToString("、"))
         "SLEEP" -> {
             val minutes = payload.optInt("durationMinutes")
-            Triple("🌙", "睡眠", if (minutes >= 60) "${minutes / 60} 小时 ${minutes % 60} 分钟" else "$minutes 分钟")
+            Triple("🌙", "睡眠", if (minutes >= 60) "\${minutes / 60} 小时 \${minutes % 60} 分钟" else "$minutes 分钟")
         }
         else -> Triple("📝", "记录", "")
     }
-    val time = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(event.occurredAt))
+    val time = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(event.occurredAt))
     Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(shape = CircleShape, color = Color(0xFFF2EDF7), modifier = Modifier.size(42.dp)) {
