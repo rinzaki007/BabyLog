@@ -20,6 +20,9 @@ class InviteJoin(BaseModel): code:str=Field(min_length=20,max_length=128)
 class Change(BaseModel):
     operation_id:str; entity_type:str; entity_id:str; operation:str; payload:dict[str,Any]; base_version:int|None=None
 class PushRequest(BaseModel): family_id:str; changes:list[Change]=Field(max_length=200)
+class SnapshotRequest(BaseModel):
+    family_id:str
+    items:list[Change]=Field(max_length=10000)
 
 def connect():
     DATA_DIR.mkdir(parents=True,exist_ok=True); PHOTO_DIR.mkdir(parents=True,exist_ok=True)
@@ -125,6 +128,67 @@ def push(body:PushRequest,uid:str=Depends(current_user)):
         if PHOTO_DIR.resolve() in resolved.parents:
             resolved.unlink(missing_ok=True)
     return {"accepted":accepted,"conflicts":conflicts}
+
+@app.post("/api/sync/authoritative-snapshot")
+def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
+    """Replace family business data with a complete snapshot from the family owner."""
+    allowed={"baby","event","photo"}
+    seen=set()
+    for item in body.items:
+        key=(item.entity_type,item.entity_id)
+        if item.entity_type not in allowed or item.operation not in {"upsert","delete"}:
+            raise HTTPException(422,"快照包含不支持的数据类型或操作")
+        if key in seen:
+            raise HTTPException(422,"快照中存在重复数据")
+        seen.add(key)
+    now=int(time.time())
+    with connect() as db:
+        require_member(db,body.family_id,uid)
+        member=db.execute("SELECT role FROM family_members WHERE family_id=? AND user_id=?",(body.family_id,uid)).fetchone()
+        if not member or member["role"]!="owner":
+            raise HTTPException(403,"只有家庭创建者可以覆盖家庭数据")
+        db.execute("BEGIN IMMEDIATE")
+        existing=db.execute("SELECT entity_type,entity_id,version FROM records WHERE family_id=? AND entity_type IN ('baby','event','photo')",(body.family_id,)).fetchall()
+        old={(r["entity_type"],r["entity_id"]):r["version"] for r in existing}
+        # Validate all external media before changing any database state.
+        for item in body.items:
+            if item.operation=="upsert" and item.entity_type=="photo":
+                photo=db.execute("SELECT relative_path FROM photos WHERE id=? AND family_id=?",(item.entity_id,body.family_id)).fetchone()
+                if not photo:
+                    raise HTTPException(409,f"照片尚未上传完成：{item.entity_id}")
+                photo_path=(PHOTO_DIR/photo["relative_path"]).resolve()
+                if PHOTO_DIR.resolve() not in photo_path.parents or not photo_path.is_file():
+                    raise HTTPException(409,f"照片文件不存在：{item.entity_id}")
+            if item.operation=="upsert" and item.entity_type=="baby" and item.payload.get("hasAvatar"):
+                avatar=(AVATAR_DIR/str(uuid.UUID(body.family_id))/f"{uuid.UUID(item.entity_id)}.jpg").resolve()
+                if AVATAR_DIR.resolve() not in avatar.parents or not avatar.is_file():
+                    raise HTTPException(409,f"宝宝头像尚未上传完成：{item.entity_id}")
+        snapshot_keys=set()
+        changes_to_append=[]
+        for item in body.items:
+            key=(item.entity_type,item.entity_id); snapshot_keys.add(key)
+            version=old.get(key,0)+1
+            deleted=int(item.operation=="delete")
+            payload=json.dumps(item.payload,ensure_ascii=False,separators=(",",":"))
+            db.execute("""INSERT INTO records VALUES (?,?,?,?,?,?,?) ON CONFLICT(family_id,entity_type,entity_id) DO UPDATE SET payload=excluded.payload,version=excluded.version,updated_at=excluded.updated_at,deleted=excluded.deleted""",(body.family_id,item.entity_type,item.entity_id,payload,version,now,deleted))
+            changes_to_append.append((item.entity_type,item.entity_id,item.operation,item.payload,version))
+            if item.entity_type=="photo" and deleted:
+                db.execute("DELETE FROM photos WHERE id=? AND family_id=?",(item.entity_id,body.family_id))
+        # Any cloud-only record absent from the authoritative device is tombstoned.
+        for key,old_version in old.items():
+            if key in snapshot_keys: continue
+            entity_type,entity_id=key; version=old_version+1; payload={"id":entity_id}
+            db.execute("UPDATE records SET payload=?,version=?,updated_at=?,deleted=1 WHERE family_id=? AND entity_type=? AND entity_id=?",(json.dumps(payload),version,now,body.family_id,entity_type,entity_id))
+            changes_to_append.append((entity_type,entity_id,"delete",payload,version))
+            if entity_type=="photo":
+                db.execute("DELETE FROM photos WHERE id=? AND family_id=?",(entity_id,body.family_id))
+        for entity_type,entity_id,operation,payload,version in changes_to_append:
+            operation_id="snapshot:"+str(uuid.uuid4())
+            change_payload=json.dumps({"operation":operation,"payload":payload},ensure_ascii=False,separators=(",",":"))
+            db.execute("INSERT INTO changes(family_id,entity_type,entity_id,operation_id,payload,version,created_at) VALUES (?,?,?,?,?,?,?)",(body.family_id,entity_type,entity_id,operation_id,change_payload,version,now))
+        latest=db.execute("SELECT COALESCE(MAX(seq),0) AS cursor FROM changes WHERE family_id=?",(body.family_id,)).fetchone()["cursor"]
+    return {"replaced":True,"items":len(body.items),"changes":len(changes_to_append),"cursor":latest}
+
 @app.get("/api/sync/pull")
 def pull(family_id:str,cursor:int=0,limit:int=500,uid:str=Depends(current_user)):
     limit=max(1,min(limit,1000))
