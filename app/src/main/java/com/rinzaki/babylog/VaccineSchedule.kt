@@ -53,14 +53,28 @@ internal fun chinaNationalVaccineSchedule(birthDate: LocalDate, sex: String?): L
 }
 
 internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDoses: List<Pair<String, String>>): Boolean {
-    return recordedNamesAndDoses.any { (rawName, rawDose) ->
-        val name = rawName.replace(" ", "").replace("（", "(").replace("）", ")")
-        val target = item.vaccineName.replace(" ", "")
-        val nameMatches = name.contains(target) || target.contains(name) ||
-            (item.group == "乙脑" && name.contains("乙脑") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")) ||
-            (item.group == "甲肝" && name.contains("甲肝") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活"))
-        val doseNumber = Regex("\\d+").find(item.dose)?.value
-        val recordedDoseNumber = Regex("\\d+").find(rawDose)?.value
-        nameMatches && doseNumber != null && recordedDoseNumber == doseNumber
+    fun normalize(value: String) = value.lowercase()
+        .replace(" ", "").replace("（", "(").replace("）", ")")
+        .replace("疫苗", "").replace("接种", "")
+    fun doseNumber(value: String): Int? {
+        Regex("\\d+").find(value)?.value?.toIntOrNull()?.let { return it }
+        val chinese = mapOf('一' to 1, '二' to 2, '三' to 3, '四' to 4, '五' to 5, '六' to 6, '七' to 7, '八' to 8, '九' to 9)
+        val text = value.replace("第", "").replace("剂", "").replace("针", "").replace("次", "").trim()
+        if (text == "十") return 10
+        if (text.length == 2 && text[0] == '十') return 10 + (chinese[text[1]] ?: return null)
+        if (text.length == 2 && text[1] == '十') return (chinese[text[0]] ?: return null) * 10
+        return text.singleOrNull()?.let { chinese[it] }
     }
+    val target = normalize(item.vaccineName)
+    val matches = recordedNamesAndDoses.filter { (rawName, _) ->
+        val name = normalize(rawName)
+        when (item.group) {
+            "乙脑" -> name.contains("乙脑") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
+            "甲肝" -> name.contains("甲肝") && name.contains(if (item.vaccineName.contains("减毒活")) "减毒活" else "灭活")
+            else -> name.contains(target) || target.contains(name)
+        }
+    }
+    val expectedDose = doseNumber(item.dose) ?: return false
+    return matches.any { (_, rawDose) -> doseNumber(rawDose) == expectedDose } ||
+        matches.filter { doseNumber(it.second) == null }.size >= expectedDose
 }
