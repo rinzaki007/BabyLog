@@ -23,8 +23,8 @@ interface BabyLogDao {
     @Query("UPDATE baby_events SET deletedAt = :deletedAt, updatedAt = :deletedAt, syncStatus = 'PENDING' WHERE id = :eventId")
     suspend fun softDeleteEvent(eventId: String, deletedAt: Long)
 
-    @Query("UPDATE baby_events SET deletedAt = :deletedAt, updatedAt = :deletedAt, syncStatus = 'SYNCED' WHERE id = :eventId")
-    suspend fun softDeleteEventFromServer(eventId: String, deletedAt: Long)
+    @Query("UPDATE baby_events SET deletedAt = :deletedAt, updatedAt = :deletedAt, syncStatus = 'SYNCED', serverVersion = :version WHERE id = :eventId")
+    suspend fun softDeleteEventFromServer(eventId: String, deletedAt: Long, version: Long)
 
     @Query("SELECT * FROM baby_events WHERE id = :eventId LIMIT 1")
     suspend fun getEvent(eventId: String): BabyEventEntity?
