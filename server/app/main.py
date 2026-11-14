@@ -208,7 +208,7 @@ def sync_status(family_id:str,uid:str=Depends(current_user)):
             "SELECT COALESCE(MAX(seq),0) AS cursor FROM changes WHERE family_id=?",
             (family_id,)
         ).fetchone()["cursor"]
-    canonical="\\n".join(f"{row['entity_type']}:{row['entity_id']}:{row['version']}" for row in rows)
+    canonical="\n".join(f"{row['entity_type']}:{row['entity_id']}:{row['version']}" for row in rows)
     digest=hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     counts={}
     for row in rows:
