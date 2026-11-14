@@ -369,10 +369,12 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 Button(onClick = {
                     showSnapshotConfirm = false
                     runAction {
+                        SyncPreferences.setRecoveryInProgress(context, true)
                         SyncScheduler.cancel(context)
                         try {
                             submitAuthoritativeSnapshot(context, dao)
                         } finally {
+                            SyncPreferences.setRecoveryInProgress(context, false)
                             SyncScheduler.schedule(context)
                         }
                     }
@@ -390,6 +392,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 Button(onClick = {
                     showDeviceResetConfirm = false
                     runAction {
+                        SyncPreferences.setRecoveryInProgress(context, true)
                         SyncScheduler.cancel(context)
                         try {
                             dao.clearAllSyncOperations()
@@ -401,6 +404,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                             SyncPreferences.resetCursor(context)
                             "本机业务数据已清空，正在从家庭云端重新下载。请保持网络连接并稍后刷新同步状态。"
                         } finally {
+                            SyncPreferences.setRecoveryInProgress(context, false)
                             SyncScheduler.schedule(context)
                         }
                     }
