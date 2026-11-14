@@ -9,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.background
@@ -24,15 +26,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -121,11 +128,33 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var showSyncSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    var selectedNav by remember { mutableStateOf(0) }
 
     MaterialTheme(colorScheme = WarmColors) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = {
+                NavigationBar(containerColor = Color.White) {
+                    val destinations = listOf("首页", "记录", "趋势", "相册")
+                    val targets = listOf(0, 3, 4, 6)
+                    destinations.forEachIndexed { index, label ->
+                        NavigationBarItem(
+                            selected = selectedNav == index,
+                            onClick = {
+                                selectedNav = index
+                                scope.launch { listState.animateScrollToItem(targets[index].coerceAtMost(if (baby == null) 1 else 6)) }
+                            },
+                            icon = { Text(listOf("⌂", "＋", "⌁", "▦")[index], style = MaterialTheme.typography.titleLarge) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+            }
+        ) { scaffoldPadding ->
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
                 contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 36.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -134,6 +163,16 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         Text("BABYLOG", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         Text("成长的每一天", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                         Text("把细碎日常，变成温柔的回忆", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(if (SyncPreferences.familyId(appContext).isBlank()) "离线模式 · 本机安全保存" else "家庭同步已连接", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                val last = SyncPreferences.lastSyncAt(appContext)
+                                Text(if (last > 0L) "上次同步 " + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(last)) else "尚未同步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                FilledTonalButton(onClick = { SyncScheduler.enqueue(appContext) }) { Text("立即同步") }
+                            }
+                        }
                         OutlinedButton(onClick = { showSyncSettings = true }) { Text("家庭同步设置") }
                     }
                 }
@@ -165,6 +204,21 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 }
                 if (baby != null) {
                     item { TodaySummary(events) }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("快捷记录", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ActionCard("🍼", "喂养", "奶量与时间", Modifier.weight(1f)) { addingEvent = "FEEDING" }
+                                ActionCard("🌿", "日常护理", "大小便情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
+                                ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ActionCard("📏", "成长记录", "体重变化", Modifier.weight(1f)) { addingEvent = "GROWTH" }
+                                Spacer(Modifier.weight(2f))
+                            }
+                        }
+                    }
+                    item { TrendsSummary(events) }
                     item { GrowthSection(baby, events) }
                     item {
                         BabyAlbumSection(
@@ -192,6 +246,17 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                     }
                                 }
                             },
+                            onCaption = { photo, caption ->
+                                scope.launch {
+                                    val updated = photo.copy(caption = caption, updatedAt = System.currentTimeMillis(), syncStatus = "PENDING")
+                                    dao.upsertPhoto(updated)
+                                    if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                        dao.clearPendingOperations("photo", photo.id)
+                                        dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "photo", photo.id, "upsert", photoSyncPayload(updated, mimeTypeForPath(updated.localPath)).toString(), photo.serverVersion, updated.updatedAt))
+                                        SyncScheduler.enqueue(appContext)
+                                    }
+                                }
+                            },
                             onDelete = { photo ->
                                 scope.launch {
                                     val now = System.currentTimeMillis()
@@ -205,20 +270,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                         )
-                    }
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("快捷记录", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionCard("🍼", "喂养", "奶量与时间", Modifier.weight(1f)) { addingEvent = "FEEDING" }
-                                ActionCard("🌿", "日常护理", "大小便情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
-                                ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionCard("📏", "成长记录", "体重变化", Modifier.weight(1f)) { addingEvent = "GROWTH" }
-                                Spacer(Modifier.weight(2f))
-                            }
-                        }
                     }
                     item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -279,33 +330,74 @@ private fun BabyLogApp(dao: BabyLogDao) {
 
 
 @Composable
+private fun TrendsSummary(events: List<BabyEventEntity>) {
+    val weekStart = LocalDate.now().minusDays(6).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val recent = events.filter { it.occurredAt >= weekStart }
+    val milk = recent.filter { it.eventType == "FEEDING" }.sumOf {
+        runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0)
+    }
+    val feedCount = recent.count { it.eventType == "FEEDING" }
+    val peeCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("urine") }.getOrDefault(false) }
+    val stoolCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
+    val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf {
+        runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0)
+    }
+    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("近 7 天趋势", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("按记录自动统计", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryPill("🍼", "配方奶", "$milk ml", Modifier.weight(1f))
+                SummaryPill("🧴", "喂养次数", "$feedCount 次", Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryPill("💧", "小便", "$peeCount 次", Modifier.weight(1f))
+                SummaryPill("🌿", "大便", "$stoolCount 次", Modifier.weight(1f))
+                SummaryPill("🌙", "睡眠", if (sleepMinutes >= 60) "${sleepMinutes / 60}h" else "${sleepMinutes}m", Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
 private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
+    var metric by remember { mutableStateOf("体重") }
+    var range by remember { mutableStateOf("全部") }
+    val key = when (metric) { "身长" -> "lengthCm"; "头围" -> "headCircumferenceCm"; else -> "weightGrams" }
+    val unit = if (metric == "体重") "kg" else "cm"
     val points = events.filter { it.eventType == "GROWTH" }.mapNotNull { event ->
-        val grams = runCatching { JSONObject(event.payloadJson).optInt("weightGrams") }.getOrDefault(0)
-        if (grams > 0) event.occurredAt to grams / 1000f else null
-    }.sortedBy { it.first }
+        val value = runCatching { JSONObject(event.payloadJson).let { payload ->
+            if (key == "weightGrams") payload.optDouble(key).takeIf { it > 0 }?.div(1000.0)
+            else payload.optDouble(key).takeIf { it > 0 }
+        } }.getOrNull()
+        value?.let { event.occurredAt to it.toFloat() }
+    }.sortedBy { it.first }.let { all ->
+        val days = when (range) { "近 30 天" -> 30L; "近 90 天" -> 90L; else -> Long.MAX_VALUE }
+        if (days == Long.MAX_VALUE) all else all.filter { it.first >= System.currentTimeMillis() - days * 86400000L }
+    }
     val latest = points.lastOrNull()
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("成长曲线", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("体重变化记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("体重、身长和头围变化", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text(latest?.let { "${"%.2f".format(Locale.getDefault(), it.second)} kg" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text(latest?.let { "${"%.2f".format(Locale.getDefault(), it.second)} $unit" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
+            SelectionRow(listOf("体重", "身长", "头围"), metric) { metric = it }
+            SelectionRow(listOf("全部", "近 30 天", "近 90 天"), range) { range = it }
             if (points.isEmpty()) {
-                Box(Modifier.fillMaxWidth().height(112.dp), contentAlignment = Alignment.Center) {
-                    Text("记录几次体重后，这里就会出现成长曲线", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Box(Modifier.fillMaxWidth().height(128.dp), contentAlignment = Alignment.Center) {
+                    Text("还没有${metric}数据，记录几次后就能看到变化", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             } else {
-                val min = (points.minOf { it.second } - 0.3f).coerceAtLeast(0f)
-                val max = points.maxOf { it.second } + 0.3f
-                Canvas(Modifier.fillMaxWidth().height(150.dp)) {
-                    val left = 12f
-                    val right = size.width - 12f
-                    val top = 12f
-                    val bottom = size.height - 12f
+                val min = (points.minOf { it.second } - if (metric == "体重") 0.3f else 1f).coerceAtLeast(0f)
+                val max = points.maxOf { it.second } + if (metric == "体重") 0.3f else 1f
+                Canvas(Modifier.fillMaxWidth().height(164.dp)) {
+                    val left = 14f; val right = size.width - 14f; val top = 12f; val bottom = size.height - 12f
                     repeat(4) { i ->
                         val y = top + (bottom - top) * i / 3f
                         drawLine(Color(0xFFEDE7F6), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
@@ -313,21 +405,17 @@ private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     val span = (max - min).coerceAtLeast(0.1f)
                     val coords = points.mapIndexed { index, point ->
                         val x = if (points.size == 1) (left + right) / 2f else left + (right - left) * index / (points.size - 1)
-                        val y = bottom - (point.second - min) / span * (bottom - top)
-                        Offset(x, y)
+                        Offset(x, bottom - (point.second - min) / span * (bottom - top))
                     }
                     if (coords.size > 1) {
-                        val path = Path().apply {
-                            moveTo(coords.first().x, coords.first().y)
-                            coords.drop(1).forEach { lineTo(it.x, it.y) }
-                        }
+                        val path = Path().apply { moveTo(coords.first().x, coords.first().y); coords.drop(1).forEach { lineTo(it.x, it.y) } }
                         drawPath(path, Color(0xFF8874B8), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
                     }
                     coords.forEach { drawCircle(Color(0xFF8874B8), radius = 4.dp.toPx(), center = it) }
                 }
                 Text("${points.size} 次测量 · 最近记录 ${SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text("曲线仅展示已记录的数据，不代表医学评估。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("曲线仅展示已记录的数据，不代表医学评估；建议定期测量并按医生建议解读。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -337,9 +425,12 @@ private fun BabyAlbumSection(
     baby: BabyEntity,
     photos: List<BabyPhotoEntity>,
     onAdd: (android.net.Uri) -> Unit,
+    onCaption: (BabyPhotoEntity, String) -> Unit,
     onDelete: (BabyPhotoEntity) -> Unit
 ) {
     var deletingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
+    var viewingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
+    var editingCaption by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) onAdd(uri)
     }
@@ -360,15 +451,43 @@ private fun BabyAlbumSection(
                 }
             }
         } else {
-            photos.forEach { photo ->
-                val day = (java.time.temporal.ChronoUnit.DAYS.between(
-                    java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(),
-                    java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
-                ) + 1).coerceAtLeast(1)
-                val milestone = when (day) { 1L -> "初见"; 7L -> "第一周"; 30L -> "满月"; 100L -> "百日"; 180L -> "半岁"; 365L -> "一周岁"; else -> "第 $day 天" }
-                AlbumPhotoCard(photo, milestone) { deletingPhoto = photo }
+            val grouped = photos.sortedByDescending { it.takenAt }.groupBy {
+                SimpleDateFormat("yyyy年M月", Locale.getDefault()).format(Date(it.takenAt))
+            }
+            grouped.forEach { (month, monthPhotos) ->
+                Text(month, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                monthPhotos.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        pair.forEach { photo ->
+                            AlbumPhotoCard(photo, onClick = { viewingPhoto = photo }, onEdit = { editingCaption = photo }, onDelete = { deletingPhoto = photo }, modifier = Modifier.weight(1f))
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
             }
         }
+    }
+    viewingPhoto?.let { photo ->
+        Dialog(onDismissRequest = { viewingPhoto = null }) {
+            Surface(shape = RoundedCornerShape(24.dp), color = Color.Black, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
+                        value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(photo.localPath) }.getOrNull() }
+                    }
+                    if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = "照片预览", modifier = Modifier.fillMaxWidth().height(420.dp), contentScale = ContentScale.Fit)
+                    Text(SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault()).format(Date(photo.takenAt)), color = Color.White)
+                    if (!photo.caption.isNullOrBlank()) Text(photo.caption!!, color = Color.White)
+                    TextButton(onClick = { viewingPhoto = null }, modifier = Modifier.align(Alignment.End)) { Text("关闭", color = Color.White) }
+                }
+            }
+        }
+    }
+    editingCaption?.let { photo ->
+        var caption by remember(photo.id) { mutableStateOf(photo.caption.orEmpty()) }
+        AlertDialog(onDismissRequest = { editingCaption = null }, title = { Text("照片备注") },
+            text = { OutlinedTextField(caption, { caption = it.take(120) }, modifier = Modifier.fillMaxWidth(), label = { Text("写下这张照片的故事") }) },
+            confirmButton = { TextButton(onClick = { onCaption(photo, caption.trim()); editingCaption = null }) { Text("保存") } },
+            dismissButton = { TextButton(onClick = { editingCaption = null }) { Text("取消") } })
     }
     deletingPhoto?.let { photo ->
         AlertDialog(
@@ -381,19 +500,28 @@ private fun BabyAlbumSection(
     }
 }
 @Composable
-private fun AlbumPhotoCard(photo: BabyPhotoEntity, milestone: String, onDelete: () -> Unit) {
+private fun AlbumPhotoCard(
+    photo: BabyPhotoEntity,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
         value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(photo.localPath) }.getOrNull() }
     }
-    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = milestone, modifier = Modifier.size(104.dp))
-            else Box(Modifier.size(104.dp).background(Color(0xFFF2EDF7), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Text("📷") }
-            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(milestone, fontWeight = FontWeight.Bold)
-                Text(SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()).format(Date(photo.takenAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("成长瞬间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                TextButton(onClick = onDelete) { Text("删除照片") }
+    Card(modifier = modifier.clickable(onClick = onClick), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column {
+            if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = "宝宝照片", modifier = Modifier.fillMaxWidth().height(132.dp), contentScale = ContentScale.Crop)
+            else Box(Modifier.fillMaxWidth().height(132.dp).background(Color(0xFFF2EDF7)), contentAlignment = Alignment.Center) { Text("📷") }
+            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(SimpleDateFormat("MM月dd日", Locale.getDefault()).format(Date(photo.takenAt)), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                Text(photo.caption?.takeIf { it.isNotBlank() } ?: "添加照片备注", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Row {
+                    TextButton(onClick = onEdit) { Text("备注") }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                }
             }
         }
     }
@@ -440,12 +568,21 @@ private fun BabyProfileEditor(
                 DatePickerDialog(context, { _, y, m, d -> birthDate = LocalDate.of(y, m + 1, d) },
                     birthDate.year, birthDate.monthValue - 1, birthDate.dayOfMonth).show()
             }, modifier = Modifier.fillMaxWidth()) { Text(birthDate.toString()) }
-            Text("出生体重  ${if (birthWeight <= 0f) "未记录" else "${birthWeight.toInt()} g"}", fontWeight = FontWeight.SemiBold)
-            Slider(birthWeight, { birthWeight = it }, valueRange = 0f..5000f, steps = 99)
-            Text("出生身长  ${if (birthLength <= 0f) "未记录" else "${"%.1f".format(Locale.getDefault(), birthLength)} cm"}", fontWeight = FontWeight.SemiBold)
-            Slider(birthLength, { birthLength = it }, valueRange = 0f..60f, steps = 119)
-            Text("出生头围  ${if (birthHead <= 0f) "未记录" else "${"%.1f".format(Locale.getDefault(), birthHead)} cm"}", fontWeight = FontWeight.SemiBold)
-            Slider(birthHead, { birthHead = it }, valueRange = 0f..45f, steps = 89)
+            OutlinedTextField(
+                value = if (birthWeight <= 0f) "" else birthWeight.toInt().toString(),
+                onValueChange = { birthWeight = it.filter(Char::isDigit).toFloatOrNull()?.coerceIn(0f, 8000f) ?: 0f },
+                modifier = Modifier.fillMaxWidth(), label = { Text("出生体重（g）") }, singleLine = true
+            )
+            OutlinedTextField(
+                value = if (birthLength <= 0f) "" else "%.1f".format(Locale.getDefault(), birthLength),
+                onValueChange = { birthLength = it.replace(',', '.').toFloatOrNull()?.coerceIn(0f, 80f) ?: 0f },
+                modifier = Modifier.fillMaxWidth(), label = { Text("出生身长（cm）") }, singleLine = true
+            )
+            OutlinedTextField(
+                value = if (birthHead <= 0f) "" else "%.1f".format(Locale.getDefault(), birthHead),
+                onValueChange = { birthHead = it.replace(',', '.').toFloatOrNull()?.coerceIn(0f, 60f) ?: 0f },
+                modifier = Modifier.fillMaxWidth(), label = { Text("出生头围（cm）") }, singleLine = true
+            )
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(onClick = {
                 when {
@@ -481,18 +618,35 @@ private fun Avatar(uri: String?, size: Int) {
 @Composable
 private fun BabyProfileCard(baby: BabyEntity, onEdit: () -> Unit) {
     val birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate()
-    val days = java.time.temporal.ChronoUnit.DAYS.between(birthDate, LocalDate.now()).coerceAtLeast(0) + 1
-    Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(baby.avatarUri, 62)
-            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(baby.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("${baby.sex ?: "宝宝"} · 第 $days 天", style = MaterialTheme.typography.bodySmall)
-                Text("出生体重 ${baby.birthWeightGrams?.let { "$it g" } ?: "未记录"} · $birthDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(listOfNotNull(baby.birthLengthCm?.let { "身长 ${"%.1f".format(Locale.getDefault(), it)} cm" }, baby.birthHeadCircumferenceCm?.let { "头围 ${"%.1f".format(Locale.getDefault(), it)} cm" }).joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val today = LocalDate.now()
+    val days = java.time.temporal.ChronoUnit.DAYS.between(birthDate, today).coerceAtLeast(0) + 1
+    val months = java.time.temporal.ChronoUnit.MONTHS.between(birthDate, today).coerceAtLeast(0)
+    val ageText = if (months < 1) "第 $days 天" else "$months 个月"
+    Card(shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
+        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Avatar(baby.avatarUri, 76)
+                Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(baby.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("${baby.sex ?: "宝宝"} · $ageText", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("出生于 $birthDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(onClick = onEdit) { Text("编辑资料") }
             }
-            TextButton(onClick = onEdit) { Text("编辑") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ProfileMetric("出生体重", baby.birthWeightGrams?.let { "$it g" } ?: "未记录", Modifier.weight(1f))
+                ProfileMetric("出生身长", baby.birthLengthCm?.let { "${"%.1f".format(Locale.getDefault(), it)} cm" } ?: "未记录", Modifier.weight(1f))
+                ProfileMetric("出生头围", baby.birthHeadCircumferenceCm?.let { "${"%.1f".format(Locale.getDefault(), it)} cm" } ?: "未记录", Modifier.weight(1f))
+            }
         }
+    }
+}
+
+@Composable
+private fun ProfileMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier.background(Color.White.copy(alpha = 0.72f), RoundedCornerShape(15.dp)).padding(vertical = 10.dp, horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -553,7 +707,9 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
     var stoolColor by remember { mutableStateOf("黄色") }
     var stoolAmount by remember { mutableStateOf("中量") }
     var sleepMinutes by remember { mutableStateOf(60f) }
-    var weightKg by remember { mutableStateOf(5f) }
+    var weightKg by remember { mutableStateOf("") }
+    var lengthCm by remember { mutableStateOf("") }
+    var headCm by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val title = when (eventType) { "FEEDING" -> "喂养记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; else -> "成长记录" }
@@ -574,8 +730,13 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                 }
                 when (eventType) {
                     "FEEDING" -> {
-                        Text("本次奶量  ${amount.toInt()} ml", fontWeight = FontWeight.SemiBold)
-                        Slider(amount, { amount = it }, valueRange = 30f..300f, steps = 26)
+                        OutlinedTextField(
+                            value = amount.toInt().toString(),
+                            onValueChange = { raw -> raw.filter(Char::isDigit).toIntOrNull()?.let { amount = it.coerceIn(0, 1000).toFloat() } },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("本次奶量（ml）") },
+                            singleLine = true
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf(60f, 90f, 120f, 150f, 180f, 210f).forEach { v ->
                                 if (amount.toInt() == v.toInt()) FilledTonalButton(onClick = { amount = v }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)) { Text(v.toInt().toString()) }
@@ -601,14 +762,23 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                         Slider(sleepMinutes, { sleepMinutes = it }, valueRange = 10f..720f, steps = 70)
                     }
                     "GROWTH" -> {
-                        Text("当前体重  ${"%.2f".format(Locale.getDefault(), weightKg)} kg", fontWeight = FontWeight.SemiBold)
-                        Slider(weightKg, { weightKg = it }, valueRange = 2f..20f, steps = 179)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(3f, 4f, 5f, 6f, 8f, 10f).forEach { v ->
-                                if (weightKg == v) FilledTonalButton(onClick = { weightKg = v }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) { Text("$v") }
-                                else OutlinedButton(onClick = { weightKg = v }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) { Text("$v") }
-                            }
-                        }
+                        OutlinedTextField(
+                            value = weightKg,
+                            onValueChange = { raw -> weightKg = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("当前体重（kg）") },
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = lengthCm,
+                            onValueChange = { raw -> lengthCm = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
+                            modifier = Modifier.fillMaxWidth(), label = { Text("身长（cm）") }, singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = headCm,
+                            onValueChange = { raw -> headCm = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
+                            modifier = Modifier.fillMaxWidth(), label = { Text("头围（cm）") }, singleLine = true
+                        )
                     }
                 }
                 OutlinedTextField(note, { note = it.take(120) }, Modifier.fillMaxWidth(), label = { Text("备注（可选）") }, minLines = 1, maxLines = 2)
@@ -627,7 +797,24 @@ private fun EventEditor(eventType: String, onDismiss: () -> Unit, onSave: (Strin
                         if (stool) payload.put("stoolShape", stoolShape).put("stoolColor", stoolColor).put("stoolAmount", stoolAmount)
                     }
                     "SLEEP" -> payload.put("durationMinutes", sleepMinutes.toInt())
-                    "GROWTH" -> payload.put("weightGrams", (weightKg * 1000).toInt())
+                    "GROWTH" -> {
+                        val weight = weightKg.toDoubleOrNull()
+                        val length = lengthCm.toDoubleOrNull()
+                        val head = headCm.toDoubleOrNull()
+                        if (weight == null && length == null && head == null) {
+                            error = "请至少填写一项测量数据"
+                            return@Button
+                        }
+                        if ((weight != null && weight !in 0.1..80.0) ||
+                            (length != null && length !in 20.0..120.0) ||
+                            (head != null && head !in 20.0..70.0)) {
+                            error = "请检查测量数值是否在合理范围内"
+                            return@Button
+                        }
+                        weight?.let { payload.put("weightGrams", (it * 1000).toInt()) }
+                        length?.let { payload.put("lengthCm", it) }
+                        head?.let { payload.put("headCircumferenceCm", it) }
+                    }
                 }
                 if (note.isNotBlank()) payload.put("note", note.trim())
                 onSave(eventType, payload, timestamp)
@@ -666,7 +853,11 @@ private fun EventCard(event: BabyEventEntity, onDelete: () -> Unit) {
             val mins = payload.optInt("durationMinutes")
             Triple("🌙", "睡眠", if (mins >= 60) "${mins / 60} 小时 ${mins % 60} 分钟" else "$mins 分钟")
         }
-        "GROWTH" -> Triple("📏", "体重记录", "${"%.2f".format(Locale.getDefault(), payload.optInt("weightGrams") / 1000.0)} kg")
+        "GROWTH" -> Triple("📏", "成长测量", listOfNotNull(
+            payload.optInt("weightGrams").takeIf { it > 0 }?.let { "${"%.2f".format(Locale.getDefault(), it / 1000.0)} kg" },
+            payload.optDouble("lengthCm").takeIf { it > 0 }?.let { "${"%.1f".format(Locale.getDefault(), it)} cm 身长" },
+            payload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.let { "${"%.1f".format(Locale.getDefault(), it)} cm 头围" }
+        ).joinToString(" · "))
         else -> Triple("📝", "记录", "")
     }
     val time = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(event.occurredAt))
