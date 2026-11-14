@@ -104,4 +104,31 @@ class VaccineScheduleTest {
         val hibItem = VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true)
         assertTrue(vaccineDoseIsRecorded(hibItem, listOf("五联疫苗" to "第1剂")))
     }
+
+    @Test
+    fun combinationVaccineRecordsCoverTheirComponents() {
+        val pentavalent = listOf("五联疫苗" to "第1剂")
+        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("百白破疫苗", "第 1 剂", 2), pentavalent))
+        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("脊灰灭活疫苗", "第 1 剂", 2), pentavalent))
+        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true), pentavalent))
+
+        val quadrivalent = listOf("DTaP-Hib 四联疫苗" to "第1剂")
+        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("百白破疫苗", "第 1 剂", 2), quadrivalent))
+        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true), quadrivalent))
+        assertTrue(!vaccineDoseIsRecorded(VaccineScheduleItem("脊灰灭活疫苗", "第 1 剂", 2), quadrivalent))
+
+        val acHib = listOf("AC-Hib 联合疫苗" to "第1剂")
+        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true), acHib))
+        assertTrue(vaccineDoseIsRecorded(VaccineScheduleItem("A 群 C 群流脑多糖疫苗", "第 1 剂", 36), acHib))
+    }
+
+    @Test
+    fun vaccineCategoriesAndOptionalCatalogAreAvailable() {
+        assertEquals("国家免规", VaccineScheduleItem("乙肝疫苗", "第 1 剂", 0).category)
+        assertEquals("自费常见", VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true).category)
+        assertEquals("联合疫苗", VaccineScheduleItem("五联疫苗（DTaP-IPV-Hib）", "第 1 剂", 2, isSelfPaid = true).category)
+        assertTrue(chinaOptionalVaccineCatalog().any { it.name.contains("ACYW135") })
+        assertTrue(chinaOptionalVaccineCatalog().any { it.category == "特殊风险" })
+    }
+
 }
