@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -140,10 +141,16 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val vaccineEvents = events.filter { it.eventType == "VACCINE" }
     val normalEvents = events.filter { it.eventType != "VACCINE" }
     LaunchedEffect(Unit) {
-        if (SyncPreferences.familyId(appContext).isNotBlank()) SyncScheduler.enqueue(appContext)
+        if (SyncPreferences.familyId(appContext).isNotBlank()) SyncScheduler.schedule(appContext)
+        var lastForegroundSync = 0L
         while (true) {
             lastSyncAt = SyncPreferences.lastSyncAt(appContext)
             syncError = SyncPreferences.lastSyncError(appContext)
+            val now = System.currentTimeMillis()
+            if (SyncPreferences.familyId(appContext).isNotBlank() && now - lastForegroundSync >= 30_000L) {
+                SyncScheduler.enqueue(appContext)
+                lastForegroundSync = now
+            }
             kotlinx.coroutines.delay(1500)
         }
     }
