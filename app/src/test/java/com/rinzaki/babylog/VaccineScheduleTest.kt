@@ -29,6 +29,29 @@ class VaccineScheduleTest {
     }
 
     @Test
+    fun selfPaidPlanIncludesCommonOptionalVaccines() {
+        val plan = chinaSelfPaidVaccineSchedule(LocalDate.of(2026, 1, 15))
+        assertTrue(plan.any { it.first.vaccineName.contains("肺炎球菌") && it.first.isSelfPaid })
+        assertTrue(plan.any { it.first.vaccineName.contains("轮状病毒") && it.first.isSelfPaid })
+        assertTrue(plan.any { it.first.vaccineName.contains("手足口") && it.first.isSelfPaid })
+    }
+
+    @Test
+    fun liveVaccineIntervalsOfLessThan28DaysAreFlagged() {
+        val first = VaccineScheduleItem("麻腮风疫苗", "第 1 剂", 8, isLiveVaccine = true)
+        val second = VaccineScheduleItem("水痘疫苗", "第 1 剂", 9, isLiveVaccine = true)
+        val warnings = liveVaccineScheduleConflicts(listOf(first to LocalDate.of(2026, 8, 1), second to LocalDate.of(2026, 8, 20)))
+        assertEquals(1, warnings.size)
+    }
+
+    @Test
+    fun sameDayLiveVaccinesAreNotFlaggedAsIntervalConflict() {
+        val first = VaccineScheduleItem("麻腮风疫苗", "第 1 剂", 8, isLiveVaccine = true)
+        val second = VaccineScheduleItem("水痘疫苗", "第 1 剂", 8, isLiveVaccine = true)
+        assertTrue(liveVaccineScheduleConflicts(listOf(first to LocalDate.of(2026, 8, 1), second to LocalDate.of(2026, 8, 1))).isEmpty())
+    }
+
+    @Test
     fun vaccineRecordMatchesNameAndDose() {
         val item = VaccineScheduleItem("乙肝疫苗", "第 1 剂", 0)
         assertTrue(vaccineDoseIsRecorded(item, listOf("重组乙肝疫苗" to "第1剂")))
