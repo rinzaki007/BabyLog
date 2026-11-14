@@ -152,6 +152,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 )
                                 dao.upsertBaby(updatedBaby)
                                 if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                    dao.clearPendingOperations("baby", updatedBaby.id)
                                     dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "baby", updatedBaby.id, "upsert", babySyncPayload(updatedBaby).toString(), updatedBaby.serverVersion, now))
                                     SyncScheduler.enqueue(appContext)
                                 }
@@ -215,6 +216,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             if (SyncPreferences.familyId(appContext).isNotBlank()) {
                                 val deleted = dao.getEvent(event.id)
                                 if (deleted != null) {
+                                    dao.clearPendingOperations("event", deleted.id)
                                     dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", deleted.id, "delete", eventSyncPayload(deleted).toString(), deleted.serverVersion, now))
                                     SyncScheduler.enqueue(appContext)
                                 }
@@ -238,6 +240,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 val event = BabyEventEntity(UUID.randomUUID().toString(), baby.id, type, occurredAt, payload.toString(), null, now)
                 dao.upsertEvent(event)
                 if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                    dao.clearPendingOperations("event", event.id)
                     dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", event.id, "upsert", eventSyncPayload(event).toString(), event.serverVersion, now))
                     SyncScheduler.enqueue(appContext)
                 }
