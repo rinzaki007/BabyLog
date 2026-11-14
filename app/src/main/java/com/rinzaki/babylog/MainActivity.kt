@@ -144,6 +144,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
+    var syncConsistency by remember { mutableStateOf(SyncPreferences.lastConsistency(appContext)) }
     var selectedEventFilter by remember { mutableStateOf("全部") }
     val vaccineEvents = events.filter { it.eventType == "VACCINE" }
     val normalEvents = events.filter { it.eventType != "VACCINE" }
@@ -164,6 +165,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
             lastSyncAt = SyncPreferences.lastSyncAt(appContext)
             syncError = SyncPreferences.lastSyncError(appContext)
             syncing = SyncPreferences.isSyncing(appContext)
+            syncConsistency = SyncPreferences.lastConsistency(appContext)
             val now = System.currentTimeMillis()
             if (SyncPreferences.familyId(appContext).isNotBlank() && now - lastForegroundSync >= 30_000L) {
                 SyncScheduler.enqueue(appContext)
@@ -276,6 +278,15 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                     enabled = SyncPreferences.familyId(appContext).isNotBlank() && !syncing,
                                     onClick = { SyncScheduler.enqueue(appContext) }
                                 ) { Text(if (syncing) "同步中" else "立即同步") }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("本地与云端校验", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                Text(
+                                    syncConsistency ?: "尚未校验",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (syncConsistency == "一致") Color(0xFF38845B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             }
                             if (!syncError.isNullOrBlank()) {
                                 Text("同步失败：$syncError", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
