@@ -377,13 +377,14 @@ private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: L
     val jeInactivated = records.any { it.first.contains("乙脑") && it.first.contains("灭活") }
     val hepAInactivated = records.any { it.first.contains("甲肝") && it.first.contains("灭活") }
     val allItems = remember(birthDate, sex, jeInactivated, hepAInactivated) {
-        chinaNationalVaccineSchedule(birthDate, sex).filter { (item, _) ->
+        val national = chinaNationalVaccineSchedule(birthDate, sex).filter { (item, _) ->
             when (item.group) {
                 "乙脑" -> if (jeInactivated) item.vaccineName.contains("灭活") else item.vaccineName.contains("减毒活")
                 "甲肝" -> if (hepAInactivated) item.vaccineName.contains("灭活") else item.vaccineName.contains("减毒活")
                 else -> true
             }
         }
+        national + chinaSelfPaidVaccineSchedule(birthDate)
     }
     val today = LocalDate.now()
     val decorated = allItems.map { (item, date) ->
@@ -391,15 +392,20 @@ private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: L
     }.sortedBy { it.second }
     val pending = decorated.filterNot { it.third }
     val completedCount = decorated.size - pending.size
-    val visible = if (showAll) decorated else pending.take(8)
+    val visible = if (showAll) decorated else (pending.take(8) + decorated.filter { it.third }.takeLast(4)).distinct().sortedBy { it.second }
+    val conflicts = remember(allItems) { liveVaccineScheduleConflicts(allItems) }
     Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EFF8))) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("接种计划 · 倒计时", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("参考中国国家免疫规划 2026 年版", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("国家免疫规划 + 常见自费疫苗参考计划", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text("已记录 $completedCount/${decorated.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
+            conflicts.forEach { warning ->
+                Text("⚠ 接种间隔提示：$warning。减毒活疫苗通常需同日接种或间隔至少 28 天，请让接种门诊核对具体产品和日期。",
+                    color = Color(0xFFB65D4A), style = MaterialTheme.typography.bodySmall)
             }
             if (visible.isEmpty()) {
                 Text("当前计划剂次均已记录，太棒啦！", color = MaterialTheme.colorScheme.primary)
@@ -407,7 +413,7 @@ private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: L
                 visible.forEach { (item, date, completed) ->
                     val days = java.time.temporal.ChronoUnit.DAYS.between(today, date)
                     val status = when {
-                        completed -> "已记录"
+                        completed -> "已接种"
                         days < 0 -> "逾期 ${-days} 天"
                         days == 0L -> "今天接种"
                         else -> "还有 ${days} 天"
@@ -420,7 +426,10 @@ private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: L
                     }
                     Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(14.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(item.vaccineName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(item.vaccineName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                if (item.isSelfPaid) Text("自费", color = Color(0xFF9A6B31), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            }
                             Text("${item.dose} · $date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (item.note.isNotBlank()) Text(item.note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -433,7 +442,8 @@ private fun VaccineScheduleSection(birthDate: LocalDate, sex: String?, events: L
                     Text(if (showAll) "收起计划" else "查看全部 ${decorated.size} 项")
                 }
             }
-            Text("乙脑、甲肝有不同疫苗类型和接种程序；未记录路线时暂按减毒活疫苗显示。实际接种日期、补种及具体路线请以当地接种门诊安排为准。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("自费疫苗仅作常见接种窗口提醒，厂家、剂型和剂次数可能不同；乙脑、甲肝需按实际产品选择路线。接种冲突提示仅供核对，最终以当地接种门诊和疫苗说明书为准。",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
