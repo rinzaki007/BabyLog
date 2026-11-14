@@ -81,7 +81,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("家庭同步", fontWeight = FontWeight.Bold) },
+        title = { Text("设置", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().height(520.dp).verticalScroll(rememberScrollState()),
@@ -211,6 +211,18 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     }
                     Text("同步状态", fontWeight = FontWeight.SemiBold)
                     Text("待同步 $pendingCount 项 · 冲突 $conflictCount 项")
+                    Button(
+                        onClick = {
+                            runAction {
+                                require(SyncPreferences.server(context).isNotBlank()) { "请先配置 NAS 同步地址" }
+                                require(SyncPreferences.familyId(context).isNotBlank()) { "请先创建家庭或加入已有家庭" }
+                                SyncScheduler.enqueue(context)
+                                "已发起手动同步。同步会在后台执行，可稍后刷新状态查看结果。"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy && familyId.isNotBlank()
+                    ) { Text(if (busy) "正在处理…" else "立即同步") }
                     Text(if (lastSyncAt > 0L) "上次成功同步：" + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt)) else "尚未成功同步")
                     if (!lastSyncError.isNullOrBlank()) Text("最近错误：$lastSyncError")
                     Text("记录变更和每次打开 App 时都会自动同步；离线时会保留在本机，联网后自动补传。", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
