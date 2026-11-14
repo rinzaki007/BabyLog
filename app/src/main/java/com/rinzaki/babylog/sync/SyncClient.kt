@@ -311,9 +311,19 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 for (i in 0 until conflicts.length()) {
                     val item = conflicts.getJSONObject(i)
                     val operationId = item.optString("operation_id")
-                    dao.markOperationConflict(operationId, item.optString("reason", "sync conflict"))
-                    pending.firstOrNull { it.operationId == operationId }?.let { operation ->
-                        if (operation.entityType == "photo") dao.setPhotoServerVersion(operation.entityId, -1L, "CONFLICT")
+                    val operation = pending.firstOrNull { it.operationId == operationId }
+                    val serverVersion = item.optLong("server_version", -1L)
+                    if (operation != null && serverVersion >= 0L) {
+                        // Rebase the local write onto the server's current version.
+                        // Keep the local payload; never replace it with stale remote data.
+                        when (operation.entityType) {
+                            "baby" -> dao.setBabyServerVersion(operation.entityId, serverVersion)
+                            "event" -> dao.setEventServerVersion(operation.entityId, serverVersion)
+                            "photo" -> dao.setPhotoServerVersion(operation.entityId, serverVersion, "PENDING")
+                        }
+                        dao.rebaseConflict(operationId, serverVersion)
+                    } else {
+                        dao.markOperationConflict(operationId, item.optString("reason", "sync conflict"))
                     }
                 }
                 batch++
@@ -355,7 +365,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
         val operation = item.optString("operation")
         val payload = item.optJSONObject("payload") ?: JSONObject()
         val version = item.optLong("version", 0L)
-        if (dao.hasConflict(type, id)) return
+        if (dao.hasLocalOperation(type, id)) return
         when (type) {
             "baby" -> {
                 if (operation == "delete") return
