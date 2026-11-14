@@ -654,7 +654,7 @@ private fun BabyAlbumSection(
             Column(horizontalAlignment = Alignment.End) {
                 OutlinedButton(onClick = {
                     DatePickerDialog(context, { _, y, m, d ->
-                        photoDateTime = photoDateTime.withYear(y).withMonth(m + 1).withDayOfMonth(d)
+                        photoDateTime = LocalDate.of(y, m + 1, d).atTime(photoDateTime.toLocalTime())
                         TimePickerDialog(context, { _, h, min -> photoDateTime = photoDateTime.withHour(h).withMinute(min) }, photoDateTime.hour, photoDateTime.minute, true).show()
                     }, photoDateTime.year, photoDateTime.monthValue - 1, photoDateTime.dayOfMonth).show()
                 }) { Text("时间：${photoDateTime.format(DateTimeFormatter.ofPattern(\"MM-dd HH:mm\"))}") }
@@ -678,7 +678,7 @@ private fun BabyAlbumSection(
                 monthPhotos.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         pair.forEach { photo ->
-                            AlbumPhotoCard(photo, onClick = { viewingPhoto = photo }, onEdit = { editingCaption = photo }, onDelete = { deletingPhoto = photo }, onSaveGallery = { savePhotoToGallery(context, photo.localPath) }, modifier = Modifier.weight(1f))
+                            AlbumPhotoCard(photo, onClick = { viewingPhoto = photo }, onEdit = { editingCaption = photo }, onDelete = { deletingPhoto = photo }, onSaveGallery = { albumScope.launch { galleryMessage = runCatching { withContext(Dispatchers.IO) { savePhotoToGallery(context, photo.localPath) }; "已保存到手机相册" }.getOrElse { "保存失败：${it.message}" } } }, modifier = Modifier.weight(1f))
                         }
                         if (pair.size == 1) Spacer(Modifier.weight(1f))
                     }
