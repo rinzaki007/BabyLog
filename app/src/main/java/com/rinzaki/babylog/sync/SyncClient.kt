@@ -80,11 +80,11 @@ object SyncHttp {
         }
         try {
             DataOutputStream(connection.outputStream).use { output ->
-                output.writeBytes("--$boundary\\r\\n")
-                output.writeBytes("Content-Disposition: form-data; name=" + 34.toChar() + "file" + 34.toChar() + "; filename=" + 34.toChar() + "avatar.jpg" + 34.toChar() + "\\r\\n")
-                output.writeBytes("Content-Type: image/jpeg\\r\\n\\r\\n")
+                output.writeBytes("--$boundary\r\n")
+                output.writeBytes("Content-Disposition: form-data; name=" + 34.toChar() + "file" + 34.toChar() + "; filename=" + 34.toChar() + "avatar.jpg" + 34.toChar() + "\r\n")
+                output.writeBytes("Content-Type: image/jpeg\r\n\r\n")
                 file.inputStream().use { it.copyTo(output) }
-                output.writeBytes("\\r\\n--$boundary--\\r\\n")
+                output.writeBytes("\r\n--$boundary--\r\n")
             }
             val code = connection.responseCode
             if (code !in 200..299) {
