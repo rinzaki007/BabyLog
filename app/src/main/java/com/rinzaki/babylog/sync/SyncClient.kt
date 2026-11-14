@@ -226,14 +226,16 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
             while (page < 10) {
                 val pulled = SyncHttp.request(base, "/api/sync/pull?family_id=$familyId&cursor=$cursor&limit=500", token = token)
                 val items = pulled.optJSONArray("items") ?: JSONArray()
-                if (items.length() == 0) break
-                for (i in 0 until items.length()) applyRemote(dao, items.getJSONObject(i), familyId)
                 val next = pulled.optLong("next_cursor", cursor)
                 if (next <= cursor) break
+                for (i in 0 until items.length()) applyRemote(dao, items.getJSONObject(i), familyId)
                 cursor = next
                 SyncPreferences.saveCursor(applicationContext, cursor)
                 page++
-                if (items.length() < 500) break
+                // The server may filter obsolete photo-upserts while retaining
+                // their cursor positions. Use scanned_count, not visible items,
+                // to decide whether another page is available.
+                if (pulled.optInt("scanned_count", items.length()) < 500) break
             }
             SyncPreferences.markSyncSuccess(applicationContext)
             Result.success()
