@@ -322,7 +322,6 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                                     item.optLong("created_at", System.currentTimeMillis() / 1000L) * 1000L,
                                     version
                                 )
-                                existing?.let { File(it.localPath).delete() }
                                 return
                             }
                             throw error
