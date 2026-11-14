@@ -1042,7 +1042,17 @@ private suspend fun persistBabyAvatar(context: android.content.Context, source: 
     val parsed = runCatching { android.net.Uri.parse(source) }.getOrNull() ?: return null
     val bitmap = withContext(Dispatchers.IO) {
         runCatching {
-            context.contentResolver.openInputStream(parsed)?.use { BitmapFactory.decodeStream(it) }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(parsed)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@runCatching null
+            var sampleSize = 1
+            while (bounds.outWidth / sampleSize > 640 || bounds.outHeight / sampleSize > 640) sampleSize *= 2
+            context.contentResolver.openInputStream(parsed)?.use {
+                BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+                })
+            }
         }.getOrNull()
     } ?: return null
     return withContext(Dispatchers.IO) {
@@ -1382,9 +1392,11 @@ private fun DateTimeOptionDialog(
                         OptionPicker("时", "%02d".format(selected.hour), (0..23).toList().map { "%02d".format(it) }) { selected = selected.withHour(it.toInt()) }
                         OptionPicker("分", "%02d".format(selected.minute), (0..59).toList().map { "%02d".format(it) }) { selected = selected.withMinute(it.toInt()) }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf("现在" to LocalDateTime.now(), "08:00" to selected.toLocalDate().atTime(8, 0), "12:00" to selected.toLocalDate().atTime(12, 0), "18:00" to selected.toLocalDate().atTime(18, 0), "21:00" to selected.toLocalDate().atTime(21, 0)).forEach { (label, value) ->
-                            OutlinedButton(onClick = { selected = value }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 5.dp)) { Text(label) }
+                    listOf("现在" to LocalDateTime.now(), "08:00" to selected.toLocalDate().atTime(8, 0), "12:00" to selected.toLocalDate().atTime(12, 0), "18:00" to selected.toLocalDate().atTime(18, 0), "21:00" to selected.toLocalDate().atTime(21, 0)).chunked(3).forEach { group ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            group.forEach { (label, value) ->
+                                OutlinedButton(onClick = { selected = value }, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 5.dp)) { Text(label) }
+                            }
                         }
                     }
                 }
