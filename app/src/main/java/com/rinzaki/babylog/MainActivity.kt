@@ -309,17 +309,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         } }
                     }
-                    if (selectedNav == 2) item { VaccinePage(vaccineEvents, onSave = { payload, timestamp ->
-                        val now = System.currentTimeMillis()
-                        scope.launch {
-                            val vaccine = BabyEventEntity(UUID.randomUUID().toString(), baby.id, "VACCINE", timestamp, payload.toString(), null, now)
-                            dao.upsertEvent(vaccine)
-                            if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                                dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", vaccine.id, "upsert", eventSyncPayload(vaccine).toString(), vaccine.serverVersion, now))
-                                SyncScheduler.enqueue(appContext)
-                            }
-                        }
-                    }, onDelete = { event -> scope.launch {
+                    if (selectedNav == 2) item { VaccinePage(vaccineEvents, onSave = { existing, payload, timestamp -> saveEvent(existing, "VACCINE", payload, timestamp) }, onDelete = { event -> scope.launch {
                         val now = System.currentTimeMillis(); dao.softDeleteEvent(event.id, now)
                         if (SyncPreferences.familyId(appContext).isNotBlank()) {
                             val deleted = dao.getEvent(event.id)
@@ -356,17 +346,9 @@ private fun BabyLogApp(dao: BabyLogDao) {
 
 
 @Composable
-private fun VaccinePage(events: List<BabyEventEntity>, onSave: (JSONObject, Long) -> Unit, onDelete: (BabyEventEntity) -> Unit) {
-    val context = LocalContext.current
+private fun VaccinePage(events: List<BabyEventEntity>, onSave: (BabyEventEntity?, JSONObject, Long) -> Unit, onDelete: (BabyEventEntity) -> Unit) {
     var showEditor by remember { mutableStateOf(false) }
-    var name by remember { mutableStateOf("") }
-    var dose by remember { mutableStateOf("") }
-    var clinic by remember { mutableStateOf("") }
-    var site by remember { mutableStateOf("") }
-    var batch by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf(LocalDate.now()) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<BabyEventEntity?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("疫苗接种档案", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("独立管理宝宝每一次接种，方便长期查询和核对。", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -377,7 +359,7 @@ private fun VaccinePage(events: List<BabyEventEntity>, onSave: (JSONObject, Long
                 Text("接种安排请以当地接种机构和医生提供的计划为准。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Button(onClick = { showEditor = true }, modifier = Modifier.fillMaxWidth()) { Text("＋ 添加疫苗接种记录") }
+        Button(onClick = { editing = null; showEditor = true }, modifier = Modifier.fillMaxWidth()) { Text("＋ 添加疫苗接种记录") }
         if (events.isEmpty()) {
             Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -406,15 +388,37 @@ private fun VaccinePage(events: List<BabyEventEntity>, onSave: (JSONObject, Long
                             data.optString("batchNumber").takeIf { it.isNotBlank() }?.let { "疫苗批号：" + it },
                             data.optString("note").takeIf { it.isNotBlank() }?.let { "备注：" + it }
                         ).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        TextButton(onClick = { onDelete(event) }, modifier = Modifier.align(Alignment.End)) { Text("删除记录", color = MaterialTheme.colorScheme.error) }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = { editing = event; showEditor = true }) { Text("编辑") }
+                            TextButton(onClick = { onDelete(event) }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                        }
                     }
                 }
             }
         }
     }
-    if (showEditor) AlertDialog(
-        onDismissRequest = { showEditor = false },
-        title = { Text("添加疫苗记录", fontWeight = FontWeight.Bold) },
+    if (showEditor) VaccineEditor(editing, onDismiss = { showEditor = false }) { payload, timestamp ->
+        onSave(editing, payload, timestamp)
+        showEditor = false
+    }
+}
+
+
+@Composable
+private fun VaccineEditor(existing: BabyEventEntity?, onDismiss: () -> Unit, onSave: (JSONObject, Long) -> Unit) {
+    val context = LocalContext.current
+    val data = remember(existing?.id) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
+    var name by remember(existing?.id) { mutableStateOf(data.optString("vaccineName")) }
+    var dose by remember(existing?.id) { mutableStateOf(data.optString("dose")) }
+    var clinic by remember(existing?.id) { mutableStateOf(data.optString("clinic")) }
+    var site by remember(existing?.id) { mutableStateOf(data.optString("site")) }
+    var batch by remember(existing?.id) { mutableStateOf(data.optString("batchNumber")) }
+    var note by remember(existing?.id) { mutableStateOf(data.optString("note")) }
+    var date by remember(existing?.id) { mutableStateOf(existing?.let { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate() } ?: LocalDate.now()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (existing == null) "添加疫苗记录" else "编辑疫苗记录", fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.height(460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name, { name = it.take(60) }, Modifier.fillMaxWidth(), label = { Text("疫苗名称 *") }, singleLine = true)
@@ -433,10 +437,9 @@ private fun VaccinePage(events: List<BabyEventEntity>, onSave: (JSONObject, Long
                 val payload = JSONObject().put("vaccineName", name.trim()).put("dose", dose.trim())
                     .put("clinic", clinic.trim()).put("site", site.trim()).put("batchNumber", batch.trim()).put("note", note.trim())
                 onSave(payload, date.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
-                name = ""; dose = ""; clinic = ""; site = ""; batch = ""; note = ""; date = LocalDate.now(); showEditor = false
             }) { Text("保存记录") }
         },
-        dismissButton = { TextButton(onClick = { showEditor = false }) { Text("取消") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }
 
