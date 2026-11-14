@@ -22,4 +22,12 @@ interface BabyLogDao {
 
     @Query("UPDATE baby_events SET deletedAt = :deletedAt, updatedAt = :deletedAt, syncStatus = 'PENDING' WHERE id = :eventId")
     suspend fun softDeleteEvent(eventId: String, deletedAt: Long)
+    @Query("SELECT * FROM baby_photos WHERE babyId = :babyId AND deletedAt IS NULL ORDER BY takenAt DESC")
+    fun observePhotos(babyId: String): Flow<List<BabyPhotoEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertPhoto(photo: BabyPhotoEntity)
+
+    @Query("UPDATE baby_photos SET deletedAt = :deletedAt, updatedAt = :deletedAt, syncStatus = 'PENDING' WHERE id = :photoId")
+    suspend fun softDeletePhoto(photoId: String, deletedAt: Long)
 }
