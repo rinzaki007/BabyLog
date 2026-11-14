@@ -68,6 +68,27 @@ jobs:
         uses: actions/checkout@v4
       - name: Build sync server image
         run: docker build -t babylog-sync:ci ./server
+      - name: Smoke test NAS container
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/babylog-sync-data"
+          docker run -d --name babylog-sync-ci \
+            --read-only --tmpfs /tmp:size=32m,noexec,nosuid \
+            --security-opt no-new-privileges --cap-drop ALL \
+            --cap-add CHOWN --cap-add SETUID --cap-add SETGID \
+            -e BABYLOG_JWT_SECRET=ci-only-secret-value-with-more-than-32-characters \
+            -v "$RUNNER_TEMP/babylog-sync-data:/data" \
+            -p 18766:18765 babylog-sync:ci
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:18766/health; then
+              docker rm -f babylog-sync-ci
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs babylog-sync-ci
+          docker rm -f babylog-sync-ci
+          exit 1
       - name: Validate Compose configuration
         run: |
           BABYLOG_JWT_SECRET=ci-only-secret-value-with-more-than-32-characters \
