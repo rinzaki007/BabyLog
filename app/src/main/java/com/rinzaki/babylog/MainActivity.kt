@@ -24,7 +24,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,11 +65,7 @@ class MainActivity : ComponentActivity() {
 private fun BabyLogApp(dao: BabyLogDao) {
     val babies by dao.observeBabies().collectAsState(initial = emptyList())
     val baby = babies.firstOrNull()
-    var editing by remember { mutableStateOf(baby == null) }
-
-    LaunchedEffect(baby?.id) {
-        if (baby != null && !editing) editing = false
-    }
+    var editing by remember { mutableStateOf(false) }
 
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
