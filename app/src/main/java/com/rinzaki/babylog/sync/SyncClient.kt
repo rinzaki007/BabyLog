@@ -36,6 +36,8 @@ object SyncPreferences {
     fun saveFamily(context: Context, id: String) { prefs(context).edit().putString("family_id", id).putLong("cursor", 0L).apply() }
     fun saveCursor(context: Context, value: Long) { prefs(context).edit().putLong("cursor", value).apply() }
     fun resetCursor(context: Context) { prefs(context).edit().putLong("cursor", 0L).apply() }
+    fun recoveryInProgress(context: Context) = prefs(context).getBoolean("recovery_in_progress", false)
+    fun setRecoveryInProgress(context: Context, value: Boolean) { prefs(context).edit().putBoolean("recovery_in_progress", value).apply() }
     fun clearSession(context: Context) { prefs(context).edit().remove("token").remove("family_id").remove("account_email").putLong("cursor", 0L).apply() }
     fun lastSyncAt(context: Context) = prefs(context).getLong("last_sync_at", 0L)
     fun lastSyncError(context: Context) = prefs(context).getString("last_sync_error", null)
@@ -200,6 +202,7 @@ object SyncHttp {
 object SyncScheduler {
     private val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
     fun enqueue(context: Context) {
+        if (SyncPreferences.recoveryInProgress(context)) return
         val request = OneTimeWorkRequestBuilder<BabyLogSyncWorker>().setConstraints(constraints).build()
         WorkManager.getInstance(context).enqueueUniqueWork("babylog-sync-now", ExistingWorkPolicy.KEEP, request)
     }
