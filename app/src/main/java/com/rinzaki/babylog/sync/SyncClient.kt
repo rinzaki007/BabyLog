@@ -266,9 +266,9 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                     val mime = payload.optString("mimeType", "image/jpeg")
                     val extension = extensionForMime(mime)
                     val localFile = existing?.let { File(it.localPath) }
-                    val target = if (localFile != null && localFile.isFile && existing.serverVersion == version) localFile
+                    val target = if (localFile != null && localFile.isFile && existing?.serverVersion == version) localFile
                         else File(applicationContext.filesDir, "baby_album/$id$extension")
-                    if (localFile == null || !localFile.isFile || existing.serverVersion != version) {
+                    if (localFile == null || !localFile.isFile || existing?.serverVersion != version) {
                         SyncHttp.downloadPhoto(SyncPreferences.server(applicationContext), familyId, id,
                             SyncPreferences.token(applicationContext), target)
                     }
