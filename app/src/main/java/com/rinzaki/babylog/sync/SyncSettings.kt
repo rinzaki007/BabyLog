@@ -97,7 +97,14 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                             val result = SyncHttp.request(base, "/api/auth/register", "POST", body =
                                 JSONObject().put("email", email.trim()).put("password", password))
                             SyncPreferences.saveServer(context, base)
-                            SyncPreferences.saveSession(context, result.getString("access_token"))
+                            val accessToken = result.getString("access_token")
+                            SyncPreferences.saveSession(context, accessToken)
+                            val profile = SyncHttp.request(base, "/api/me", token = accessToken)
+                            val linkedFamilies = profile.optJSONArray("families")
+                            if (linkedFamilies != null && linkedFamilies.length() == 1) {
+                                SyncPreferences.saveFamily(context, linkedFamilies.getJSONObject(0).getString("id"))
+                                SyncScheduler.schedule(context)
+                            }
                             "注册成功，账号已登录。"
                         }
                     }, modifier = Modifier.fillMaxWidth(), enabled = !busy
@@ -110,7 +117,14 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                             val result = SyncHttp.request(base, "/api/auth/login", "POST", body =
                                 JSONObject().put("email", email.trim()).put("password", password))
                             SyncPreferences.saveServer(context, base)
-                            SyncPreferences.saveSession(context, result.getString("access_token"))
+                            val accessToken = result.getString("access_token")
+                            SyncPreferences.saveSession(context, accessToken)
+                            val profile = SyncHttp.request(base, "/api/me", token = accessToken)
+                            val linkedFamilies = profile.optJSONArray("families")
+                            if (linkedFamilies != null && linkedFamilies.length() == 1) {
+                                SyncPreferences.saveFamily(context, linkedFamilies.getJSONObject(0).getString("id"))
+                                SyncScheduler.schedule(context)
+                            }
                             "登录成功。"
                         }
                     }, modifier = Modifier.fillMaxWidth(), enabled = !busy
