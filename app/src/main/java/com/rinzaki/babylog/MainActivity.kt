@@ -309,7 +309,19 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         } }
                     }
-                    if (selectedNav == 2) item { VaccinePage(vaccineEvents, onSave = { existing, payload, timestamp -> saveEvent(existing, "VACCINE", payload, timestamp) }, onDelete = { event -> scope.launch {
+                    if (selectedNav == 2) item { VaccinePage(vaccineEvents, onSave = { existing, payload, timestamp ->
+                        val now = System.currentTimeMillis()
+                        scope.launch {
+                            val vaccine = existing?.copy(occurredAt = timestamp, payloadJson = payload.toString(), updatedAt = now, syncStatus = "PENDING")
+                                ?: BabyEventEntity(UUID.randomUUID().toString(), baby.id, "VACCINE", timestamp, payload.toString(), null, now)
+                            dao.upsertEvent(vaccine)
+                            if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                dao.clearPendingOperations("event", vaccine.id)
+                                dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", vaccine.id, "upsert", eventSyncPayload(vaccine).toString(), vaccine.serverVersion, now))
+                                SyncScheduler.enqueue(appContext)
+                            }
+                        }
+                    }, onDelete = { event -> scope.launch {
                         val now = System.currentTimeMillis(); dao.softDeleteEvent(event.id, now)
                         if (SyncPreferences.familyId(appContext).isNotBlank()) {
                             val deleted = dao.getEvent(event.id)
