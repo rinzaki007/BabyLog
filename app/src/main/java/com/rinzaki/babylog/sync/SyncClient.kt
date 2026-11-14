@@ -41,8 +41,28 @@ object SyncPreferences {
     fun clearSession(context: Context) { prefs(context).edit().remove("token").remove("family_id").remove("account_email").putLong("cursor", 0L).apply() }
     fun lastSyncAt(context: Context) = prefs(context).getLong("last_sync_at", 0L)
     fun lastSyncError(context: Context) = prefs(context).getString("last_sync_error", null)
-    fun markSyncSuccess(context: Context) { prefs(context).edit().putLong("last_sync_at", System.currentTimeMillis()).remove("last_sync_error").apply() }
-    fun markSyncFailure(context: Context, reason: String) { prefs(context).edit().putString("last_sync_error", reason.take(240)).apply() }
+    fun lastConsistency(context: Context) = prefs(context).getString("last_consistency", null)
+    fun saveConsistency(context: Context, value: String) { prefs(context).edit().putString("last_consistency", value).apply() }
+    fun isSyncing(context: Context): Boolean {
+        val preferences = prefs(context)
+        val startedAt = preferences.getLong("sync_started_at", 0L)
+        val active = preferences.getBoolean("sync_in_progress", false) &&
+            startedAt > 0L && System.currentTimeMillis() - startedAt < TimeUnit.MINUTES.toMillis(10)
+        if (!active) preferences.edit().putBoolean("sync_in_progress", false).apply()
+        return active
+    }
+    fun markSyncStarted(context: Context) {
+        prefs(context).edit().putBoolean("sync_in_progress", true)
+            .putLong("sync_started_at", System.currentTimeMillis()).apply()
+    }
+    fun markSyncSuccess(context: Context) {
+        prefs(context).edit().putLong("last_sync_at", System.currentTimeMillis())
+            .putBoolean("sync_in_progress", false).remove("sync_started_at").remove("last_sync_error").apply()
+    }
+    fun markSyncFailure(context: Context, reason: String) {
+        prefs(context).edit().putBoolean("sync_in_progress", false).remove("sync_started_at")
+            .putString("last_sync_error", reason.take(240)).apply()
+    }
 }
 
 class SyncHttpException(val statusCode: Int, message: String) : IllegalStateException(message)
@@ -289,6 +309,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
         val token = SyncPreferences.token(applicationContext)
         val familyId = SyncPreferences.familyId(applicationContext)
         if (base.isBlank() || token.isBlank() || familyId.isBlank()) return Result.success()
+        SyncPreferences.markSyncStarted(applicationContext)
         return try {
             val dao = RoomAccess.database(applicationContext).babyLogDao()
             var batch = 0
@@ -437,6 +458,27 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
             require(remainingPending == 0) {
                 "仍有 $remainingPending 项待同步记录未完成上传；本机数据已保留，稍后将安全重试"
             }
+            val cloudStatus = SyncHttp.request(base, "/api/sync/status?family_id=$familyId", token = token)
+            val localBabies = dao.getAllBabies().filter { it.familyId == familyId }
+            val activeBabyIds = localBabies.map { it.id }.toSet()
+            val localCanonical = buildList {
+                localBabies.forEach { add("baby:${it.id}:${it.serverVersion ?: 0L}") }
+                dao.getAllEvents().filter { it.babyId in activeBabyIds && it.deletedAt == null }
+                    .forEach { add("event:${it.id}:${it.serverVersion ?: 0L}") }
+                dao.getAllPhotos().filter { it.babyId in activeBabyIds && it.deletedAt == null }
+                    .forEach { add("photo:${it.id}:${it.serverVersion ?: 0L}") }
+            }.sorted().joinToString("\n")
+            val localDigest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(localCanonical.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+            val cloudDigest = cloudStatus.optString("digest")
+            require(cloudDigest.matches(Regex("[a-fA-F0-9]{64}"))) {
+                "云端一致性校验响应无效"
+            }
+            SyncPreferences.saveConsistency(
+                applicationContext,
+                if (localDigest.equals(cloudDigest, ignoreCase = true)) "一致" else "存在差异，请再次同步核对"
+            )
             SyncPreferences.markSyncSuccess(applicationContext)
             Result.success()
         } catch (error: java.net.SocketTimeoutException) {

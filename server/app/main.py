@@ -195,6 +195,26 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
         latest=db.execute("SELECT COALESCE(MAX(seq),0) AS cursor FROM changes WHERE family_id=?",(body.family_id,)).fetchone()["cursor"]
     return {"replaced":True,"items":len(body.items),"changes":len(changes_to_append),"cursor":latest,"versions":versions}
 
+@app.get("/api/sync/status")
+def sync_status(family_id:str,uid:str=Depends(current_user)):
+    """Return a deterministic fingerprint of active family records for client integrity checks."""
+    with connect() as db:
+        require_member(db,family_id,uid)
+        rows=db.execute(
+            "SELECT entity_type,entity_id,version FROM records WHERE family_id=? AND deleted=0 ORDER BY entity_type,entity_id",
+            (family_id,)
+        ).fetchall()
+        latest=db.execute(
+            "SELECT COALESCE(MAX(seq),0) AS cursor FROM changes WHERE family_id=?",
+            (family_id,)
+        ).fetchone()["cursor"]
+    canonical="\n".join(f"{row['entity_type']}:{row['entity_id']}:{row['version']}" for row in rows)
+    digest=hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    counts={}
+    for row in rows:
+        counts[row["entity_type"]]=counts.get(row["entity_type"],0)+1
+    return {"active_count":len(rows),"active_counts":counts,"digest":digest,"cursor":latest}
+
 @app.get("/api/sync/pull")
 def pull(family_id:str,cursor:int=0,limit:int=500,uid:str=Depends(current_user)):
     limit=max(1,min(limit,1000))

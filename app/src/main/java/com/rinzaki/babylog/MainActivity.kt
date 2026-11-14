@@ -67,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -142,14 +143,29 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
+    var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
+    var syncConsistency by remember { mutableStateOf(SyncPreferences.lastConsistency(appContext)) }
+    var selectedEventFilter by remember { mutableStateOf("全部") }
     val vaccineEvents = events.filter { it.eventType == "VACCINE" }
     val normalEvents = events.filter { it.eventType != "VACCINE" }
+    val filteredEvents = normalEvents.filter { event ->
+        when (selectedEventFilter) {
+            "喂养" -> event.eventType == "FEEDING"
+            "大小便" -> event.eventType == "DIAPER"
+            "睡眠" -> event.eventType == "SLEEP"
+            "成长测量" -> event.eventType == "GROWTH"
+            "其他" -> event.eventType !in setOf("FEEDING", "DIAPER", "SLEEP", "GROWTH")
+            else -> true
+        }
+    }
     LaunchedEffect(Unit) {
         if (SyncPreferences.familyId(appContext).isNotBlank()) SyncScheduler.schedule(appContext)
         var lastForegroundSync = 0L
         while (true) {
             lastSyncAt = SyncPreferences.lastSyncAt(appContext)
             syncError = SyncPreferences.lastSyncError(appContext)
+            syncing = SyncPreferences.isSyncing(appContext)
+            syncConsistency = SyncPreferences.lastConsistency(appContext)
             val now = System.currentTimeMillis()
             if (SyncPreferences.familyId(appContext).isNotBlank() && now - lastForegroundSync >= 30_000L) {
                 SyncScheduler.enqueue(appContext)
@@ -219,6 +235,63 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             )
                         }
                         if (!syncError.isNullOrBlank()) Text("同步提示：" + syncError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                if (selectedNav == 0) item {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("家庭数据同步", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                Text(
+                                    when {
+                                        SyncPreferences.familyId(appContext).isBlank() -> "离线模式"
+                                        syncing -> "正在同步"
+                                        !syncError.isNullOrBlank() -> "需要检查"
+                                        lastSyncAt > 0L -> "同步正常"
+                                        else -> "等待首次同步"
+                                    },
+                                    color = when {
+                                        !syncError.isNullOrBlank() -> MaterialTheme.colorScheme.error
+                                        syncing -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(
+                                        if (syncing) "正在交换本地与云端数据…" else if (!syncError.isNullOrBlank()) "上次同步未完成" else "自动同步已开启",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        if (lastSyncAt > 0L) "上次成功：${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt))}" else "尚无成功同步记录",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                OutlinedButton(
+                                    enabled = SyncPreferences.familyId(appContext).isNotBlank() && !syncing,
+                                    onClick = { SyncScheduler.enqueue(appContext) }
+                                ) { Text(if (syncing) "同步中" else "立即同步") }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("本地与云端校验", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                Text(
+                                    syncConsistency ?: "尚未校验",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (syncConsistency == "一致") Color(0xFF38845B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            if (!syncError.isNullOrBlank()) {
+                                Text("同步失败：$syncError", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     }
                 }
                 if (selectedNav == 0 && baby != null) item {
@@ -321,20 +394,37 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     if (selectedNav == 1) item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("成长足迹", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Text("共 ${events.size} 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("共 ${normalEvents.size} 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    if (selectedNav == 1 && normalEvents.isEmpty()) {
+                    if (selectedNav == 1) item {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(listOf("全部", "喂养", "大小便", "睡眠", "成长测量", "其他")) { category ->
+                                if (selectedEventFilter == category) {
+                                    FilledTonalButton(onClick = { selectedEventFilter = category }) { Text(category) }
+                                } else {
+                                    OutlinedButton(onClick = { selectedEventFilter = category }) { Text(category) }
+                                }
+                            }
+                        }
+                    }
+                    if (selectedNav == 1 && filteredEvents.isEmpty()) {
                         item {
                             Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("🌱", style = MaterialTheme.typography.headlineLarge)
-                                    Text("第一条记录，等你来写", fontWeight = FontWeight.SemiBold)
-                                    Text("从一次喂养、一段好觉或一次成长测量开始。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        if (selectedEventFilter == "全部") "第一条记录，等你来写" else "还没有${selectedEventFilter}记录",
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        if (selectedEventFilter == "全部") "从一次喂养、一段好觉或一次成长测量开始。" else "试试切换其他分类，查看宝宝的成长足迹。",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
-                    } else if (selectedNav == 1) items(normalEvents, key = { it.id }) { event ->
+                    } else if (selectedNav == 1) items(filteredEvents, key = { it.id }) { event ->
                         EventCard(event, onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
                     }
                     if (selectedNav == 2) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
@@ -891,12 +981,24 @@ private fun BabyAlbumSection(
                         }
                     }
                     if (bitmap != null) {
-                        Image(
-                            bitmap!!.asImageBitmap(),
-                            contentDescription = "宝宝照片大图",
-                            modifier = Modifier.fillMaxWidth().height(430.dp),
-                            contentScale = ContentScale.Fit
-                        )
+                        Box(
+                            Modifier.fillMaxWidth().height(430.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                bitmap!!.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize().blur(26.dp),
+                                contentScale = ContentScale.Crop,
+                                alpha = 0.55f
+                            )
+                            Image(
+                                bitmap!!.asImageBitmap(),
+                                contentDescription = "宝宝照片大图",
+                                modifier = Modifier.fillMaxWidth().height(430.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                     } else {
                         Box(
                             Modifier.fillMaxWidth().height(240.dp),
