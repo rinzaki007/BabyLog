@@ -89,7 +89,9 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 base.startsWith("http://localhost")) { "请先填写有效的 NAS 同步地址" }
             val result = SyncHttp.request(
                 base, path, "POST",
-                body = JSONObject().put("username", accountIdentifier.trim()).put("password", password)
+                body = JSONObject()
+                    .put(if (path == "/api/auth/register" && accountIdentifier.contains("@")) "email" else "username", accountIdentifier.trim())
+                    .put("password", password)
             )
             SyncPreferences.saveServer(context, base)
             SyncPreferences.saveAccountEmail(context, accountIdentifier)
