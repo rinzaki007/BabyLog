@@ -31,31 +31,6 @@ private data class BabyRelease(
 )
 
 private object BabyUpdater {
-    fun shouldCheck(context: Context) = System.currentTimeMillis() -
-        context.getSharedPreferences(UPDATE_PREFS, 0).getLong("last_check", 0L) >= CHECK_INTERVAL
-
-    fun nasStatus(context: Context): String {
-        val base = SyncPreferences.server(context).trim().trimEnd('/')
-        if (base.isBlank()) return "NAS 更新镜像：尚未配置 NAS 地址"
-        return try {
-            val connection = URL("$base/api/app-update/status").openConnection() as HttpURLConnection
-            try {
-                connection.connectTimeout = 5000
-                connection.readTimeout = 7000
-                check(connection.responseCode == 200) { "HTTP ${connection.responseCode}" }
-                val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-                val error = json.optString("last_error")
-                when {
-                    error.isNotBlank() && error != "null" -> "NAS 更新镜像同步异常：$error"
-                    json.optBoolean("available") -> "NAS 已缓存 v${json.optString("version")}，手机可走内网高速下载"
-                    else -> "NAS 更新镜像尚未准备好安装包，后台会自动检查"
-                }
-            } finally { connection.disconnect() }
-        } catch (error: Exception) {
-            "NAS 更新镜像暂不可用：${error.message ?: "连接失败"}"
-        }
-    }
-
     fun currentVersion(context: Context): String {
         @Suppress("DEPRECATION")
         return context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0.0.0"
@@ -71,57 +46,38 @@ private object BabyUpdater {
         return false
     }
 
-    suspend fun check(context: Context): BabyRelease = withContext(Dispatchers.IO) {
-        val current = currentVersion(context)
+    suspend fun checkNas(context: Context): Pair<BabyRelease?, String> = withContext(Dispatchers.IO) {
         val base = SyncPreferences.server(context).trim().trimEnd('/')
-        var nasFailure: String? = null
-        var nasReleaseFallback: BabyRelease? = null
-        if (base.isNotBlank()) {
+        if (base.isBlank()) return@withContext null to "未配置 NAS 服务器地址"
+        try {
+            val connection = URL("$base/api/app-update/latest").openConnection() as HttpURLConnection
             try {
-                val connection = URL("$base/api/app-update/latest").openConnection() as HttpURLConnection
-                val nasRelease = try {
-                    connection.connectTimeout = 7000
-                    connection.readTimeout = 10000
-                    connection.setRequestProperty("Accept", "application/json")
-                    check(connection.responseCode == 200) { "NAS 更新接口 HTTP ${connection.responseCode}" }
-                    val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-                    if (json.optBoolean("available")) {
-                        val tag = json.optString("tag")
-                        val version = json.optString("version", tag.removePrefix("v").removePrefix("V"))
-                        val path = json.optString("download_path", "/api/app-update/download")
-                        require(tag.isNotBlank() && path == "/api/app-update/download") { "NAS 更新信息无效" }
-                        BabyRelease(
-                            tag, version, json.optString("notes").ifBlank { "本次更新未提供说明。" },
-                            base + path, json.optLong("size"),
-                            json.optString("sha256").takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) },
-                            "NAS 本地镜像"
-                        )
-                    } else null
-                } finally { connection.disconnect() }
-                nasReleaseFallback = nasRelease
-                if (nasRelease != null && newer(nasRelease.version, current)) {
-                    context.getSharedPreferences(UPDATE_PREFS, 0).edit()
-                        .putLong("last_check", System.currentTimeMillis()).apply()
-                    return@withContext nasRelease
-                }
-            } catch (error: Exception) {
-                nasFailure = error.message ?: "NAS 更新源暂时不可用"
-            }
-        }
-
-        val release = try {
-            fetchOfficialRelease()
+                connection.connectTimeout = 7000
+                connection.readTimeout = 10000
+                connection.setRequestProperty("Accept", "application/json")
+                check(connection.responseCode == 200) { "HTTP ${connection.responseCode}" }
+                val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                if (!json.optBoolean("available")) return@withContext null to "NAS 暂无可用安装包"
+                val tag = json.optString("tag")
+                val version = json.optString("version", tag.removePrefix("v").removePrefix("V"))
+                val path = json.optString("download_path", "/api/app-update/download")
+                require(tag.isNotBlank() && path == "/api/app-update/download") { "NAS 更新信息无效" }
+                val release = BabyRelease(
+                    tag, version, json.optString("notes").ifBlank { "本次更新未提供说明。" },
+                    base + path, json.optLong("size"),
+                    json.optString("sha256").takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) },
+                    "内网 NAS"
+                )
+                release to "NAS 安装包已就绪"
+            } finally { connection.disconnect() }
         } catch (error: Exception) {
-            nasReleaseFallback?.let { return@withContext it }
-            val detail = error.message ?: "官方更新检查失败"
-            throw IllegalStateException(
-                if (nasFailure != null) "NAS 更新源不可用（$nasFailure）；官方更新源也暂时无法访问（$detail）"
-                else detail
-            )
+            null to (error.message ?: "内网更新源连接失败")
         }
-        context.getSharedPreferences(UPDATE_PREFS, 0).edit()
-            .putLong("last_check", System.currentTimeMillis()).apply()
-        release
+    }
+
+    suspend fun checkOfficial(): Pair<BabyRelease?, String> = withContext(Dispatchers.IO) {
+        try { fetchOfficialRelease() to "官方版本信息获取成功" }
+        catch (error: Exception) { null to (error.message ?: "官方更新源暂不可用") }
     }
 
     private fun fetchOfficialRelease(): BabyRelease {
@@ -220,7 +176,6 @@ private object BabyUpdater {
         })
     }
 }
-
 @Composable
 internal fun AppUpdateSection() {
     val context = LocalContext.current
@@ -240,7 +195,6 @@ internal fun AppUpdateSection() {
     val current = remember { BabyUpdater.currentVersion(context) }
     val selectedRelease = if (selectedSource == "nas") nasRelease else officialRelease
     val hasUpdate = selectedRelease?.let { BabyUpdater.newer(it.version, current) } == true
-    val sourceAvailable = selectedRelease != null
 
     fun checkUpdate() {
         if (checking || downloading) return
