@@ -6,11 +6,12 @@ BabyLog Android 客户端、NAS 同步服务和网页管理面板属于同一个
 
 向 `main` 推送或创建 PR 时，CI 并行执行：
 
-1. **Android**：构建 debug APK。
-2. **Sync API**：运行 FastAPI 接口测试，覆盖认证、家庭数据访问、增量同步、幂等、照片上传下载、网页面板、备份导出与安全导入。
-3. **Docker**：构建 NAS 同步服务镜像，并校验 Compose 配置及容器启动。
+1. **Android 单元测试与构建**：运行 JVM 单元测试并构建 debug APK。
+2. **Android 仪器测试**：在 Android Emulator 中执行 Room 数据库迁移与 Keystore Token 加密 / 迁移测试。
+3. **Sync API**：运行 FastAPI 接口测试，覆盖认证、家庭数据访问、增量同步、幂等、照片上传下载、网页面板、备份导出与安全导入。
+4. **Docker**：构建 NAS 同步服务镜像，并校验 Compose 配置及容器启动。
 
-三个任务全部通过才视为该提交通过 CI。Android APK 作为 Actions artifact 上传；Docker 镜像由 CI 构建验证，不代表 NAS 已自动更新。除非专门配置发布流程，合并代码后仍需由部署者在 NAS / Dockge 更新容器。
+Android 单元测试、模拟器仪器测试、NAS API 与 Docker 检查全部通过，才视为该提交通过 CI。Android APK 作为 Actions artifact 上传；Docker 镜像由 CI 构建验证，不代表 NAS 已自动更新。除非专门配置发布流程，合并代码后仍需由部署者在 NAS / Dockge 更新容器。
 
 ## API 与数据兼容原则
 
@@ -23,6 +24,10 @@ BabyLog Android 客户端、NAS 同步服务和网页管理面板属于同一个
 - 备份导入必须保持增量新增原则：跳过目标端已存在的记录，不覆盖或删除现有数据。
 - ZIP 导入应在临时文件中流式接收与校验，限制上传体积、条目数量、解压体积和媒体路径，避免将整个归档一次性载入内存。
 - 数据备份默认不包含照片和头像；完整媒体备份必须由用户主动选择。
+
+## 依赖维护
+
+Dependabot 每周检查 Gradle / Android 依赖、`server/` 下的 Python 依赖以及 GitHub Actions 版本，并以 Pull Request 提交更新。依赖升级应先通过本仓库完整 CI，再合并；不要为了追新版本跳过兼容性验证。
 
 ## 发布与部署
 
