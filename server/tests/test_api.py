@@ -658,7 +658,7 @@ def test_web_dashboard_login_overview_and_complete_export(client):
          "operation": "upsert", "payload": {"id": baby_id, "displayName": "小宝", "birthTime": 123456789}, "base_version": 0},
         {"operation_id": str(uuid.uuid4()), "entity_type": "event", "entity_id": event_id,
          "operation": "upsert", "payload": {"id": event_id, "eventType": "FEEDING", "occurredAt": 123456789,
-                                             "payloadJson": "{\\"amountMl\\":120}"}, "base_version": 0}
+                                             "payloadJson": "{\"amountMl\":120}"}, "base_version": 0}
     ]})
     assert pushed.status_code == 200
 
