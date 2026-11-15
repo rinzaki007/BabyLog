@@ -808,55 +808,105 @@ private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     var range by remember { mutableStateOf("全部") }
     val key = when (metric) { "身长" -> "lengthCm"; "头围" -> "headCircumferenceCm"; else -> "weightGrams" }
     val unit = if (metric == "体重") "kg" else "cm"
-    val points = events.filter { it.eventType == "GROWTH" }.mapNotNull { event ->
-        val value = runCatching { JSONObject(event.payloadJson).let { payload ->
-            if (key == "weightGrams") payload.optDouble(key).takeIf { it > 0 }?.div(1000.0)
-            else payload.optDouble(key).takeIf { it > 0 }
-        } }.getOrNull()
+    val allPoints = events.filter { it.eventType == "GROWTH" }.mapNotNull { event ->
+        val value = runCatching {
+            JSONObject(event.payloadJson).let { payload ->
+                if (key == "weightGrams") payload.optDouble(key).takeIf { it > 0 }?.div(1000.0)
+                else payload.optDouble(key).takeIf { it > 0 }
+            }
+        }.getOrNull()
         value?.let { event.occurredAt to it.toFloat() }
-    }.sortedBy { it.first }.let { all ->
-        val days = when (range) { "近 30 天" -> 30L; "近 90 天" -> 90L; else -> Long.MAX_VALUE }
-        if (days == Long.MAX_VALUE) all else all.filter { it.first >= System.currentTimeMillis() - days * 86400000L }
-    }
+    }.sortedBy { it.first }
+    val now = System.currentTimeMillis()
+    val days = when (range) { "近 30 天" -> 30L; "近 90 天" -> 90L; "近半年" -> 182L; "近一年" -> 365L; else -> Long.MAX_VALUE }
+    val points = if (days == Long.MAX_VALUE) allPoints else allPoints.filter { it.first >= now - days * 86400000L }
     val latest = points.lastOrNull()
+    val previous = points.dropLast(1).lastOrNull()
+    val delta = if (latest != null && previous != null) latest.second - previous.second else null
+    val minValue = points.minOfOrNull { it.second }
+    val maxValue = points.maxOfOrNull { it.second }
+    val min = ((minValue ?: 0f) - if (metric == "体重") 0.25f else 1f).coerceAtLeast(0f)
+    val max = (maxValue ?: 1f) + if (metric == "体重") 0.25f else 1f
+    val dateFormat = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("成长曲线", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("体重、身长和头围变化", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("按实际测量日期展示变化", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text(latest?.let { "${"%.2f".format(Locale.getDefault(), it.second)} $unit" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(latest?.let { "${"%.2f".format(Locale.getDefault(), it.second)} $unit" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    if (delta != null) {
+                        val sign = if (delta > 0) "+" else ""
+                        Text("较上次 $sign${"%.2f".format(Locale.getDefault(), delta)} $unit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
             SelectionRow(listOf("体重", "身长", "头围"), metric) { metric = it }
-            SelectionRow(listOf("全部", "近 30 天", "近 90 天"), range) { range = it }
+            SelectionRow(listOf("近30天", "近90天", "近半年", "近一年", "全部"), range.replace("近30天","近 30 天").replace("近90天","近 90 天").replace("近半年","近半年").replace("近一年","近一年")) { range = it.replace("近30天","近 30 天").replace("近90天","近 90 天") }
             if (points.isEmpty()) {
-                Box(Modifier.fillMaxWidth().height(128.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
                     Text("还没有${metric}数据，记录几次后就能看到变化", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             } else {
-                val min = (points.minOf { it.second } - if (metric == "体重") 0.3f else 1f).coerceAtLeast(0f)
-                val max = points.maxOf { it.second } + if (metric == "体重") 0.3f else 1f
-                Canvas(Modifier.fillMaxWidth().height(164.dp)) {
-                    val left = 14f; val right = size.width - 14f; val top = 12f; val bottom = size.height - 12f
-                    repeat(4) { i ->
-                        val y = top + (bottom - top) * i / 3f
-                        drawLine(Color(0xFFEDE7F6), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.width(42.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                        Text("${"%.1f".format(Locale.getDefault(), max)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(110.dp))
+                        Text("${"%.1f".format(Locale.getDefault(), min)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    val span = (max - min).coerceAtLeast(0.1f)
-                    val coords = points.mapIndexed { index, point ->
-                        val x = if (points.size == 1) (left + right) / 2f else left + (right - left) * index / (points.size - 1)
-                        Offset(x, bottom - (point.second - min) / span * (bottom - top))
+                    Canvas(Modifier.weight(1f).height(150.dp)) {
+                        val left = 8f
+                        val right = size.width - 8f
+                        val top = 10f
+                        val bottom = size.height - 12f
+                        val valueSpan = (max - min).coerceAtLeast(0.1f)
+                        val timeStart = points.first().first
+                        val timeSpan = (points.last().first - timeStart).coerceAtLeast(1L)
+                        repeat(4) { index ->
+                            val y = top + (bottom - top) * index / 3f
+                            drawLine(Color(0xFFEDE7F6), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
+                        }
+                        val coords = points.map { point ->
+                            val x = left + (right - left) * ((point.first - timeStart).toFloat() / timeSpan.toFloat())
+                            val y = bottom - (point.second - min) / valueSpan * (bottom - top)
+                            Offset(x, y)
+                        }
+                        if (coords.size > 1) {
+                            val fillPath = Path().apply {
+                                moveTo(coords.first().x, bottom)
+                                lineTo(coords.first().x, coords.first().y)
+                                coords.drop(1).forEach { lineTo(it.x, it.y) }
+                                lineTo(coords.last().x, bottom)
+                                close()
+                            }
+                            drawPath(fillPath, Color(0xFF8874B8).copy(alpha = 0.10f))
+                            val linePath = Path().apply {
+                                moveTo(coords.first().x, coords.first().y)
+                                for (i in 1 until coords.size) {
+                                    val previousPoint = coords[i - 1]
+                                    val currentPoint = coords[i]
+                                    val middleX = (previousPoint.x + currentPoint.x) / 2f
+                                    quadraticTo(previousPoint.x, previousPoint.y, middleX, (previousPoint.y + currentPoint.y) / 2f)
+                                    lineTo(currentPoint.x, currentPoint.y)
+                                }
+                            }
+                            drawPath(linePath, Color(0xFF8874B8), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                        }
+                        coords.forEachIndexed { index, point ->
+                            val isLatest = index == coords.lastIndex
+                            drawCircle(if (isLatest) Color(0xFFB77969) else Color(0xFF8874B8), radius = if (isLatest) 5.dp.toPx() else 3.5.dp.toPx(), center = point)
+                        }
                     }
-                    if (coords.size > 1) {
-                        val path = Path().apply { moveTo(coords.first().x, coords.first().y); coords.drop(1).forEach { lineTo(it.x, it.y) } }
-                        drawPath(path, Color(0xFF8874B8), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
-                    }
-                    coords.forEach { drawCircle(Color(0xFF8874B8), radius = 4.dp.toPx(), center = it) }
                 }
-                Text("${points.size} 次测量 · 最近记录 ${SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(points.first().first.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(dateFormat) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(points.last().first.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(dateFormat) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("${points.size} 次测量 · 最新记录 ${SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text("曲线仅展示已记录的数据，不代表医学评估；建议定期测量并按医生建议解读。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("曲线按实际日期间隔绘制，仅展示已记录的数据，不代表医学评估；建议按医生建议解读。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -940,7 +990,7 @@ private fun BabyAlbumSection(
                     verticalAlignment = Alignment.Top
                 ) {
                     Box(
-                        Modifier.width(18.dp).height((photoRows.size * 123 + 34).dp)
+                        Modifier.width(18.dp).height((photoRows.size * 124 + 36).dp)
                             .background(Color.Transparent)
                     ) {
                         Box(
@@ -1007,10 +1057,10 @@ private fun BabyAlbumSection(
                 modifier = Modifier.fillMaxSize()
             ) {
                 Column(
-                    Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 18.dp),
+                    Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(
                                 SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(photo.takenAt)),
@@ -1050,7 +1100,7 @@ private fun BabyAlbumSection(
                             Text("照片暂时无法读取", color = Color(0xFF716B78))
                         }
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             photo.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注",
                             color = Color(0xFF514A58),
@@ -1061,7 +1111,7 @@ private fun BabyAlbumSection(
                         }
                     }
                     Row(
-                        Modifier.fillMaxWidth(),
+                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1186,7 +1236,7 @@ private fun AlbumPhotoCard(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))
     ) {
-        Box(Modifier.fillMaxWidth().height(116.dp)) {
+        Box(Modifier.fillMaxWidth().height(124.dp)) {
             if (bitmap != null) {
                 Image(
                     bitmap!!.asImageBitmap(),

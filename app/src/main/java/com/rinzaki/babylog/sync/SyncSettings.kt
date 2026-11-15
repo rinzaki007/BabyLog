@@ -37,7 +37,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     var server by remember { mutableStateOf(SyncPreferences.server(context)) }
-    var email by remember { mutableStateOf("") }
+    var accountIdentifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("BabyLog 默认离线使用。登录同一个账号，即可在多台设备间自动同步数据。") }
     var busy by remember { mutableStateOf(false) }
@@ -47,6 +47,10 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var showAccountForm by remember { mutableStateOf(SyncPreferences.token(context).isBlank()) }
     var pendingCount by remember { mutableStateOf(0) }
     var conflictCount by remember { mutableStateOf(0) }
+    var showSecurity by remember { mutableStateOf(false) }
+    var editedAccountName by remember { mutableStateOf(accountEmail) }
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         pendingCount = dao.pendingOperationCount()
@@ -85,13 +89,16 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 base.startsWith("http://localhost")) { "请先填写有效的 NAS 同步地址" }
             val result = SyncHttp.request(
                 base, path, "POST",
-                body = JSONObject().put("email", email.trim()).put("password", password)
+                body = JSONObject()
+                    .put(if (path == "/api/auth/register" && accountIdentifier.contains("@")) "email" else "username", accountIdentifier.trim())
+                    .put("password", password)
             )
             SyncPreferences.saveServer(context, base)
-            SyncPreferences.saveAccountEmail(context, email)
+            SyncPreferences.saveAccountEmail(context, accountIdentifier)
             val accessToken = result.getString("access_token")
             SyncPreferences.saveSession(context, accessToken)
             val profile = SyncHttp.request(base, "/api/me", token = accessToken)
+            SyncPreferences.saveAccountEmail(context, profile.optString("username", accountIdentifier.trim()))
             val linkedFamilies = profile.optJSONArray("families")
             require(linkedFamilies != null && linkedFamilies.length() > 0) {
                 "账号初始化失败，请检查 NAS 服务端版本后重试。"
@@ -174,10 +181,11 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 if (token.isBlank() || showAccountForm) {
                     Text("账号登录", fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
+                        value = accountIdentifier,
+                        onValueChange = { accountIdentifier = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("邮箱") },
+                        label = { Text("账号名或邮箱") },
+                        supportingText = { Text("新账号可使用 3-32 位字母、数字、点、下划线或短横线") },
                         singleLine = true,
                         enabled = !busy
                     )
@@ -193,11 +201,11 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     OutlinedButton(
                         onClick = { authenticate("/api/auth/login", "登录成功，已开启后台自动同步。") },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !busy && email.isNotBlank() && password.isNotBlank()
+                        enabled = !busy && accountIdentifier.isNotBlank() && password.isNotBlank()
                     ) { Text(if (busy) "正在登录…" else "登录已有账号") }
                     TextButton(
                         onClick = { authenticate("/api/auth/register", "注册成功，已登录并开启后台自动同步。") },
-                        enabled = !busy && email.isNotBlank() && password.length >= 10
+                        enabled = !busy && accountIdentifier.isNotBlank() && password.length >= 10
                     ) { Text("注册新账号") }
                 } else {
                     Text("当前账号", fontWeight = FontWeight.SemiBold)
@@ -206,6 +214,73 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                         "已开启自动同步。在其他设备登录同一个账号和密码，即可共享宝宝档案、记录和相册。",
                         style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                     )
+                    OutlinedButton(
+                        onClick = { editedAccountName = accountEmail; showSecurity = !showSecurity },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy
+                    ) { Text(if (showSecurity) "收起账号与安全" else "账号与安全") }
+                    if (showSecurity) {
+                        Text("修改账号名", fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(
+                            value = editedAccountName,
+                            onValueChange = { editedAccountName = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("新账号名") },
+                            singleLine = true,
+                            enabled = !busy
+                        )
+                        OutlinedTextField(
+                            value = currentPassword,
+                            onValueChange = { currentPassword = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("当前密码") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            enabled = !busy
+                        )
+                        Button(
+                            onClick = {
+                                runAction {
+                                    val result = SyncHttp.request(
+                                        server.trim().trimEnd('/'), "/api/account/username", "POST", token,
+                                        JSONObject().put("username", editedAccountName.trim()).put("current_password", currentPassword)
+                                    )
+                                    val saved = result.optString("username", editedAccountName.trim())
+                                    SyncPreferences.saveAccountEmail(context, saved)
+                                    currentPassword = ""
+                                    "账号名已更新。其他设备下次登录请使用新账号名。"
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !busy && editedAccountName.trim().length >= 3 && currentPassword.length >= 10
+                        ) { Text("保存账号名") }
+                        Spacer(Modifier.height(4.dp))
+                        Text("修改密码", fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(
+                            value = newPassword,
+                            onValueChange = { newPassword = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("新密码（至少 10 位）") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            enabled = !busy
+                        )
+                        Button(
+                            onClick = {
+                                runAction {
+                                    SyncHttp.request(
+                                        server.trim().trimEnd('/'), "/api/account/password", "POST", token,
+                                        JSONObject().put("current_password", currentPassword).put("new_password", newPassword)
+                                    )
+                                    currentPassword = ""
+                                    newPassword = ""
+                                    "密码已更新。其他设备下次登录请使用新密码。"
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !busy && currentPassword.length >= 10 && newPassword.length >= 10
+                        ) { Text("保存新密码") }
+                    }
                     OutlinedButton(
                         onClick = {
                             if (pendingCount > 0 || conflictCount > 0) {
