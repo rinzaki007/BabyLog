@@ -16,7 +16,8 @@
 3. 将 `BABYLOG_DATA_PATH` 改为 NAS 持久化目录。
 4. 在 Dockge 部署 Compose。
 5. 将专用 HTTPS 域名反向代理到 NAS 的 18765 端口。
-6. 执行 `docker compose up -d --build` 启动服务；Dockge 中保存并启动 Compose 项目即可。\n7. 检查 `https://你的域名/health`。
+6. 执行 `docker compose up -d --build` 启动服务；Dockge 中保存并启动 Compose 项目即可。
+7. 检查 `https://你的域名/health`。
 
 容器启动时会准备挂载目录权限，随后以 UID/GID 10001 的非 root 用户运行 API。不要暴露数据库文件或 NAS 管理端口。备份应使用 SQLite 在线备份方式，并同时备份照片目录。
 
