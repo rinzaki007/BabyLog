@@ -681,6 +681,7 @@ def test_web_dashboard_login_overview_and_complete_export(client):
     assert exported.headers["content-type"].startswith("application/zip")
     with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
         backup = json.loads(archive.read("backup.json"))
+        assert archive.getinfo("backup.json").compress_type == zipfile.ZIP_DEFLATED
     assert backup["format"] == "babylog-backup"
     assert {item["entity_type"] for item in backup["records"]} == {"baby", "event"}
     assert len(backup["records"]) == 2
