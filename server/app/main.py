@@ -73,7 +73,7 @@ def _rate_limit_retry_at(error, attempt=0):
     return now+min(3600,60*(2**min(max(0,int(attempt)),6)))
 
 
-def _read_update_url_retry(request, timeout, max_bytes):
+def _read_update_url_retry(request, timeout, max_bytes, rate_limit_attempt=0):
     import urllib.error
     import urllib.request
     last_error=None
@@ -93,7 +93,7 @@ def _read_update_url_retry(request, timeout, max_bytes):
                 if "rate limit" in detail.lower() or "rate limit" in message.lower() or error.code==429:
                     raise GitHubRateLimitError(
                         f"GitHub HTTP {error.code} 限流：{detail[:240] or message}",
-                        _rate_limit_retry_at(error,attempt)
+                        _rate_limit_retry_at(error,rate_limit_attempt+attempt)
                     ) from error
             last_error=error
             if attempt<2:
@@ -105,7 +105,7 @@ def _read_update_url_retry(request, timeout, max_bytes):
     raise RuntimeError(f"GitHub 更新信息连续请求失败（已重试 3 次）：{last_error}") from last_error
 
 
-def _download_update_asset_retry(request, temp, expected_size, expected_digest):
+def _download_update_asset_retry(request, temp, expected_size, expected_digest, rate_limit_attempt=0):
     import urllib.error
     import urllib.request
     last_error=None
@@ -142,7 +142,7 @@ def _download_update_asset_retry(request, temp, expected_size, expected_digest):
             if error.code in (403,429):
                 raise GitHubRateLimitError(
                     f"GitHub APK 下载受到 HTTP {error.code} 限制",
-                    _rate_limit_retry_at(error,attempt)
+                    _rate_limit_retry_at(error,rate_limit_attempt+attempt)
                 ) from error
             last_error=error
             if attempt<2: time.sleep((2,5)[attempt])
@@ -157,14 +157,14 @@ def _download_update_asset_retry(request, temp, expected_size, expected_digest):
     raise RuntimeError(f"GitHub APK 下载连续失败（已重试 3 次）：{last_error}") from last_error
 
 
-def _release_from_atom():
+def _release_from_atom(rate_limit_attempt=0):
     import html
     import urllib.request
     import xml.etree.ElementTree as ET
     request=urllib.request.Request(UPDATE_RELEASE_FEED,headers={
         "Accept":"application/atom+xml","User-Agent":"BabyLog-NAS-Updater"
     })
-    payload=_read_update_url_retry(request,timeout=25,max_bytes=2*1024*1024)
+    payload=_read_update_url_retry(request,timeout=25,max_bytes=2*1024*1024,rate_limit_attempt=rate_limit_attempt)
     root=ET.fromstring(payload)
     ns={"atom":"http://www.w3.org/2005/Atom"}
     entry=root.find("atom:entry",ns)
@@ -220,13 +220,15 @@ def refresh_app_release():
             headers["Authorization"]=f"Bearer {token}"
         request=urllib.request.Request(UPDATE_RELEASE_API,headers=headers)
         try:
-            release_payload=_read_update_url_retry(request,timeout=25,max_bytes=2*1024*1024)
+            release_payload=_read_update_url_retry(request,timeout=25,max_bytes=2*1024*1024,rate_limit_attempt=int(status.get('api_rate_limit_failures') or 0))
             release=json.loads(release_payload.decode("utf-8"))
             status["api_retry_at"]=0
+            status["api_rate_limit_failures"]=0
             status["api_last_error"]=None
         except GitHubRateLimitError as error:
             api_retry_at=error.retry_at
             status["api_retry_at"]=api_retry_at
+            status["api_rate_limit_failures"]=int(status.get("api_rate_limit_failures") or 0)+1
             status["api_last_error"]=str(error)[:500]
             _write_json_atomic(UPDATE_STATUS,status)
             source="github_atom_fallback"
@@ -234,7 +236,7 @@ def refresh_app_release():
             raise
     if release is None:
         try:
-            release=_release_from_atom()
+            release=_release_from_atom(rate_limit_attempt=int(status.get('api_rate_limit_failures') or 0))
         except GitHubRateLimitError as error:
             status["api_retry_at"]=max(api_retry_at,error.retry_at)
             raise
@@ -265,7 +267,7 @@ def refresh_app_release():
     expected_digest=str(asset.get("digest") or "").removeprefix("sha256:").strip().lower()
     if expected_digest and not re.fullmatch(r"[a-f0-9]{64}",expected_digest):
         raise ValueError("GitHub 返回的 APK SHA-256 格式无效")
-    total,digest_hex=_download_update_asset_retry(request,temp,expected_size,expected_digest)
+    total,digest_hex=_download_update_asset_retry(request,temp,expected_size,expected_digest,rate_limit_attempt=int(status.get("api_rate_limit_failures") or 0))
     os.replace(temp,target)
     metadata={
         "available":True,"tag":tag,"version":tag.lstrip("vV"),
