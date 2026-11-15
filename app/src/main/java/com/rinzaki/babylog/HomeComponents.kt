@@ -81,7 +81,7 @@ internal fun TodaySummary(events: List<BabyEventEntity>) {
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 SummaryPill("💧", "小便", "${pee} 次", Modifier.weight(1f))
                 SummaryPill("🌿", "大便", "${stool} 次", Modifier.weight(1f))
-                SummaryPill("📝", "其他记录", "${today.count { it.eventType !in setOf("FEEDING", "DIAPER", "SLEEP") }} 次", Modifier.weight(1f))
+                SummaryPill("📏", "成长测量", "${today.count { it.eventType == "GROWTH" }} 次", Modifier.weight(1f))
             }
         }
     }
