@@ -9,7 +9,7 @@
 
 [![Android CI](https://github.com/rinzaki007/BabyLog/actions/workflows/android.yml/badge.svg?branch=main)](https://github.com/rinzaki007/BabyLog/actions/workflows/android.yml)
 [![Latest Release](https://img.shields.io/github/v/release/rinzaki007/BabyLog?label=最新版本)](https://github.com/rinzaki007/BabyLog/releases/latest)
-[![License](https://img.shields.io/badge/平台-Android-3DDC84?logo=android&logoColor=white)](https://github.com/rinzaki007/BabyLog)
+[![Android](https://img.shields.io/badge/平台-Android-3DDC84?logo=android&logoColor=white)](https://github.com/rinzaki007/BabyLog)
 
 </div>
 
