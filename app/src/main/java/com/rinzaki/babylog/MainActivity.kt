@@ -842,15 +842,7 @@ private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     var range by remember { mutableStateOf("全部") }
     val key = when (metric) { "身长" -> "lengthCm"; "头围" -> "headCircumferenceCm"; else -> "weightGrams" }
     val unit = if (metric == "体重") "kg" else "cm"
-    val allPoints = events.filter { it.eventType == "GROWTH" }.mapNotNull { event ->
-        val value = runCatching {
-            JSONObject(event.payloadJson).let { payload ->
-                if (key == "weightGrams") payload.optDouble(key).takeIf { it > 0 }?.div(1000.0)
-                else payload.optDouble(key).takeIf { it > 0 }
-            }
-        }.getOrNull()
-        value?.let { event.occurredAt to it.toFloat() }
-    }.sortedBy { it.first }
+    val allPoints = growthMetricPoints(baby, events, key)
     val now = System.currentTimeMillis()
     val days = when (range) { "近 30 天" -> 30L; "近 90 天" -> 90L; "近半年" -> 182L; "近一年" -> 365L; else -> Long.MAX_VALUE }
     val points = if (days == Long.MAX_VALUE) allPoints else allPoints.filter { it.first >= now - days * 86400000L }
