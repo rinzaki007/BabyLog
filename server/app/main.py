@@ -1,4 +1,4 @@
-import asyncio, hashlib, io, json, os, re, secrets, sqlite3, time, uuid, tempfile, zipfile
+import asyncio, hashlib, io, json, os, re, secrets, shutil, sqlite3, time, uuid, tempfile, zipfile
 from pathlib import Path
 from typing import Any
 import jwt
@@ -638,9 +638,8 @@ def web_export(uid:str=Depends(current_user)):
     return FileResponse(temp_path,media_type="application/zip",filename=filename,
         headers={"Cache-Control":"no-store"},background=BackgroundTask(lambda:Path(temp_path).unlink(missing_ok=True)))
 
-def _parse_web_backup(raw:bytes):
-    if len(raw)>512*1024*1024: raise HTTPException(413,"备份文件不能超过 512 MB")
-    try: archive=zipfile.ZipFile(io.BytesIO(raw))
+def _parse_web_backup(archive_path:Path):
+    try: archive=zipfile.ZipFile(archive_path)
     except Exception: raise HTTPException(400,"备份文件不是有效 ZIP")
     with archive:
         infos=archive.infolist()
@@ -664,7 +663,7 @@ def _parse_web_backup(raw:bytes):
             raise HTTPException(400,"不支持的 BabyLog 备份格式")
         records=backup.get("records")
         if not isinstance(records,list) or len(records)>10000: raise HTTPException(400,"备份记录数量无效")
-        assets={}; seen=set()
+        assets=set(); seen=set()
         for item in records:
             if not isinstance(item,dict) or item.get("entity_type") not in {"baby","event","photo"} or not isinstance(item.get("payload"),dict):
                 raise HTTPException(400,"备份中包含无效记录")
@@ -675,90 +674,113 @@ def _parse_web_backup(raw:bytes):
             seen.add(key); item["entity_id"]=entity_id
             if item["payload"].get("id") not in (None,entity_id): raise HTTPException(400,"备份记录 ID 与内容不一致")
             asset=item.get("asset_path")
-            if item["entity_type"]=="photo" and not asset:
-                raise HTTPException(400,"备份照片缺少原始图片文件")
+            if item["entity_type"]=="photo" and not asset: raise HTTPException(400,"备份照片缺少原始图片文件")
             if asset:
                 prefix="photos/" if item["entity_type"]=="photo" else "avatars/" if item["entity_type"]=="baby" else None
                 if not prefix or not isinstance(asset,str) or not asset.startswith(prefix) or Path(asset).name!=asset[len(prefix):] or Path(asset).stem!=entity_id or ".." in Path(asset).parts:
                     raise HTTPException(400,"备份包含无效媒体路径")
                 if asset not in names: raise HTTPException(400,"备份缺少媒体文件")
-                content=archive.read(asset)
-                if not content or len(content)>MAX_PHOTO_BYTES: raise HTTPException(400,"备份媒体文件大小无效")
+                info=archive.getinfo(asset)
+                if info.file_size<=0 or info.file_size>MAX_PHOTO_BYTES: raise HTTPException(400,"备份媒体文件大小无效")
                 if item["entity_type"]=="photo" and Path(asset).suffix.lower() not in {".jpg",".jpeg",".png",".webp",".heic",".heif"}:
                     raise HTTPException(400,"备份照片格式不受支持")
                 if item["entity_type"]=="baby" and Path(asset).suffix.lower()!=".jpg":
                     raise HTTPException(400,"备份头像格式不受支持")
-                assets[asset]=content
+                assets.add(asset)
+        bad_member=archive.testzip()
+        if bad_member: raise HTTPException(400,"备份媒体文件损坏："+Path(bad_member).name)
         return backup,assets
 
 async def _read_web_backup(file:UploadFile):
-    raw=await file.read(512*1024*1024+1)
-    if len(raw)>512*1024*1024: raise HTTPException(413,"备份文件不能超过 512 MB")
-    return _parse_web_backup(raw)
+    DATA_DIR.mkdir(parents=True,exist_ok=True)
+    fd,temp_name=tempfile.mkstemp(prefix="babylog-import-",suffix=".zip",dir=DATA_DIR)
+    temp_path=Path(temp_name); total=0
+    try:
+        with os.fdopen(fd,"wb") as output:
+            while True:
+                chunk=await file.read(1024*1024)
+                if not chunk: break
+                total+=len(chunk)
+                if total>512*1024*1024: raise HTTPException(413,"备份文件不能超过 512 MB")
+                output.write(chunk)
+            output.flush(); os.fsync(output.fileno())
+        backup,assets=_parse_web_backup(temp_path)
+        return temp_path,backup,assets
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
 
 @app.post("/api/web/import/preview")
 async def web_import_preview(file:UploadFile=File(...),uid:str=Depends(current_user)):
-    backup,assets=await _read_web_backup(file)
-    profile,family=_web_family(uid); fid=family["id"]
-    with connect() as db:
-        existing={(r["entity_type"],r["entity_id"]) for r in db.execute("SELECT entity_type,entity_id FROM records WHERE family_id=?",(fid,)).fetchall()}
-        mapped_photos={r["source_photo_id"] for r in db.execute("SELECT source_photo_id FROM web_import_mappings WHERE family_id=?",(fid,)).fetchall()}
-    additions=[r for r in backup["records"] if (r["entity_type"],r["entity_id"]) not in existing and not (r["entity_type"]=="photo" and r["entity_id"] in mapped_photos)]
-    return {"valid":True,"family_name":family["name"],"backup_family_name":str(backup.get("family_name") or ""),
-        "total":len(backup["records"]),"new_count":len(additions),"conflict_count":len(backup["records"])-len(additions),
-        "photo_count":sum(1 for r in additions if r["entity_type"]=="photo"),
-        "asset_count":sum(1 for r in additions if r.get("asset_path") in assets)}
+    temp_path,backup,assets=await _read_web_backup(file)
+    try:
+        profile,family=_web_family(uid); fid=family["id"]
+        with connect() as db:
+            existing={(r["entity_type"],r["entity_id"]) for r in db.execute("SELECT entity_type,entity_id FROM records WHERE family_id=?",(fid,)).fetchall()}
+            mapped_photos={r["source_photo_id"] for r in db.execute("SELECT source_photo_id FROM web_import_mappings WHERE family_id=?",(fid,)).fetchall()}
+        additions=[r for r in backup["records"] if (r["entity_type"],r["entity_id"]) not in existing and not (r["entity_type"]=="photo" and r["entity_id"] in mapped_photos)]
+        return {"valid":True,"family_name":family["name"],"backup_family_name":str(backup.get("family_name") or ""),
+            "total":len(backup["records"]),"new_count":len(additions),"conflict_count":len(backup["records"])-len(additions),
+            "photo_count":sum(1 for r in additions if r["entity_type"]=="photo"),
+            "asset_count":sum(1 for r in additions if r.get("asset_path") in assets)}
+    finally:
+        temp_path.unlink(missing_ok=True)
 
 @app.post("/api/web/import")
 async def web_import(file:UploadFile=File(...),uid:str=Depends(current_user)):
-    backup,assets=await _read_web_backup(file)
-    profile,family=_web_family(uid); fid=family["id"]; written=[]; imported=0; skipped=0
+    temp_path,backup,assets=await _read_web_backup(file)
+    written=[]; imported=0; skipped=0
     mime_by_ext={".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp",".heic":"image/heic",".heif":"image/heif"}
     try:
-        with connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            for item in backup["records"]:
-                kind=item["entity_type"]; source_entity_id=item["entity_id"]; entity_id=source_entity_id
-                if db.execute("SELECT 1 FROM records WHERE family_id=? AND entity_type=? AND entity_id=?",(fid,kind,source_entity_id)).fetchone():
-                    skipped+=1; continue
-                if kind=="photo":
-                    mapped=db.execute("SELECT target_photo_id FROM web_import_mappings WHERE family_id=? AND source_photo_id=?",(fid,source_entity_id)).fetchone()
-                    if mapped:
-                        skipped+=1; continue
-                    collision=db.execute("SELECT 1 FROM photos WHERE id=?",(source_entity_id,)).fetchone()
-                    if collision: entity_id=str(uuid.uuid4())
-                payload=dict(item["payload"])
-                if kind=="photo" and "id" in payload: payload["id"]=entity_id
-                asset=item.get("asset_path")
-                if kind=="baby" and payload.get("hasAvatar"):
-                    if asset and asset in assets:
-                        folder=AVATAR_DIR/str(uuid.UUID(fid)); folder.mkdir(parents=True,exist_ok=True)
-                        target=folder/f"{entity_id}.jpg"; temp=target.with_suffix(".jpg.import")
-                        if target.exists(): raise HTTPException(409,"头像目标文件已存在，已停止导入以保护现有文件")
-                        temp.write_bytes(assets[asset]); temp.replace(target); written.append(target)
-                    else: payload["hasAvatar"]=False
-                if kind=="photo":
-                    if not asset or asset not in assets: raise HTTPException(400,"备份照片缺少原始图片文件")
-                    ext=Path(asset).suffix.lower(); mime=mime_by_ext.get(ext)
-                    if not mime: raise HTTPException(400,"备份照片格式不受支持")
-                    folder=PHOTO_DIR/fid; folder.mkdir(parents=True,exist_ok=True)
-                    target=folder/f"{entity_id}{ext}"; temp=target.with_suffix(target.suffix+".import")
-                    if target.exists(): raise HTTPException(409,"照片目标文件已存在，已停止导入以保护现有文件")
-                    temp.write_bytes(assets[asset]); temp.replace(target); written.append(target)
-                    db.execute("INSERT INTO photos VALUES (?,?,?,?,?,?)",(entity_id,fid,str(target.relative_to(PHOTO_DIR)),mime,len(assets[asset]),int(time.time())))
-                    db.execute("INSERT INTO web_import_mappings VALUES (?,?,?,?)",(fid,source_entity_id,entity_id,int(time.time())))
-                payload_json=json.dumps(payload,ensure_ascii=False,separators=(",",":"))
-                now=int(time.time())
-                db.execute("INSERT INTO records VALUES (?,?,?,?,?,?,0)",(fid,kind,entity_id,payload_json,1,now))
-                db.execute("INSERT INTO changes(family_id,entity_type,entity_id,operation_id,payload,version,created_at) VALUES (?,?,?,?,?,?,?)",
-                    (fid,kind,entity_id,str(uuid.uuid4()),json.dumps({"operation":"upsert","payload":payload},ensure_ascii=False),1,now))
-                imported+=1
-    except Exception:
-        for path in written:
-            try: path.unlink(missing_ok=True)
-            except OSError: pass
-        raise
-    return {"imported":imported,"skipped_existing":skipped}
+        profile,family=_web_family(uid); fid=family["id"]
+        with zipfile.ZipFile(temp_path) as archive:
+            try:
+                with connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    for item in backup["records"]:
+                        kind=item["entity_type"]; source_entity_id=item["entity_id"]; entity_id=source_entity_id
+                        if db.execute("SELECT 1 FROM records WHERE family_id=? AND entity_type=? AND entity_id=?",(fid,kind,source_entity_id)).fetchone():
+                            skipped+=1; continue
+                        if kind=="photo":
+                            mapped=db.execute("SELECT target_photo_id FROM web_import_mappings WHERE family_id=? AND source_photo_id=?",(fid,source_entity_id)).fetchone()
+                            if mapped: skipped+=1; continue
+                            collision=db.execute("SELECT 1 FROM photos WHERE id=?",(source_entity_id,)).fetchone()
+                            if collision: entity_id=str(uuid.uuid4())
+                        payload=dict(item["payload"])
+                        if kind=="photo" and "id" in payload: payload["id"]=entity_id
+                        asset=item.get("asset_path")
+                        if kind=="baby" and payload.get("hasAvatar"):
+                            if asset and asset in assets:
+                                folder=AVATAR_DIR/str(uuid.UUID(fid)); folder.mkdir(parents=True,exist_ok=True)
+                                target=folder/f"{entity_id}.jpg"; temp=target.with_suffix(".jpg.import")
+                                if target.exists(): raise HTTPException(409,"头像目标文件已存在，已停止导入以保护现有文件")
+                                with archive.open(asset) as source, temp.open("wb") as output: shutil.copyfileobj(source,output,1024*1024)
+                                temp.replace(target); written.append(target)
+                            else: payload["hasAvatar"]=False
+                        if kind=="photo":
+                            if not asset or asset not in assets: raise HTTPException(400,"备份照片缺少原始图片文件")
+                            ext=Path(asset).suffix.lower(); mime=mime_by_ext.get(ext)
+                            if not mime: raise HTTPException(400,"备份照片格式不受支持")
+                            folder=PHOTO_DIR/fid; folder.mkdir(parents=True,exist_ok=True)
+                            target=folder/f"{entity_id}{ext}"; temp=target.with_suffix(target.suffix+".import")
+                            if target.exists(): raise HTTPException(409,"照片目标文件已存在，已停止导入以保护现有文件")
+                            with archive.open(asset) as source, temp.open("wb") as output: shutil.copyfileobj(source,output,1024*1024)
+                            temp.replace(target); written.append(target)
+                            db.execute("INSERT INTO photos VALUES (?,?,?,?,?,?)",(entity_id,fid,str(target.relative_to(PHOTO_DIR)),mime,target.stat().st_size,int(time.time())))
+                            db.execute("INSERT INTO web_import_mappings VALUES (?,?,?,?)",(fid,source_entity_id,entity_id,int(time.time())))
+                        payload_json=json.dumps(payload,ensure_ascii=False,separators=(",",":")); now=int(time.time())
+                        db.execute("INSERT INTO records VALUES (?,?,?,?,?,?,0)",(fid,kind,entity_id,payload_json,1,now))
+                        db.execute("INSERT INTO changes(family_id,entity_type,entity_id,operation_id,payload,version,created_at) VALUES (?,?,?,?,?,?,?)",
+                            (fid,kind,entity_id,str(uuid.uuid4()),json.dumps({"operation":"upsert","payload":payload},ensure_ascii=False),1,now))
+                        imported+=1
+            except Exception:
+                for path in written:
+                    try: path.unlink(missing_ok=True)
+                    except OSError: pass
+                raise
+        return {"imported":imported,"skipped_existing":skipped}
+    finally:
+        temp_path.unlink(missing_ok=True)
 
 @app.post("/api/families")
 def create_family(body:FamilyCreate,uid:str=Depends(current_user)):
