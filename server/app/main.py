@@ -90,7 +90,8 @@ def _read_update_url_retry(request, timeout, max_bytes, rate_limit_attempt=0):
                 try: detail=error.read(2048).decode("utf-8","replace")
                 except Exception: pass
                 message=str(error)
-                if "rate limit" in detail.lower() or "rate limit" in message.lower() or error.code==429:
+                remaining=str(error.headers.get("X-RateLimit-Remaining") or error.headers.get("x-ratelimit-remaining") or "") if error.headers else ""
+                if "rate limit" in detail.lower() or "rate limit" in message.lower() or remaining=="0" or error.code==429:
                     raise GitHubRateLimitError(
                         f"GitHub HTTP {error.code} 限流：{detail[:240] or message}",
                         _rate_limit_retry_at(error,rate_limit_attempt+attempt)
