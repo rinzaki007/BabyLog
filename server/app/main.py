@@ -203,7 +203,7 @@ def app_update_status():
 def app_update_download():
     metadata=_read_json(UPDATE_META,{})
     filename=metadata.get("file_name","")
-    if not metadata.get("available") or not re.fullmatch(r"BabyLog-[A-Za-z0-9._+-]{1,64}\\.apk",str(filename)):
+    if not metadata.get("available") or not re.fullmatch(r"BabyLog-[A-Za-z0-9._+-]{1,64}\.apk",str(filename)):
         raise HTTPException(404,"NAS 尚未准备好更新安装包")
     apk=(UPDATE_DIR/filename).resolve()
     if apk.parent!=UPDATE_DIR.resolve() or not apk.is_file():
