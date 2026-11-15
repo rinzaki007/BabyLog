@@ -37,22 +37,23 @@ private object BabyUpdater {
     fun nasStatus(context: Context): String {
         val base = SyncPreferences.server(context).trim().trimEnd('/')
         if (base.isBlank()) return "NAS 更新镜像：尚未配置 NAS 地址"
-        var connection: HttpURLConnection? = null
         return try {
-            connection = URL("$base/api/app-update/status").openConnection() as HttpURLConnection
-            connection.connectTimeout = 5000
-            connection.readTimeout = 7000
-            check(connection.responseCode == 200) { "HTTP ${connection.responseCode}" }
-            val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-            val error = json.optString("last_error")
-            when {
-                error.isNotBlank() && error != "null" -> "NAS 更新镜像同步异常：$error"
-                json.optBoolean("available") -> "NAS 已缓存 v${json.optString("version")}，手机可走内网高速下载"
-                else -> "NAS 更新镜像尚未准备好安装包，后台会自动检查"
-            }
+            val connection = URL("$base/api/app-update/status").openConnection() as HttpURLConnection
+            try {
+                connection.connectTimeout = 5000
+                connection.readTimeout = 7000
+                check(connection.responseCode == 200) { "HTTP ${connection.responseCode}" }
+                val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                val error = json.optString("last_error")
+                when {
+                    error.isNotBlank() && error != "null" -> "NAS 更新镜像同步异常：$error"
+                    json.optBoolean("available") -> "NAS 已缓存 v${json.optString("version")}，手机可走内网高速下载"
+                    else -> "NAS 更新镜像尚未准备好安装包，后台会自动检查"
+                }
+            } finally { connection.disconnect() }
         } catch (error: Exception) {
             "NAS 更新镜像暂不可用：${error.message ?: "连接失败"}"
-        } finally { connection?.disconnect() }
+        }
     }
 
     fun currentVersion(context: Context): String {
