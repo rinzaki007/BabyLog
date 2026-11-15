@@ -418,7 +418,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                     if (selectedNav == 1 && filteredEvents.isEmpty()) {
                         item {
-                            Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
+                            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("🌱", style = MaterialTheme.typography.headlineLarge)
                                     Text(
@@ -434,7 +434,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     } else if (selectedNav == 1) items(filteredEvents, key = { it.id }) { event ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                            EventCard(event, modifier = Modifier.fillMaxWidth(0.94f), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
+                            EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
                         }
                     }
                     if (selectedNav == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
@@ -571,7 +571,7 @@ private fun VaccineScheduleSection(
         })
     }
     val conflicts = remember(allItems, recordedConflicts) { (liveVaccineScheduleConflicts(allItems) + recordedConflicts).distinct() }
-    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EFF8))) {
+    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EFF8))) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -654,7 +654,7 @@ private fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, sex
     var editing by remember { mutableStateOf<BabyEventEntity?>(null) }
     var editorInitialName by remember { mutableStateOf("") }
     var editorInitialDose by remember { mutableStateOf("") }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("疫苗接种档案", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("独立管理宝宝每一次接种，方便长期查询和核对。", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button(
@@ -1013,7 +1013,7 @@ private fun BabyAlbumSection(
         }
         if (photos.isEmpty()) {
             Card(
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F0))
             ) {
                 Column(
@@ -1345,7 +1345,7 @@ private fun BabyProfileEditor(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) avatar = uri.toString()
     }
-    Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Text(if (existing == null) "建立宝宝档案" else "编辑宝宝档案", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1457,7 +1457,7 @@ private fun BabyProfileCard(baby: BabyEntity, onEdit: () -> Unit) {
     val days = java.time.temporal.ChronoUnit.DAYS.between(birthDate, today).coerceAtLeast(0) + 1
     val months = java.time.temporal.ChronoUnit.MONTHS.between(birthDate, today).coerceAtLeast(0)
     val ageText = if (months < 1) "第 $days 天" else "$months 个月"
-    Card(shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
+    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
         Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(baby.avatarUri, 54)
@@ -1522,7 +1522,7 @@ private fun ActionCard(emoji: String, title: String, subtitle: String, modifier:
     Card(
         onClick = onClick,
         modifier = modifier.heightIn(min = 88.dp),
-        shape = RoundedCornerShape(19.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -1777,7 +1777,7 @@ private fun DateTimeOptionDialog(
                     }
                 }
                 Text("快速选择日期", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("今天" to LocalDate.now(), "昨天" to LocalDate.now().minusDays(1), "前天" to LocalDate.now().minusDays(2)).forEach { (label, day) ->
                         val active = selected.toLocalDate() == day
                         if (active) FilledTonalButton(onClick = { selected = day.atTime(selected.toLocalTime()) }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 5.dp)) { Text(label) }
