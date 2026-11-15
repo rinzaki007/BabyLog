@@ -769,7 +769,7 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
     assert pushed.status_code == 200
     source_login = client.post("/api/web/login", json={"email": "web-import-source@example.test", "password": "correct-horse-battery"})
     assert source_login.status_code == 200
-    exported = client.get("/api/web/export")
+    exported = client.get("/api/web/export?include_photos=true")
     assert exported.status_code == 200
 
     target_token = register(client, "web-import-target@example.test")
