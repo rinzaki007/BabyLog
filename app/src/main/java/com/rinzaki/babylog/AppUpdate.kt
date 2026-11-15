@@ -150,18 +150,40 @@ private object BabyUpdater {
         val decodedTag = runCatching { java.net.URLDecoder.decode(tag, "UTF-8") }.getOrDefault(tag)
 
         fun findApk(html: String): String? {
-            val hrefPattern = Regex(
-                """href\s*=\s*["']([^"']+\.apk(?:\?[^"']*)?)["']""",
+            // GitHub release markup varies between HTML, Turbo frames and embedded JSON.
+            val normalized = html
+                .replace("\\u0026", "&", ignoreCase = true)
+                .replace("\\/", "/")
+                .replace("&amp;", "&", ignoreCase = true)
+                .replace("&#x2F;", "/", ignoreCase = true)
+                .replace("&quot;", "\"")
+            val candidates = linkedSetOf<String>()
+            val attributePattern = Regex(
+                """(?:href|data-url|data-download-url)\s*=\s*["']([^"']+)["']""",
                 RegexOption.IGNORE_CASE
             )
-            return hrefPattern.findAll(html).mapNotNull { match ->
-                match.groupValues[1].replace("&amp;", "&").let { href ->
-                    when {
-                        href.startsWith("https://") -> href
-                        href.startsWith("/") -> "https://github.com$href"
-                        else -> null
-                    }
-                }
+            attributePattern.findAll(normalized).forEach { candidates += it.groupValues[1] }
+            // Also inspect raw links embedded in GitHub's page JSON.
+            val urlPattern = Regex(
+                """(?:https?://github\.com)?/[^"'<\s]*?/releases/download/[^"'<\s]*?\.apk(?:\?[^"'<\s]*)?""",
+                RegexOption.IGNORE_CASE
+            )
+            urlPattern.findAll(normalized).forEach { candidates += it.value }
+
+            return candidates.asSequence().mapNotNull { raw ->
+                val href = raw.trim()
+                val decoded = runCatching {
+                    java.net.URLDecoder.decode(href.replace("+", "%2B"), "UTF-8")
+                }.getOrDefault(href)
+                val absolute = when {
+                    decoded.startsWith("https://") -> decoded
+                    decoded.startsWith("/") -> "https://github.com$decoded"
+                    else -> null
+                } ?: return@mapNotNull null
+                val path = absolute.substringBefore('?').substringBefore('#')
+                if (path.contains("/releases/download/", ignoreCase = true) &&
+                    path.endsWith(".apk", ignoreCase = true)
+                ) absolute else null
             }.firstOrNull()
         }
 
