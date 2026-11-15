@@ -218,7 +218,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             selected = selectedNav == index,
                             onClick = { selectedNav = index },
                             icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleLarge) },
-                            label = { Text(label, style = MaterialTheme.typography.labelLarge) }
+                            label = { Text(label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, lineHeight = 18.sp, fontWeight = if (selectedNav == index) FontWeight.SemiBold else FontWeight.Medium), maxLines = 1) }
                         )
                     }
                 }
@@ -808,17 +808,19 @@ private fun TrendsSummary(events: List<BabyEventEntity>) {
                 Text("数据统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Text("${recent.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Text("统计周期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("近7天", "近30天", "近90天", "全部"), range) { range = it }
+            Text("记录类型", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("全部", "喂养", "护理", "睡眠", "成长"), category) { category = it }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
             }
-            if (category == "全部" || category == "喂养") Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (category == "全部" || category == "喂养") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("🍼", "配方奶总量", "${milk} ml", Modifier.weight(1f))
                 SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
             }
-            if (category == "全部" || category == "护理") Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
                 SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
             }
@@ -1510,10 +1512,16 @@ private fun TodaySummary(events: List<BabyEventEntity>) {
 
 @Composable
 private fun SummaryPill(emoji: String, label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.background(Color(0xFFFFF5F0), RoundedCornerShape(12.dp)).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier.fillMaxWidth().heightIn(min = 84.dp)
+            .background(Color(0xFFFFF5F0), RoundedCornerShape(14.dp))
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
+    ) {
         Text(emoji)
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 
