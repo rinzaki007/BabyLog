@@ -14,7 +14,15 @@ password_hash=PasswordHash.recommended(); bearer=HTTPBearer(auto_error=False)
 app=FastAPI(title="BabyLog Sync Server",docs_url=None,redoc_url=None,openapi_url=None)
 
 class Credentials(BaseModel):
-    email:str=Field(min_length=3,max_length=254); password:str=Field(min_length=10,max_length=128)
+    username:str|None=Field(default=None,min_length=3,max_length=32)
+    email:str|None=Field(default=None,min_length=3,max_length=254)
+    password:str=Field(min_length=10,max_length=128)
+class UsernameChange(BaseModel):
+    username:str=Field(min_length=3,max_length=32)
+    current_password:str=Field(min_length=10,max_length=128)
+class PasswordChange(BaseModel):
+    current_password:str=Field(min_length=10,max_length=128)
+    new_password:str=Field(min_length=10,max_length=128)
 class FamilyCreate(BaseModel): name:str=Field(default="我的家庭",min_length=1,max_length=80)
 class InviteJoin(BaseModel): code:str=Field(min_length=20,max_length=128)
 class Change(BaseModel):
@@ -41,6 +49,11 @@ def init_db():
         CREATE TABLE IF NOT EXISTS photos(id TEXT PRIMARY KEY,family_id TEXT NOT NULL,relative_path TEXT NOT NULL,mime_type TEXT NOT NULL,size_bytes INTEGER NOT NULL,created_at INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS idx_changes_family_seq ON changes(family_id,seq);
         """)
+        columns={row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+        if "username" not in columns:
+            db.execute("ALTER TABLE users ADD COLUMN username TEXT")
+        db.execute("UPDATE users SET username=lower(email) WHERE username IS NULL OR username=''")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)")
 init_db()
 
 def issue_token(uid):
@@ -53,6 +66,8 @@ def current_user(creds:HTTPAuthorizationCredentials|None=Depends(bearer)):
 def require_member(db,fid,uid):
     if not db.execute("SELECT 1 FROM family_members WHERE family_id=? AND user_id=?",(fid,uid)).fetchone(): raise HTTPException(403,"无权访问该家庭")
 def clean_email(email): return email.strip().lower()
+def clean_username(value): return value.strip().lower()
+def valid_username(value): return 3 <= len(value) <= 32 and all(c.isalnum() or c in "._-" for c in value)
 
 @app.get("/health")
 def health():
@@ -60,18 +75,28 @@ def health():
     return {"status":"ok","service":"babylog-sync"}
 @app.post("/api/auth/register")
 def register(body:Credentials):
-    email=clean_email(body.email)
-    if "@" not in email: raise HTTPException(422,"邮箱格式不正确")
+    if body.username:
+        username=clean_username(body.username)
+        if not valid_username(username): raise HTTPException(422,"账号名需为 3-32 位字母、数字或 . _ -")
+        email=clean_email(body.email) if body.email else username+"@babylog.local"
+    else:
+        email=clean_email(body.email or "")
+        if "@" not in email: raise HTTPException(422,"请填写有效账号名或邮箱")
+        username=email
     uid=str(uuid.uuid4())
     try:
-        with connect() as db: db.execute("INSERT INTO users VALUES (?,?,?,?)",(uid,email,password_hash.hash(body.password),int(time.time())))
-    except sqlite3.IntegrityError: raise HTTPException(409,"该邮箱已注册")
-    return {"access_token":issue_token(uid),"token_type":"bearer","user_id":uid}
+        with connect() as db:
+            db.execute("INSERT INTO users(id,email,password_hash,created_at,username) VALUES (?,?,?,?,?)",
+                (uid,email,password_hash.hash(body.password),int(time.time()),username))
+    except sqlite3.IntegrityError: raise HTTPException(409,"该账号名或邮箱已注册")
+    return {"access_token":issue_token(uid),"token_type":"bearer","user_id":uid,"username":username}
 @app.post("/api/auth/login")
 def login(body:Credentials):
-    with connect() as db: user=db.execute("SELECT * FROM users WHERE email=?",(clean_email(body.email),)).fetchone()
-    if not user or not password_hash.verify(body.password,user["password_hash"]): raise HTTPException(401,"邮箱或密码错误")
-    return {"access_token":issue_token(user["id"]),"token_type":"bearer","user_id":user["id"]}
+    identifier=clean_username(body.username or body.email or "")
+    with connect() as db:
+        user=db.execute("SELECT * FROM users WHERE username=? OR email=?",(identifier,clean_email(identifier))).fetchone()
+    if not user or not password_hash.verify(body.password,user["password_hash"]): raise HTTPException(401,"账号名/邮箱或密码错误")
+    return {"access_token":issue_token(user["id"]),"token_type":"bearer","user_id":user["id"],"username":user["username"]}
 @app.get("/api/me")
 def me(uid:str=Depends(current_user)):
     # Provision a default data space for legacy accounts on first profile lookup.
@@ -84,7 +109,31 @@ def me(uid:str=Depends(current_user)):
             db.execute("INSERT INTO families VALUES (?,?,?)",(fid,"我的家庭",now))
             db.execute("INSERT INTO family_members VALUES (?,?,?,?)",(fid,uid,"owner",now))
             rows=db.execute("SELECT f.id,f.name,m.role FROM families f JOIN family_members m ON m.family_id=f.id WHERE m.user_id=? ORDER BY m.joined_at,f.created_at",(uid,)).fetchall()
-    return {"user_id":uid,"families":[dict(r) for r in rows]}
+        account=db.execute("SELECT username FROM users WHERE id=?",(uid,)).fetchone()
+    return {"user_id":uid,"username":account["username"] if account else "","families":[dict(r) for r in rows]}
+@app.post("/api/account/username")
+def change_username(body:UsernameChange,uid:str=Depends(current_user)):
+    username=clean_username(body.username)
+    if not valid_username(username): raise HTTPException(422,"账号名需为 3-32 位字母、数字或 . _ -")
+    with connect() as db:
+        user=db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
+        if not user or not password_hash.verify(body.current_password,user["password_hash"]):
+            raise HTTPException(401,"当前密码错误")
+        try:
+            db.execute("UPDATE users SET username=? WHERE id=?",(username,uid))
+        except sqlite3.IntegrityError:
+            raise HTTPException(409,"该账号名已被使用")
+    return {"updated":True,"username":username}
+
+@app.post("/api/account/password")
+def change_password(body:PasswordChange,uid:str=Depends(current_user)):
+    with connect() as db:
+        user=db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
+        if not user or not password_hash.verify(body.current_password,user["password_hash"]):
+            raise HTTPException(401,"当前密码错误")
+        db.execute("UPDATE users SET password_hash=? WHERE id=?",(password_hash.hash(body.new_password),uid))
+    return {"updated":True}
+
 @app.post("/api/families")
 def create_family(body:FamilyCreate,uid:str=Depends(current_user)):
     fid=str(uuid.uuid4()); now=int(time.time())
