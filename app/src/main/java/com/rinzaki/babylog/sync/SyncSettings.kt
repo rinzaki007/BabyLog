@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -116,10 +117,22 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
         title = { Text("设置", fontWeight = FontWeight.Bold) },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth().height(520.dp).verticalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 AppUpdateSection()
+
+                Text("同步状态", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (pendingCount == 0 && conflictCount == 0) "本机同步队列已清空，没有待处理项目。"
+                    else "待同步 $pendingCount 项 · 冲突 $conflictCount 项",
+                    color = if (conflictCount > 0) androidx.compose.material3.MaterialTheme.colorScheme.error
+                    else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "记录会先保存在本机；联网后自动同步到 NAS。切换服务器或退出账号前，请先处理未完成的同步项目。",
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                )
 
                 Text("NAS 同步服务器", fontWeight = FontWeight.SemiBold)
                 if (server.isNotBlank() && !editingServer) {
