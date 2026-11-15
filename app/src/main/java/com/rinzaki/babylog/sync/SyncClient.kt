@@ -38,7 +38,8 @@ object SyncPreferences {
             return runCatching { SecureTokenStore.decrypt(encrypted) }.getOrElse {
                 // A Keystore key can become unavailable after device security changes.
                 // Fail closed and require a fresh login instead of using an unreadable token.
-                preferences.edit().remove("token_encrypted").remove("token").commit()
+                // Keep the encrypted value for diagnostics/retry; a fresh login can
+                // safely overwrite it. Never erase credential material on read failure.
                 ""
             }
         }
