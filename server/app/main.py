@@ -1,4 +1,4 @@
-import asyncio, hashlib, json, os, re, secrets, sqlite3, time, uuid, tempfile, zipfile
+import asyncio, hashlib, io, json, os, re, secrets, sqlite3, time, uuid, tempfile, zipfile
 from pathlib import Path
 from typing import Any
 import jwt
@@ -548,11 +548,17 @@ def _web_family(uid:str):
     return profile,profile["families"][0]
 
 @app.get("/api/web/overview")
-def web_overview(response:Response,uid:str=Depends(current_user)):
+def web_overview(response:Response,uid:str=Depends(current_user),
+    event_limit:int=50,event_offset:int=0,photo_limit:int=60,photo_offset:int=0,
+    event_from:int|None=None,event_to:int|None=None,photo_from:int|None=None,photo_to:int|None=None):
     response.headers["Cache-Control"]="no-store"
+    if not 1<=event_limit<=100 or not 1<=photo_limit<=120 or event_offset<0 or photo_offset<0:
+        raise HTTPException(422,"分页参数无效")
+    for start,end in ((event_from,event_to),(photo_from,photo_to)):
+        if start is not None and end is not None and start>end: raise HTTPException(422,"日期范围无效")
     profile,family=_web_family(uid); fid=family["id"]
     with connect() as db:
-        rows=db.execute("SELECT entity_type,entity_id,payload,version,updated_at FROM records WHERE family_id=? AND deleted=0 ORDER BY updated_at DESC",(fid,)).fetchall()
+        rows=db.execute("SELECT entity_type,entity_id,payload,version,updated_at FROM records WHERE family_id=? AND deleted=0 AND entity_type IN ('baby','event','photo')",(fid,)).fetchall()
         photo_rows=db.execute("SELECT id,relative_path,mime_type,size_bytes,created_at FROM photos WHERE family_id=?",(fid,)).fetchall()
     babies=[]; events=[]; photos=[]
     for row in rows:
@@ -572,14 +578,18 @@ def web_overview(response:Response,uid:str=Depends(current_user)):
     photo_files={r["id"]:r for r in photo_rows}
     for item in photos:
         meta=photo_files.get(item["id"])
-        if meta:
-            item["mime_type"]=meta["mime_type"]; item["size_bytes"]=meta["size_bytes"]
+        if meta: item["mime_type"]=meta["mime_type"]; item["size_bytes"]=meta["size_bytes"]
         else: item["missing_file"]=True
-    events.sort(key=lambda x:int(x["payload"].get("occurredAt") or 0),reverse=True)
-    photos.sort(key=lambda x:int(x["payload"].get("takenAt") or 0),reverse=True)
+    events.sort(key=lambda x:(int(x["payload"].get("occurredAt") or 0),x["id"]),reverse=True)
+    photos.sort(key=lambda x:(int(x["payload"].get("takenAt") or 0),x["id"]),reverse=True)
+    event_filtered=[x for x in events if (event_from is None or int(x["payload"].get("occurredAt") or 0)>=event_from) and (event_to is None or int(x["payload"].get("occurredAt") or 0)<event_to)]
+    photo_filtered=[x for x in photos if (photo_from is None or int(x["payload"].get("takenAt") or 0)>=photo_from) and (photo_to is None or int(x["payload"].get("takenAt") or 0)<photo_to)]
     return {"user":{"username":profile["username"]},"family":family,
         "counts":{"babies":len(babies),"events":len(events),"photos":len(photos)},
-        "babies":babies,"events":events[:100],"photos":photos[:120]}
+        "babies":babies,"events":event_filtered[event_offset:event_offset+event_limit],
+        "photos":photo_filtered[photo_offset:photo_offset+photo_limit],
+        "pagination":{"events":{"total":len(event_filtered),"offset":event_offset,"limit":event_limit,"has_more":event_offset+event_limit<len(event_filtered)},
+                      "photos":{"total":len(photo_filtered),"offset":photo_offset,"limit":photo_limit,"has_more":photo_offset+photo_limit<len(photo_filtered)}}}
 
 @app.get("/api/web/export")
 def web_export(uid:str=Depends(current_user)):
@@ -622,6 +632,112 @@ def web_export(uid:str=Depends(current_user)):
     filename=f"BabyLog-backup-{time.strftime('%Y%m%d-%H%M%S')}.zip"
     return FileResponse(temp_path,media_type="application/zip",filename=filename,
         headers={"Cache-Control":"no-store"},background=BackgroundTask(lambda:Path(temp_path).unlink(missing_ok=True)))
+
+def _parse_web_backup(raw:bytes):
+    if len(raw)>512*1024*1024: raise HTTPException(413,"备份文件不能超过 512 MB")
+    try: archive=zipfile.ZipFile(io.BytesIO(raw))
+    except Exception: raise HTTPException(400,"备份文件不是有效 ZIP")
+    with archive:
+        infos=archive.infolist()
+        if len(infos)>12000: raise HTTPException(413,"备份文件包含过多条目")
+        total=0; names=set()
+        for info in infos:
+            name=info.filename
+            if "\\" in name: raise HTTPException(400,"备份文件包含不安全路径")
+            path=Path(name)
+            if info.is_dir(): continue
+            if path.is_absolute() or ".." in path.parts or name.startswith("/"):
+                raise HTTPException(400,"备份文件包含不安全路径")
+            if name in names: raise HTTPException(400,"备份文件包含重复路径")
+            names.add(name); total+=info.file_size
+            if total>512*1024*1024: raise HTTPException(413,"备份解压后超过 512 MB")
+        if "backup.json" not in names: raise HTTPException(400,"备份缺少 backup.json")
+        try: backup=json.loads(archive.read("backup.json"))
+        except Exception: raise HTTPException(400,"备份清单无法读取")
+        if not isinstance(backup,dict) or backup.get("format")!="babylog-backup" or backup.get("format_version")!=1:
+            raise HTTPException(400,"不支持的 BabyLog 备份格式")
+        records=backup.get("records")
+        if not isinstance(records,list) or len(records)>10000: raise HTTPException(400,"备份记录数量无效")
+        assets={}; seen=set()
+        for item in records:
+            if not isinstance(item,dict) or item.get("entity_type") not in {"baby","event","photo"} or not isinstance(item.get("payload"),dict):
+                raise HTTPException(400,"备份中包含无效记录")
+            try: entity_id=str(uuid.UUID(str(item.get("entity_id"))))
+            except (ValueError,TypeError,AttributeError): raise HTTPException(400,"备份中包含无效记录 ID")
+            key=(item["entity_type"],entity_id)
+            if key in seen: raise HTTPException(400,"备份中存在重复记录")
+            seen.add(key); item["entity_id"]=entity_id
+            asset=item.get("asset_path")
+            if asset:
+                prefix="photos/" if item["entity_type"]=="photo" else "avatars/" if item["entity_type"]=="baby" else None
+                if not prefix or not isinstance(asset,str) or not asset.startswith(prefix) or Path(asset).name!=asset[len(prefix):] or ".." in Path(asset).parts:
+                    raise HTTPException(400,"备份包含无效媒体路径")
+                if asset not in names: raise HTTPException(400,"备份缺少媒体文件")
+                content=archive.read(asset)
+                if not content or len(content)>MAX_PHOTO_BYTES: raise HTTPException(400,"备份媒体文件大小无效")
+                if item["entity_type"]=="photo" and Path(asset).suffix.lower() not in {".jpg",".jpeg",".png",".webp",".heic",".heif"}:
+                    raise HTTPException(400,"备份照片格式不受支持")
+                if item["entity_type"]=="baby" and Path(asset).suffix.lower()!=".jpg":
+                    raise HTTPException(400,"备份头像格式不受支持")
+                assets[asset]=content
+        return backup,assets
+
+async def _read_web_backup(file:UploadFile):
+    raw=await file.read(512*1024*1024+1)
+    if len(raw)>512*1024*1024: raise HTTPException(413,"备份文件不能超过 512 MB")
+    return _parse_web_backup(raw)
+
+@app.post("/api/web/import/preview")
+async def web_import_preview(file:UploadFile=File(...),uid:str=Depends(current_user)):
+    backup,assets=await _read_web_backup(file)
+    profile,family=_web_family(uid); fid=family["id"]
+    with connect() as db:
+        existing={(r["entity_type"],r["entity_id"]) for r in db.execute("SELECT entity_type,entity_id FROM records WHERE family_id=?",(fid,)).fetchall()}
+    additions=[r for r in backup["records"] if (r["entity_type"],r["entity_id"]) not in existing]
+    return {"valid":True,"family_name":family["name"],"backup_family_name":str(backup.get("family_name") or ""),
+        "total":len(backup["records"]),"new_count":len(additions),"conflict_count":len(backup["records"])-len(additions),
+        "photo_count":sum(1 for r in additions if r["entity_type"]=="photo"),
+        "asset_count":sum(1 for r in additions if r.get("asset_path") in assets)}
+
+@app.post("/api/web/import")
+async def web_import(file:UploadFile=File(...),uid:str=Depends(current_user)):
+    backup,assets=await _read_web_backup(file)
+    profile,family=_web_family(uid); fid=family["id"]; written=[]; imported=0; skipped=0
+    mime_by_ext={".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp",".heic":"image/heic",".heif":"image/heif"}
+    try:
+        with connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            for item in backup["records"]:
+                kind=item["entity_type"]; entity_id=item["entity_id"]
+                if db.execute("SELECT 1 FROM records WHERE family_id=? AND entity_type=? AND entity_id=?",(fid,kind,entity_id)).fetchone():
+                    skipped+=1; continue
+                payload=dict(item["payload"]); asset=item.get("asset_path")
+                if kind=="baby" and payload.get("hasAvatar"):
+                    if asset and asset in assets:
+                        folder=AVATAR_DIR/str(uuid.UUID(fid)); folder.mkdir(parents=True,exist_ok=True)
+                        target=folder/f"{entity_id}.jpg"; temp=target.with_suffix(".jpg.import")
+                        temp.write_bytes(assets[asset]); temp.replace(target); written.append(target)
+                    else: payload["hasAvatar"]=False
+                if kind=="photo":
+                    if not asset or asset not in assets: raise HTTPException(400,"备份照片缺少原始图片文件")
+                    ext=Path(asset).suffix.lower(); mime=mime_by_ext.get(ext)
+                    if not mime: raise HTTPException(400,"备份照片格式不受支持")
+                    folder=PHOTO_DIR/fid; folder.mkdir(parents=True,exist_ok=True)
+                    target=folder/f"{entity_id}{ext}"; temp=target.with_suffix(target.suffix+".import")
+                    temp.write_bytes(assets[asset]); temp.replace(target); written.append(target)
+                    db.execute("INSERT INTO photos VALUES (?,?,?,?,?,?)",(entity_id,fid,str(target.relative_to(PHOTO_DIR)),mime,len(assets[asset]),int(time.time())))
+                payload_json=json.dumps(payload,ensure_ascii=False,separators=(",",":"))
+                now=int(time.time())
+                db.execute("INSERT INTO records VALUES (?,?,?,?,?,?,0)",(fid,kind,entity_id,payload_json,1,now))
+                db.execute("INSERT INTO changes(family_id,entity_type,entity_id,operation_id,payload,version,created_at) VALUES (?,?,?,?,?,?,?)",
+                    (fid,kind,entity_id,str(uuid.uuid4()),json.dumps({"operation":"upsert","payload":payload},ensure_ascii=False),1,now))
+                imported+=1
+    except Exception:
+        for path in written:
+            try: path.unlink(missing_ok=True)
+            except OSError: pass
+        raise
+    return {"imported":imported,"skipped_existing":skipped}
 
 @app.post("/api/families")
 def create_family(body:FamilyCreate,uid:str=Depends(current_user)):
