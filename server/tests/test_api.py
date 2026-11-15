@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("BABYLOG_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("BABYLOG_JWT_SECRET", "test-only-secret-that-is-at-least-32-bytes-long")
+    monkeypatch.setenv("BABYLOG_UPDATE_SYNC_ENABLED", "0")
     import app.main as main
     importlib.reload(main)
     with TestClient(main.app) as test_client:
@@ -346,3 +347,103 @@ def test_legacy_email_account_can_login_and_change_username(client):
     assert client.post("/api/auth/login", json={
         "email": "legacy-parent@example.test", "password": "correct-horse-battery"
     }).status_code == 200
+
+
+def test_nas_app_update_metadata_and_download(client, tmp_path):
+    from app import main
+
+    update_dir = tmp_path / "updates"
+    update_dir.mkdir()
+    apk_bytes = b"fake-signed-apk-content"
+    apk_name = "BabyLog-v1.2.3.apk"
+    (update_dir / apk_name).write_bytes(apk_bytes)
+    digest = __import__("hashlib").sha256(apk_bytes).hexdigest()
+    (update_dir / "latest.json").write_text(__import__("json").dumps({
+        "available": True, "tag": "v1.2.3", "version": "1.2.3",
+        "name": "BabyLog v1.2.3", "notes": "更新说明", "size": len(apk_bytes),
+        "sha256": digest, "file_name": apk_name,
+        "download_path": "/api/app-update/download"
+    }), "utf-8")
+    (update_dir / "status.json").write_text(__import__("json").dumps({
+        "last_check": 100, "last_success": 100, "last_error": None,
+        "current_tag": "v1.2.3"
+    }), "utf-8")
+
+    latest = client.get("/api/app-update/latest")
+    assert latest.status_code == 200
+    assert latest.json()["available"] is True
+    assert latest.json()["version"] == "1.2.3"
+    assert latest.json()["sha256"] == digest
+    assert latest.json()["sync_status"]["last_error"] is None
+
+    status = client.get("/api/app-update/status")
+    assert status.status_code == 200
+    assert status.json()["current_tag"] == "v1.2.3"
+
+    download = client.get("/api/app-update/download")
+    assert download.status_code == 200
+    assert download.content == apk_bytes
+    assert download.headers["x-checksum-sha256"] == digest
+
+
+def test_nas_app_update_download_rejects_missing_or_unsafe_file(client, tmp_path):
+    from app import main
+
+    missing = client.get("/api/app-update/download")
+    assert missing.status_code == 404
+
+    update_dir = tmp_path / "updates"
+    update_dir.mkdir(exist_ok=True)
+    (update_dir / "latest.json").write_text(__import__("json").dumps({
+        "available": True, "file_name": "../outside.apk"
+    }), "utf-8")
+    assert client.get("/api/app-update/download").status_code == 404
+
+
+def test_nas_release_mirror_downloads_official_release_and_hashes_apk(client, tmp_path, monkeypatch):
+    import hashlib
+    import json
+    from app import main
+
+    apk_bytes = b"release-apk-payload"
+    release = {
+        "draft": False,
+        "prerelease": False,
+        "tag_name": "v9.8.7",
+        "name": "BabyLog v9.8.7",
+        "body": "更新说明",
+        "published_at": "2026-11-15T00:00:00Z",
+        "assets": [{
+            "name": "BabyLog-v9.8.7.apk",
+            "browser_download_url": "https://github.com/rinzaki007/BabyLog/releases/download/v9.8.7/BabyLog-v9.8.7.apk",
+            "size": len(apk_bytes)
+        }]
+    }
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+            self.read_once = False
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self, size=-1):
+            if self.read_once:
+                return b""
+            self.read_once = True
+            return self.payload
+
+    responses = [FakeResponse(json.dumps(release).encode()), FakeResponse(apk_bytes)]
+    def fake_urlopen(request, timeout):
+        assert timeout in (20, 45)
+        return responses.pop(0)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    metadata = main.refresh_app_release()
+
+    assert metadata["tag"] == "v9.8.7"
+    assert metadata["sha256"] == hashlib.sha256(apk_bytes).hexdigest()
+    assert (tmp_path / "updates" / "BabyLog-v9.8.7.apk").read_bytes() == apk_bytes
+    assert json.loads((tmp_path / "updates" / "latest.json").read_text("utf-8"))["version"] == "9.8.7"
+    assert json.loads((tmp_path / "updates" / "status.json").read_text("utf-8"))["last_error"] is None

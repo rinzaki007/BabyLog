@@ -1,8 +1,9 @@
-import hashlib, json, os, secrets, sqlite3, time, uuid
+import asyncio, hashlib, json, os, re, secrets, sqlite3, time, uuid
 from pathlib import Path
 from typing import Any
 import jwt
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field
@@ -12,6 +13,113 @@ JWT_SECRET=os.getenv("BABYLOG_JWT_SECRET",""); JWT_ISSUER="babylog-sync"
 TOKEN_TTL=int(os.getenv("BABYLOG_TOKEN_TTL_SECONDS","2592000")); MAX_PHOTO_BYTES=int(os.getenv("BABYLOG_MAX_PHOTO_BYTES",str(20*1024*1024)))
 password_hash=PasswordHash.recommended(); bearer=HTTPBearer(auto_error=False)
 app=FastAPI(title="BabyLog Sync Server",docs_url=None,redoc_url=None,openapi_url=None)
+
+UPDATE_DIR=DATA_DIR/"updates"
+UPDATE_META=UPDATE_DIR/"latest.json"
+UPDATE_STATUS=UPDATE_DIR/"status.json"
+UPDATE_RELEASE_API="https://api.github.com/repos/rinzaki007/BabyLog/releases/latest"
+UPDATE_MAX_BYTES=250*1024*1024
+_update_task=None
+
+def _read_json(path:Path, default:dict):
+    try: return json.loads(path.read_text("utf-8"))
+    except (OSError, ValueError): return default
+
+def _write_json_atomic(path:Path, payload:dict):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    temp=path.with_suffix(path.suffix+".tmp")
+    temp.write_text(json.dumps(payload,ensure_ascii=False,indent=2),"utf-8")
+    os.replace(temp,path)
+
+def refresh_app_release():
+    import urllib.request
+    UPDATE_DIR.mkdir(parents=True,exist_ok=True)
+    checked=int(time.time())
+    status=_read_json(UPDATE_STATUS,{})
+    try:
+        request=urllib.request.Request(UPDATE_RELEASE_API,headers={
+            "Accept":"application/vnd.github+json","User-Agent":"BabyLog-NAS-Updater"
+        })
+        with urllib.request.urlopen(request,timeout=20) as response:
+            release=json.loads(response.read(2*1024*1024).decode("utf-8"))
+        if release.get("draft") or release.get("prerelease"):
+            raise ValueError("最新正式 Release 不可用")
+        tag=str(release.get("tag_name","")).strip()
+        if not re.fullmatch(r"v?[0-9A-Za-z][0-9A-Za-z._+-]{0,63}",tag):
+            raise ValueError("Release 版本标签无效")
+        assets=release.get("assets") or []
+        asset=next((item for item in assets if str(item.get("name","")).lower().endswith(".apk")),None)
+        if not asset: raise ValueError("最新 Release 尚未附带 APK")
+        asset_url=str(asset.get("browser_download_url",""))
+        if not asset_url.startswith("https://github.com/rinzaki007/BabyLog/releases/download/"):
+            raise ValueError("APK 下载地址不是官方 Release 地址")
+        filename="BabyLog-"+tag+".apk"
+        target=UPDATE_DIR/filename
+        current=_read_json(UPDATE_META,{})
+        if current.get("tag")==tag and target.is_file() and target.stat().st_size>0:
+            status.update({"last_check":checked,"last_success":status.get("last_success",checked),
+                           "last_error":None,"current_tag":tag})
+            _write_json_atomic(UPDATE_STATUS,status)
+            return current
+        request=urllib.request.Request(asset_url,headers={"User-Agent":"BabyLog-NAS-Updater"})
+        temp=UPDATE_DIR/(filename+".part")
+        digest=hashlib.sha256(); total=0
+        try:
+            with urllib.request.urlopen(request,timeout=45) as response, temp.open("wb") as output:
+                while True:
+                    chunk=response.read(1024*1024)
+                    if not chunk: break
+                    total+=len(chunk)
+                    if total>UPDATE_MAX_BYTES: raise ValueError("APK 超过 250 MB 安全限制")
+                    digest.update(chunk); output.write(chunk)
+            expected_size=int(asset.get("size") or 0)
+            if expected_size and total!=expected_size: raise ValueError("APK 下载大小校验失败")
+            if total<=0: raise ValueError("下载到的 APK 为空")
+            os.replace(temp,target)
+        finally:
+            if temp.exists(): temp.unlink()
+        metadata={
+            "available":True,"tag":tag,"version":tag.lstrip("vV"),
+            "name":str(release.get("name") or ("BabyLog "+tag)),
+            "notes":str(release.get("body") or "本次更新未提供说明。")[:12000],
+            "published_at":release.get("published_at"),"size":total,
+            "sha256":digest.hexdigest(),"file_name":filename,
+            "download_path":"/api/app-update/download","updated_at":checked
+        }
+        _write_json_atomic(UPDATE_META,metadata)
+        apk_files=sorted(UPDATE_DIR.glob("BabyLog-*.apk"),key=lambda item:item.stat().st_mtime,reverse=True)
+        for old in apk_files[2:]:
+            try: old.unlink()
+            except OSError: pass
+        status.update({"last_check":checked,"last_success":checked,"last_error":None,"current_tag":tag})
+        _write_json_atomic(UPDATE_STATUS,status)
+        return metadata
+    except Exception as error:
+        status.update({"last_check":checked,"last_error":str(error)[:500]})
+        _write_json_atomic(UPDATE_STATUS,status)
+        raise
+
+async def app_release_sync_loop():
+    while True:
+        try: await asyncio.to_thread(refresh_app_release)
+        except Exception as error: print(f"[app-update] Release sync failed: {error}",flush=True)
+        await asyncio.sleep(max(300,int(os.getenv("BABYLOG_UPDATE_CHECK_SECONDS","900"))))
+
+@app.on_event("startup")
+async def start_app_release_sync():
+    global _update_task
+    if os.getenv("BABYLOG_UPDATE_SYNC_ENABLED","1").lower() not in {"0","false","no"}:
+        _update_task=asyncio.create_task(app_release_sync_loop())
+
+@app.on_event("shutdown")
+async def stop_app_release_sync():
+    global _update_task
+    if _update_task:
+        _update_task.cancel()
+        try: await _update_task
+        except asyncio.CancelledError: pass
+        _update_task=None
+
 
 class Credentials(BaseModel):
     username:str|None=Field(default=None,min_length=3,max_length=32)
@@ -73,6 +181,37 @@ def valid_username(value): return 3 <= len(value) <= 32 and all(c.isalnum() or c
 def health():
     with connect() as db: db.execute("SELECT 1").fetchone()
     return {"status":"ok","service":"babylog-sync"}
+
+@app.get("/api/app-update/latest")
+def app_update_latest():
+    metadata=_read_json(UPDATE_META,{"available":False})
+    status=_read_json(UPDATE_STATUS,{})
+    return {**metadata,"available":bool(metadata.get("available")),"sync_status":{
+        "last_check":status.get("last_check"),"last_success":status.get("last_success"),
+        "last_error":status.get("last_error"),"current_tag":status.get("current_tag")
+    }}
+
+@app.get("/api/app-update/status")
+def app_update_status():
+    metadata=_read_json(UPDATE_META,{"available":False})
+    status=_read_json(UPDATE_STATUS,{})
+    return {"available":bool(metadata.get("available")),"version":metadata.get("version"),
+            "tag":metadata.get("tag"),"size":metadata.get("size"),
+            "sha256":metadata.get("sha256"),**status}
+
+@app.get("/api/app-update/download")
+def app_update_download():
+    metadata=_read_json(UPDATE_META,{})
+    filename=metadata.get("file_name","")
+    if not metadata.get("available") or not re.fullmatch(r"BabyLog-[A-Za-z0-9._+-]{1,64}\.apk",str(filename)):
+        raise HTTPException(404,"NAS 尚未准备好更新安装包")
+    apk=(UPDATE_DIR/filename).resolve()
+    if apk.parent!=UPDATE_DIR.resolve() or not apk.is_file():
+        raise HTTPException(404,"更新安装包不存在")
+    return FileResponse(apk,media_type="application/vnd.android.package-archive",
+                        filename=filename,headers={"Cache-Control":"no-store",
+                        "X-Checksum-Sha256":str(metadata.get("sha256",""))})
+
 @app.post("/api/auth/register")
 def register(body:Credentials):
     if body.username:
