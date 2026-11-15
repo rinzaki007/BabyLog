@@ -1,5 +1,6 @@
 package com.rinzaki.babylog
 
+import android.graphics.BitmapFactory
 import android.content.ContentValues
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
