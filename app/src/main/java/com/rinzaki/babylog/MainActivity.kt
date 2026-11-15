@@ -11,6 +11,14 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.lazy.LazyRow
@@ -26,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -100,6 +109,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlin.math.roundToInt
 import java.io.File
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -141,6 +151,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var editingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
     var deletingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
     var showQuickRecordMenu by remember { mutableStateOf(false) }
+    var showSyncDetails by remember { mutableStateOf(false) }
+    var quickRecordHidden by remember { mutableStateOf(appContext.getSharedPreferences("babylog_ui", 0).getBoolean("quick_record_hidden", false)) }
+    var fabOffsetX by remember { mutableStateOf(0f) }
+    var fabOffsetY by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
     val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
@@ -195,19 +209,56 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 }
             },
             floatingActionButton = {
-                if (baby != null) Box {
-                    FloatingActionButton(onClick = { showQuickRecordMenu = true }) { Text("＋ 记录") }
-                    DropdownMenu(expanded = showQuickRecordMenu, onDismissRequest = { showQuickRecordMenu = false }) {
-                        listOf("FEEDING" to "🍼 喂养", "DIAPER" to "🌿 大小便", "SLEEP" to "🌙 睡眠", "GROWTH" to "📏 成长测量").forEach { (type, label) ->
-                            DropdownMenuItem(text = { Text(label) }, onClick = { addingEvent = type; showQuickRecordMenu = false })
+                if (baby != null) {
+                    if (!quickRecordHidden) {
+                        Box {
+                            FloatingActionButton(
+                                onClick = { showQuickRecordMenu = true },
+                                modifier = Modifier
+                                    .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
+                                    .pointerInput(Unit) {
+                                        detectDragGestures { change, dragAmount ->
+                                            change.consume()
+                                            fabOffsetX = (fabOffsetX + dragAmount.x).coerceIn(-520f, 0f)
+                                            fabOffsetY = (fabOffsetY + dragAmount.y).coerceIn(-1200f, 0f)
+                                        }
+                                    }
+                            ) { Text("＋ 记录") }
+                            DropdownMenu(expanded = showQuickRecordMenu, onDismissRequest = { showQuickRecordMenu = false }) {
+                                listOf("FEEDING" to "🍼 喂养", "DIAPER" to "🌿 大小便", "SLEEP" to "🌙 睡眠", "GROWTH" to "📏 成长测量").forEach { (type, label) ->
+                                    DropdownMenuItem(text = { Text(label) }, onClick = { addingEvent = type; showQuickRecordMenu = false })
+                                }
+                                DropdownMenuItem(text = { Text("隐藏快捷记录按钮") }, onClick = {
+                                    quickRecordHidden = true
+                                    appContext.getSharedPreferences("babylog_ui", 0).edit().putBoolean("quick_record_hidden", true).apply()
+                                    showQuickRecordMenu = false
+                                })
+                            }
                         }
+                    } else {
+                        androidx.compose.material3.SmallFloatingActionButton(onClick = {
+                            quickRecordHidden = false
+                            appContext.getSharedPreferences("babylog_ui", 0).edit().putBoolean("quick_record_hidden", false).apply()
+                        }) { Text("＋") }
                     }
                 }
             }
         ) { scaffoldPadding ->
             LazyColumn(
                 state = pageListStates[selectedNav],
-                modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
+                modifier = Modifier.fillMaxSize().padding(scaffoldPadding).pointerInput(selectedNav) {
+                    var horizontalTravel = 0f
+                    val swipeThreshold = 72.dp.toPx()
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, dragAmount -> horizontalTravel += dragAmount },
+                        onDragEnd = {
+                            if (horizontalTravel < -swipeThreshold) selectedNav = (selectedNav + 1).coerceAtMost(4)
+                            else if (horizontalTravel > swipeThreshold) selectedNav = (selectedNav - 1).coerceAtLeast(0)
+                            horizontalTravel = 0f
+                        },
+                        onDragCancel = { horizontalTravel = 0f }
+                    )
+                },
                 contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 36.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -218,6 +269,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 Text("BABYLOG", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 Text("成长的每一天", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                             }
+                            if (quickRecordHidden && baby != null) TextButton(onClick = {
+                                quickRecordHidden = false
+                                appContext.getSharedPreferences("babylog_ui", 0).edit().putBoolean("quick_record_hidden", false).apply()
+                            }) { Text("＋ 记录") }
                             OutlinedButton(onClick = { showSyncSettings = true }, contentPadding = PaddingValues(horizontal = 13.dp, vertical = 7.dp)) {
                                 Text("⚙ 设置")
                             }
@@ -240,58 +295,48 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                 }
                 if (selectedNav == 0) item {
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("家庭数据同步", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                Text(
-                                    when {
-                                        SyncPreferences.familyId(appContext).isBlank() -> "离线模式"
-                                        syncing -> "正在同步"
-                                        !syncError.isNullOrBlank() -> "需要检查"
-                                        lastSyncAt > 0L -> "同步正常"
-                                        else -> "等待首次同步"
-                                    },
-                                    color = when {
-                                        !syncError.isNullOrBlank() -> MaterialTheme.colorScheme.error
-                                        syncing -> MaterialTheme.colorScheme.primary
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    Text(
-                                        if (syncing) "正在交换本地与云端数据…" else if (!syncError.isNullOrBlank()) "上次同步未完成" else "自动同步已开启",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                    Text(
-                                        if (lastSyncAt > 0L) "上次成功：${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt))}" else "尚无成功同步记录",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            color = Color.White,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth().clickable { showSyncDetails = !showSyncDetails }
+                        ) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                val syncLabel = when {
+                                    SyncPreferences.familyId(appContext).isBlank() -> "离线保存"
+                                    syncing -> "正在同步"
+                                    !syncError.isNullOrBlank() -> "同步需要检查"
+                                    lastSyncAt > 0L -> "家庭同步正常"
+                                    else -> "等待首次同步"
                                 }
-                                OutlinedButton(
-                                    enabled = SyncPreferences.familyId(appContext).isNotBlank() && !syncing,
-                                    onClick = { SyncScheduler.enqueue(appContext) }
-                                ) { Text(if (syncing) "同步中" else "立即同步") }
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("本地与云端校验", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                Box(Modifier.size(8.dp).background(
+                                    when { !syncError.isNullOrBlank() -> MaterialTheme.colorScheme.error; syncing -> MaterialTheme.colorScheme.primary; else -> Color(0xFF55A477) },
+                                    CircleShape
+                                ))
+                                Text(syncLabel, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 9.dp).weight(1f))
                                 Text(
-                                    syncConsistency ?: "尚未校验",
+                                    if (lastSyncAt > 0L) SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(lastSyncAt)) else "查看详情",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (syncConsistency == "一致") Color(0xFF38845B) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.SemiBold
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                Text(if (showSyncDetails) "⌃" else "⌄", modifier = Modifier.padding(start = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            if (!syncError.isNullOrBlank()) {
-                                Text("同步失败：$syncError", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                        }
+                        if (showSyncDetails) Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(if (syncing) "正在交换本地与云端数据…" else "自动同步已开启", style = MaterialTheme.typography.bodyMedium)
+                                        Text(if (lastSyncAt > 0L) "上次成功：${SimpleDateFormat("yyyy年M月d日 HH时mm分", Locale.CHINA).format(Date(lastSyncAt))}" else "尚无成功同步记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    OutlinedButton(enabled = SyncPreferences.familyId(appContext).isNotBlank() && !syncing, onClick = { SyncScheduler.enqueue(appContext) }) { Text(if (syncing) "同步中" else "立即同步") }
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("本地与云端校验", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(syncConsistency ?: "尚未校验", style = MaterialTheme.typography.labelSmall, color = if (syncConsistency == "一致") Color(0xFF38845B) else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                                }
+                                if (!syncError.isNullOrBlank()) Text("同步提示：$syncError", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                                TextButton(onClick = { showSyncSettings = true }) { Text("家庭同步设置") }
                             }
                         }
                     }
@@ -772,36 +817,54 @@ private fun VaccineEditor(existing: BabyEventEntity?, initialName: String = "", 
 
 @Composable
 private fun TrendsSummary(events: List<BabyEventEntity>) {
-    val weekStart = LocalDate.now().minusDays(6).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val recent = events.filter { it.occurredAt >= weekStart }
-    val milk = recent.filter { it.eventType == "FEEDING" }.sumOf {
-        runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0)
+    var range by remember { mutableStateOf("近7天") }
+    var category by remember { mutableStateOf("全部") }
+    val days = when (range) { "近7天" -> 7L; "近30天" -> 30L; "近90天" -> 90L; else -> Long.MAX_VALUE }
+    val start = if (days == Long.MAX_VALUE) 0L else LocalDate.now().minusDays(days - 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val ranged = events.filter { it.occurredAt >= start }
+    val recent = ranged.filter { event ->
+        when (category) {
+            "喂养" -> event.eventType == "FEEDING"
+            "护理" -> event.eventType == "DIAPER"
+            "睡眠" -> event.eventType == "SLEEP"
+            "成长" -> event.eventType == "GROWTH"
+            else -> true
+        }
     }
+    val milk = recent.filter { it.eventType == "FEEDING" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0) }
     val feedCount = recent.count { it.eventType == "FEEDING" }
     val peeCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("urine") }.getOrDefault(false) }
     val stoolCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
-    val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf {
-        runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0)
-    }
+    val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0) }
+    val daysCovered = if (days == Long.MAX_VALUE) {
+        if (recent.isEmpty()) 1 else (((System.currentTimeMillis() - (recent.minOf { it.occurredAt })) / 86400000L) + 1).coerceAtLeast(1)
+    } else days
+    val average = recent.size.toDouble() / daysCovered.toDouble()
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("近 7 天趋势", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text("按记录自动统计", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("数据统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("${recent.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            SelectionRow(listOf("近7天", "近30天", "近90天", "全部"), range) { range = it }
+            SelectionRow(listOf("全部", "喂养", "护理", "睡眠", "成长"), category) { category = it }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryPill("🍼", "配方奶", "$milk ml", Modifier.weight(1f))
-                SummaryPill("🧴", "喂养次数", "$feedCount 次", Modifier.weight(1f))
+                SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
+                SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryPill("💧", "小便", "$peeCount 次", Modifier.weight(1f))
-                SummaryPill("🌿", "大便", "$stoolCount 次", Modifier.weight(1f))
-                SummaryPill("🌙", "睡眠", if (sleepMinutes >= 60) "${sleepMinutes / 60}h" else "${sleepMinutes}m", Modifier.weight(1f))
+            if (category == "全部" || category == "喂养") Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryPill("🍼", "配方奶总量", "${milk} ml", Modifier.weight(1f))
+                SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
             }
+            if (category == "全部" || category == "护理") Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
+                SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
+            }
+            if (category == "全部" || category == "睡眠") SummaryPill("🌙", "睡眠时长", if (sleepMinutes >= 60) "${sleepMinutes / 60}小时${sleepMinutes % 60}分" else "${sleepMinutes}分钟", Modifier.fillMaxWidth())
+            if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
-
 @Composable
 private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     var metric by remember { mutableStateOf("体重") }
@@ -905,12 +968,19 @@ private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     Text(points.last().first.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(dateFormat) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text("${points.size} 次测量 · 最新记录 ${SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                points.takeLast(5).asReversed().forEach { point ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(point.first)), modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${"%.2f".format(Locale.CHINA, point.second)} $unit", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
             Text("曲线按实际日期间隔绘制，仅展示已记录的数据，不代表医学评估；建议按医生建议解读。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun BabyAlbumSection(
     baby: BabyEntity,
@@ -931,6 +1001,19 @@ private fun BabyAlbumSection(
     var galleryMessage by remember { mutableStateOf<String?>(null) }
     var pendingPhotoUris by remember { mutableStateOf<List<android.net.Uri>>(emptyList()) }
     var showPhotoTimePicker by remember { mutableStateOf(false) }
+    var albumFilter by remember { mutableStateOf("全部") }
+    var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
+    var showPhotoDatePicker by remember { mutableStateOf(false) }
+    val filteredPhotos = photos.filter { photo ->
+        val date = java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
+        when (albumFilter) {
+            "近7天" -> photo.takenAt >= System.currentTimeMillis() - 7L * 86400000L
+            "近30天" -> photo.takenAt >= System.currentTimeMillis() - 30L * 86400000L
+            "本月" -> date.year == LocalDate.now().year && date.month == LocalDate.now().month
+            "指定日期" -> selectedPhotoDate == date
+            else -> true
+        }
+    }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(20)
     ) { uris ->
@@ -959,6 +1042,13 @@ private fun BabyAlbumSection(
             }
         }
 
+        SelectionRow(listOf("全部", "近7天", "近30天", "本月", "指定日期"), albumFilter) { selected ->
+            albumFilter = selected
+            if (selected == "指定日期") showPhotoDatePicker = true
+        }
+        if (albumFilter == "指定日期" && selectedPhotoDate != null) {
+            Text("已筛选：${selectedPhotoDate!!.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        }
         if (photos.isEmpty()) {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -979,9 +1069,10 @@ private fun BabyAlbumSection(
                 }
             }
         } else {
-            val grouped = photos.sortedByDescending { it.takenAt }.groupBy {
+            val grouped = filteredPhotos.sortedByDescending { it.takenAt }.groupBy {
                 SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(it.takenAt))
             }
+            if (filteredPhotos.isEmpty()) Text("这个日期范围内还没有照片。", modifier = Modifier.fillMaxWidth().padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             grouped.forEach { (day, dayPhotos) ->
                 val photoRows = dayPhotos.chunked(3)
                 Row(
@@ -1051,74 +1142,55 @@ private fun BabyAlbumSection(
                     runCatching { decodeSampledPhoto(photo.localPath, 1600, 2000) }.getOrNull()
                 }
             }
-            Surface(
-                shape = RoundedCornerShape(0.dp),
-                color = Color(0xFFFFF9F5),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Column(
-                    Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            var zoom by remember(photo.id) { mutableStateOf(1f) }
+            var panX by remember(photo.id) { mutableStateOf(0f) }
+            var panY by remember(photo.id) { mutableStateOf(0f) }
+            val zoomState = rememberTransformableState { zoomChange, panChange, _ ->
+                zoom = (zoom * zoomChange).coerceIn(1f, 5f)
+                panX += panChange.x
+                panY += panChange.y
+            }
+            Surface(shape = RoundedCornerShape(0.dp), color = Color.Black, modifier = Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(
-                                SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(photo.takenAt)),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF302B38)
-                            )
-                            Text(
-                                SimpleDateFormat("HH时mm分", Locale.CHINA).format(Date(photo.takenAt)),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF716B78)
-                            )
+                            Text(SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(photo.takenAt)), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(SimpleDateFormat("HH时mm分", Locale.CHINA).format(Date(photo.takenAt)), style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
                         }
-                        TextButton(onClick = { viewingPhoto = null }) { Text("关闭") }
+                        TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("重置", color = Color.White) }
+                        TextButton(onClick = { viewingPhoto = null }) { Text("关闭", color = Color.White) }
                     }
                     Box(
-                        Modifier.fillMaxWidth().weight(1f),
+                        Modifier.fillMaxWidth().weight(1f)
+                            .pointerInput(photo.id) {
+                                detectTapGestures(onDoubleTap = {
+                                    if (zoom > 1f) { zoom = 1f; panX = 0f; panY = 0f } else zoom = 2.5f
+                                })
+                            }
+                            .transformable(zoomState),
                         contentAlignment = Alignment.Center
                     ) {
                         if (bitmap != null) {
-                            // 用同一张照片铺满背景并柔化，填补原图比例与屏幕比例之间的空隙。
-                            // 前景照片保持完整比例，不加卡片底色、圆角或内边距。
                             Image(
                                 bitmap!!.asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize().blur(36.dp),
-                                contentScale = ContentScale.Crop,
-                                alpha = 0.58f
-                            )
-                            Image(
-                                bitmap!!.asImageBitmap(),
-                                contentDescription = "宝宝照片大图",
-                                modifier = Modifier.fillMaxSize(),
+                                contentDescription = "宝宝照片，可双指缩放、拖动查看，双击放大",
+                                modifier = Modifier.fillMaxSize().graphicsLayer {
+                                    scaleX = zoom
+                                    scaleY = zoom
+                                    translationX = panX
+                                    translationY = panY
+                                },
                                 contentScale = ContentScale.Fit
                             )
-                        } else {
-                            Text("照片暂时无法读取", color = Color(0xFF716B78))
-                        }
+                        } else Text("照片暂时无法读取", color = Color.White)
+                        Text("双指缩放 · 双击放大", modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                     }
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            photo.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注",
-                            color = Color(0xFF514A58),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        galleryMessage?.let {
-                            Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
-                        }
+                    Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(photo.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                        galleryMessage?.let { Text(it, color = Color(0xFFD7C9F4), style = MaterialTheme.typography.bodySmall) }
                     }
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = {
-                            editingCaption = photo
-                            viewingPhoto = null
-                        }) { Text("编辑备注") }
+                    Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { editingCaption = photo; viewingPhoto = null }) { Text("编辑备注", color = Color.White) }
                         TextButton(onClick = {
                             albumScope.launch {
                                 galleryMessage = runCatching {
@@ -1126,10 +1198,8 @@ private fun BabyAlbumSection(
                                     "已保存到手机相册"
                                 }.getOrElse { "保存失败：${it.message}" }
                             }
-                        }) { Text("保存到手机") }
-                        TextButton(onClick = { deletingPhoto = photo; viewingPhoto = null }) {
-                            Text("删除", color = MaterialTheme.colorScheme.error)
-                        }
+                        }) { Text("保存到手机", color = Color.White) }
+                        TextButton(onClick = { deletingPhoto = photo; viewingPhoto = null }) { Text("删除", color = Color(0xFFFF8A80)) }
                     }
                 }
             }
@@ -1174,6 +1244,21 @@ private fun BabyAlbumSection(
             },
             dismissButton = { TextButton(onClick = { deletingPhoto = null }) { Text("取消") } }
         )
+    }
+    if (showPhotoDatePicker) {
+        val datePickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = selectedPhotoDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+        )
+        androidx.compose.material3.DatePickerDialog(
+            onDismissRequest = { showPhotoDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedPhotoDate = datePickerState.selectedDateMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() }
+                    showPhotoDatePicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { showPhotoDatePicker = false }) { Text("取消") } }
+        ) { androidx.compose.material3.DatePicker(state = datePickerState) }
     }
     if (showPhotoTimePicker) DateTimeOptionDialog(
         initial = photoDateTime, includeTime = true,
