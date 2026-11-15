@@ -398,3 +398,52 @@ def test_nas_app_update_download_rejects_missing_or_unsafe_file(client, tmp_path
         "available": True, "file_name": "../outside.apk"
     }), "utf-8")
     assert client.get("/api/app-update/download").status_code == 404
+
+
+def test_nas_release_mirror_downloads_official_release_and_hashes_apk(client, tmp_path, monkeypatch):
+    import hashlib
+    import json
+    from app import main
+
+    apk_bytes = b"release-apk-payload"
+    release = {
+        "draft": False,
+        "prerelease": False,
+        "tag_name": "v9.8.7",
+        "name": "BabyLog v9.8.7",
+        "body": "更新说明",
+        "published_at": "2026-11-15T00:00:00Z",
+        "assets": [{
+            "name": "BabyLog-v9.8.7.apk",
+            "browser_download_url": "https://github.com/rinzaki007/BabyLog/releases/download/v9.8.7/BabyLog-v9.8.7.apk",
+            "size": len(apk_bytes)
+        }]
+    }
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+            self.read_once = False
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self, size=-1):
+            if self.read_once:
+                return b""
+            self.read_once = True
+            return self.payload
+
+    responses = [FakeResponse(json.dumps(release).encode()), FakeResponse(apk_bytes)]
+    def fake_urlopen(request, timeout):
+        assert timeout in (20, 45)
+        return responses.pop(0)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    metadata = main.refresh_app_release()
+
+    assert metadata["tag"] == "v9.8.7"
+    assert metadata["sha256"] == hashlib.sha256(apk_bytes).hexdigest()
+    assert (tmp_path / "updates" / "BabyLog-v9.8.7.apk").read_bytes() == apk_bytes
+    assert json.loads((tmp_path / "updates" / "latest.json").read_text("utf-8"))["version"] == "9.8.7"
+    assert json.loads((tmp_path / "updates" / "status.json").read_text("utf-8"))["last_error"] is None
