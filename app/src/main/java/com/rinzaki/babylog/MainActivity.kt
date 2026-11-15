@@ -734,6 +734,8 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                             singleLine = true
                         )
                         Text("单位：毫升（ml）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("常用奶量 · 也可以直接输入其他数值", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SelectionRow(listOf("90", "120", "150", "180", "210"), amountText) { amountText = it }
                     }
                     "DIAPER" -> {
                         Text("护理情况", fontWeight = FontWeight.SemiBold)
@@ -749,6 +751,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                     }
                     "SLEEP" -> {
                         Text("睡眠时长  ${sleepMinutes.toInt()} 分钟", fontWeight = FontWeight.SemiBold)
+                        SelectionRow(listOf("30", "60", "90", "120", "180"), sleepMinutes.toInt().toString()) { sleepMinutes = it.toFloat() }
                         Slider(sleepMinutes, { sleepMinutes = it }, valueRange = 10f..720f, steps = 70)
                     }
                     "GROWTH" -> {
