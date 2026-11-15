@@ -53,3 +53,37 @@ jobs:
           name: BabyLog ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
           generate_release_notes: true
           files: app/build/outputs/apk/release/*.apk
+      - name: Publish public update manifest
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            VERSION_TAG="$GITHUB_REF_NAME"
+          else
+            VERSION_TAG="v${{ inputs.version }}"
+          fi
+          APK_PATH="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+          test -n "$APK_PATH"
+          APK_NAME="$(basename "$APK_PATH")"
+          APK_SIZE="$(stat -c '%s' "$APK_PATH")"
+          APK_SHA256="$(sha256sum "$APK_PATH" | awk '{print $1}')"
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/$VERSION_TAG/$APK_NAME"
+          VERSION="${VERSION_TAG#v}"
+          mkdir -p "$RUNNER_TEMP/babylog-update-feed"
+          cat > "$RUNNER_TEMP/babylog-update-feed/latest.json" <<EOF
+          {
+            "tag": "$VERSION_TAG",
+            "version": "$VERSION",
+            "notes": "BabyLog $VERSION_TAG 官方更新",
+            "url": "$DOWNLOAD_URL",
+            "size": $APK_SIZE,
+            "sha256": "$APK_SHA256"
+          }
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan update-feed
+          git rm -rf . >/dev/null 2>&1 || true
+          cp "$RUNNER_TEMP/babylog-update-feed/latest.json" latest.json
+          git add latest.json
+          git commit -m "chore: publish update manifest $VERSION_TAG"
+          git push --force origin HEAD:updates
