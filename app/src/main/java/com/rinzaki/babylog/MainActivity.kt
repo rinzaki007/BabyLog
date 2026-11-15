@@ -249,11 +249,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 state = pageListStates[selectedNav],
                 modifier = Modifier.fillMaxSize().padding(scaffoldPadding).pointerInput(selectedNav) {
                     var horizontalTravel = 0f
+                    val swipeThreshold = 72.dp.toPx()
                     detectHorizontalDragGestures(
                         onHorizontalDrag = { change, dragAmount -> horizontalTravel += dragAmount },
                         onDragEnd = {
-                            if (horizontalTravel < -72f) selectedNav = (selectedNav + 1).coerceAtMost(4)
-                            else if (horizontalTravel > 72f) selectedNav = (selectedNav - 1).coerceAtLeast(0)
+                            if (horizontalTravel < -swipeThreshold) selectedNav = (selectedNav + 1).coerceAtMost(4)
+                            else if (horizontalTravel > swipeThreshold) selectedNav = (selectedNav - 1).coerceAtLeast(0)
                             horizontalTravel = 0f
                         },
                         onDragCancel = { horizontalTravel = 0f }
@@ -980,6 +981,7 @@ private fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun BabyAlbumSection(
     baby: BabyEntity,
