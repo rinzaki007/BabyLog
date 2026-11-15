@@ -436,7 +436,7 @@ def test_nas_release_mirror_downloads_official_release_and_hashes_apk(client, tm
 
     responses = [FakeResponse(json.dumps(release).encode()), FakeResponse(apk_bytes)]
     def fake_urlopen(request, timeout):
-        assert timeout in (20, 45)
+        assert timeout in (25, 60)
         return responses.pop(0)
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
@@ -485,14 +485,17 @@ def test_nas_release_asset_retries_transient_tls_disconnect(tmp_path, monkeypatc
     attempts = {"count": 0}
 
     class FakeResponse:
+        def __init__(self):
+            self.read_once = False
         def __enter__(self):
             return self
         def __exit__(self, *args):
             return False
         def read(self, size=-1):
-            if attempts["count"] == 2:
-                return payload
-            return b""
+            if self.read_once:
+                return b""
+            self.read_once = True
+            return payload
 
     def flaky_urlopen(request, timeout):
         attempts["count"] += 1
