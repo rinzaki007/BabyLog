@@ -719,11 +719,11 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
     target_token = register(client, "web-import-target@example.test")
     target_login = client.post("/api/web/login", json={"email": "web-import-target@example.test", "password": "correct-horse-battery"})
     assert target_login.status_code == 200
-    preview = client.post("/api/web/import/preview", headers={"Origin": "http://testserver"}, files={"file": ("backup.zip", exported.content, "application/zip")})
+    preview = client.post("/api/web/import/preview", headers={"Origin": "http://testserver", "Content-Type": "application/zip"}, content=exported.content)
     assert preview.status_code == 200, preview.text
     assert preview.json()["new_count"] == 5
     assert preview.json()["photo_count"] == 1
-    imported = client.post("/api/web/import", headers={"Origin": "http://testserver"}, files={"file": ("backup.zip", exported.content, "application/zip")})
+    imported = client.post("/api/web/import", headers={"Origin": "http://testserver", "Content-Type": "application/zip"}, content=exported.content)
     assert imported.status_code == 200, imported.text
     assert imported.json() == {"imported": 5, "skipped_existing": 0}
     target_family = client.get("/api/me", headers=auth(target_token)).json()["families"][0]["id"]
@@ -734,7 +734,7 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
     assert restored_photo.status_code == 200 and restored_photo.content == photo_bytes
     restored_avatar = client.get(f"/api/babies/{baby_id}/avatar?family_id={target_family}")
     assert restored_avatar.status_code == 200 and restored_avatar.content == avatar_bytes
-    repeated = client.post("/api/web/import", headers={"Origin": "http://testserver"}, files={"file": ("backup.zip", exported.content, "application/zip")})
+    repeated = client.post("/api/web/import", headers={"Origin": "http://testserver", "Content-Type": "application/zip"}, content=exported.content)
     assert repeated.status_code == 200
     assert repeated.json() == {"imported": 0, "skipped_existing": 5}
     overview = client.get("/api/web/overview?event_limit=1&event_offset=1")
@@ -749,11 +749,21 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
 def test_web_import_rejects_invalid_archive_without_changing_existing_data(client):
     token = register(client, "web-import-invalid@example.test")
     client.post("/api/web/login", json={"email": "web-import-invalid@example.test", "password": "correct-horse-battery"})
-    invalid = client.post("/api/web/import", headers={"Origin": "http://testserver"}, files={"file": ("bad.zip", b"not a zip", "application/zip")})
+    invalid = client.post("/api/web/import", headers={"Origin": "http://testserver", "Content-Type": "application/zip"}, content=b"not a zip")
     assert invalid.status_code == 400
     overview = client.get("/api/web/overview")
     assert overview.status_code == 200
     assert overview.json()["counts"] == {"babies": 0, "events": 0, "photos": 0}
+
+
+def test_web_import_rejects_empty_raw_body_and_oversized_content_length(client):
+    register(client, "web-import-limits@example.test")
+    client.post("/api/web/login", json={"email": "web-import-limits@example.test", "password": "correct-horse-battery"})
+    headers = {"Origin": "http://testserver", "Content-Type": "application/zip"}
+    empty = client.post("/api/web/import/preview", headers=headers, content=b"")
+    assert empty.status_code == 400
+    oversized = client.post("/api/web/import/preview", headers={**headers, "Content-Length": str(512 * 1024 * 1024 + 1)}, content=b"x")
+    assert oversized.status_code == 413
 
 def test_web_cookie_auth_rejects_cross_origin_mutations(client):
     register(client, "web-csrf@example.test")
