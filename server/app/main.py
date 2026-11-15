@@ -18,12 +18,21 @@ UPDATE_DIR=DATA_DIR/"updates"
 UPDATE_META=UPDATE_DIR/"latest.json"
 UPDATE_STATUS=UPDATE_DIR/"status.json"
 UPDATE_RELEASE_API="https://api.github.com/repos/rinzaki007/BabyLog/releases/latest"
+UPDATE_RELEASE_FEED="https://github.com/rinzaki007/BabyLog/releases.atom"
 UPDATE_MAX_BYTES=250*1024*1024
 _update_task=None
+
+
+class GitHubRateLimitError(RuntimeError):
+    def __init__(self, message, retry_at):
+        super().__init__(message)
+        self.retry_at=int(retry_at)
+
 
 def _read_json(path:Path, default:dict):
     try: return json.loads(path.read_text("utf-8"))
     except (OSError, ValueError): return default
+
 
 def _write_json_atomic(path:Path, payload:dict):
     path.parent.mkdir(parents=True,exist_ok=True)
@@ -31,7 +40,35 @@ def _write_json_atomic(path:Path, payload:dict):
     temp.write_text(json.dumps(payload,ensure_ascii=False,indent=2),"utf-8")
     os.replace(temp,path)
 
+
+def _rate_limit_retry_at(error, attempt=0):
+    import email.utils
+    headers=getattr(error,"headers",None) or {}
+    now=int(time.time())
+    retry_after=headers.get("Retry-After") or headers.get("retry-after")
+    if retry_after:
+        try:
+            return max(now+30,now+int(float(retry_after)))
+        except (TypeError,ValueError):
+            try:
+                parsed=email.utils.parsedate_to_datetime(retry_after)
+                return max(now+30,int(parsed.timestamp()))
+            except (TypeError,ValueError,OverflowError):
+                pass
+    remaining=str(headers.get("X-RateLimit-Remaining") or headers.get("x-ratelimit-remaining") or "")
+    reset=headers.get("X-RateLimit-Reset") or headers.get("x-ratelimit-reset")
+    if remaining=="0" and reset:
+        try:
+            return max(now+30,int(float(reset))+5)
+        except (TypeError,ValueError):
+            pass
+    # GitHub secondary limits may not expose a reset time. Its guidance is
+    # to wait at least one minute, then exponentially increase the delay.
+    return now+min(3600,60*(2**min(max(0,int(attempt)),6)))
+
+
 def _read_update_url_retry(request, timeout, max_bytes):
+    import urllib.error
     import urllib.request
     last_error=None
     for attempt in range(3):
@@ -41,6 +78,20 @@ def _read_update_url_retry(request, timeout, max_bytes):
             if len(payload)>max_bytes:
                 raise ValueError("GitHub 更新响应超过大小限制")
             return payload
+        except urllib.error.HTTPError as error:
+            if error.code in (403,429):
+                detail=""
+                try: detail=error.read(2048).decode("utf-8","replace")
+                except Exception: pass
+                message=str(error)
+                if "rate limit" in detail.lower() or "rate limit" in message.lower() or error.code==429:
+                    raise GitHubRateLimitError(
+                        f"GitHub HTTP {error.code} 限流：{detail[:240] or message}",
+                        _rate_limit_retry_at(error,attempt)
+                    ) from error
+            last_error=error
+            if attempt<2:
+                time.sleep((2,5)[attempt])
         except Exception as error:
             last_error=error
             if attempt<2:
@@ -49,6 +100,7 @@ def _read_update_url_retry(request, timeout, max_bytes):
 
 
 def _download_update_asset_retry(request, temp, expected_size, expected_digest):
+    import urllib.error
     import urllib.request
     last_error=None
     for attempt in range(3):
@@ -74,14 +126,24 @@ def _download_update_asset_retry(request, temp, expected_size, expected_digest):
             if total<=0:
                 raise ValueError("下载到的 APK 为空")
             actual_digest=digest.hexdigest()
-            if expected_digest and not actual_digest.lower()==expected_digest.lower():
+            if expected_digest and actual_digest.lower()!=expected_digest.lower():
                 raise ValueError("APK SHA-256 与 GitHub 提供的摘要不一致")
             return total,actual_digest
+        except urllib.error.HTTPError as error:
+            try:
+                if temp.exists(): temp.unlink()
+            except OSError: pass
+            if error.code in (403,429):
+                raise GitHubRateLimitError(
+                    f"GitHub APK 下载受到 HTTP {error.code} 限制",
+                    _rate_limit_retry_at(error,attempt)
+                ) from error
+            last_error=error
+            if attempt<2: time.sleep((2,5)[attempt])
         except Exception as error:
             last_error=error
             try:
-                if temp.exists():
-                    temp.unlink()
+                if temp.exists(): temp.unlink()
             except OSError:
                 pass
             if attempt<2:
@@ -89,76 +151,169 @@ def _download_update_asset_retry(request, temp, expected_size, expected_digest):
     raise RuntimeError(f"GitHub APK 下载连续失败（已重试 3 次）：{last_error}") from last_error
 
 
+def _release_from_atom():
+    import html
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    request=urllib.request.Request(UPDATE_RELEASE_FEED,headers={
+        "Accept":"application/atom+xml","User-Agent":"BabyLog-NAS-Updater"
+    })
+    payload=_read_update_url_retry(request,timeout=25,max_bytes=2*1024*1024)
+    root=ET.fromstring(payload)
+    ns={"atom":"http://www.w3.org/2005/Atom"}
+    entry=root.find("atom:entry",ns)
+    if entry is None:
+        raise ValueError("GitHub Releases Feed 中没有正式版本")
+    title=(entry.findtext("atom:title",default="",namespaces=ns) or "").strip()
+    link=entry.find("atom:link",ns)
+    href=link.attrib.get("href","") if link is not None else ""
+    match=re.search(r"/releases/tag/([^/?#]+)",href)
+    tag=match.group(1) if match else ""
+    if not re.fullmatch(r"v?[0-9A-Za-z][0-9A-Za-z._+-]{0,63}",tag):
+        # Atom IDs also contain the release URL on some GitHub responses.
+        entry_id=entry.findtext("atom:id",default="",namespaces=ns)
+        match=re.search(r"/releases/tag/([^/?#]+)",entry_id)
+        tag=match.group(1) if match else ""
+    if not re.fullmatch(r"v?[0-9A-Za-z][0-9A-Za-z._+-]{0,63}",tag):
+        raise ValueError("GitHub Releases Feed 未提供有效版本标签")
+    if title.lower().startswith("[pre-release]") or "draft" in title.lower():
+        raise ValueError("Feed 返回的不是正式版本")
+    content=entry.findtext("atom:content",default="",namespaces=ns) or ""
+    notes=html.unescape(re.sub(r"<[^>]+>"," ",content))
+    notes=re.sub(r"\s+"," ",notes).strip() or "通过 GitHub Releases 备用源获取；暂无更新说明。"
+    published=entry.findtext("atom:updated",default="",namespaces=ns)
+    # The release workflow currently publishes the signed artifact as app-release.apk.
+    asset_url=f"https://github.com/rinzaki007/BabyLog/releases/download/{tag}/app-release.apk"
+    return {
+        "draft":False,"prerelease":False,"tag_name":tag,
+        "name":title or f"BabyLog {tag}","body":notes,
+        "published_at":published,"assets":[{
+            "name":"app-release.apk","browser_download_url":asset_url,
+            "size":0,"digest":""
+        }]
+    }
+
+
 def refresh_app_release():
     import urllib.request
     UPDATE_DIR.mkdir(parents=True,exist_ok=True)
     checked=int(time.time())
     status=_read_json(UPDATE_STATUS,{})
-    try:
-        request=urllib.request.Request(UPDATE_RELEASE_API,headers={
-            "Accept":"application/vnd.github+json","User-Agent":"BabyLog-NAS-Updater"
-        })
-        release_payload=_read_update_url_retry(request,timeout=25,max_bytes=2*1024*1024)
-        release=json.loads(release_payload.decode("utf-8"))
-        if release.get("draft") or release.get("prerelease"):
-            raise ValueError("最新正式 Release 不可用")
-        tag=str(release.get("tag_name","")).strip()
-        if not re.fullmatch(r"v?[0-9A-Za-z][0-9A-Za-z._+-]{0,63}",tag):
-            raise ValueError("Release 版本标签无效")
-        assets=release.get("assets") or []
-        asset=next((item for item in assets if str(item.get("name","")).lower().endswith(".apk")),None)
-        if not asset: raise ValueError("最新 Release 尚未附带 APK")
-        asset_url=str(asset.get("browser_download_url",""))
-        if not asset_url.startswith("https://github.com/rinzaki007/BabyLog/releases/download/"):
-            raise ValueError("APK 下载地址不是官方 Release 地址")
-        filename="BabyLog-"+tag+".apk"
-        target=UPDATE_DIR/filename
-        current=_read_json(UPDATE_META,{})
-        if current.get("tag")==tag and target.is_file() and target.stat().st_size>0:
-            status.update({"last_check":checked,"last_success":status.get("last_success",checked),
-                           "last_error":None,"current_tag":tag})
-            _write_json_atomic(UPDATE_STATUS,status)
-            return current
-        request=urllib.request.Request(asset_url,headers={"User-Agent":"BabyLog-NAS-Updater"})
-        temp=UPDATE_DIR/(filename+".part")
-        expected_size=int(asset.get("size") or 0)
-        expected_digest=str(asset.get("digest") or "").removeprefix("sha256:").strip().lower()
-        if expected_digest and not re.fullmatch(r"[a-f0-9]{64}",expected_digest):
-            raise ValueError("GitHub 返回的 APK SHA-256 格式无效")
-        total,digest_hex=_download_update_asset_retry(request,temp,expected_size,expected_digest)
-        os.replace(temp,target)
-        metadata={
-            "available":True,"tag":tag,"version":tag.lstrip("vV"),
-            "name":str(release.get("name") or ("BabyLog "+tag)),
-            "notes":str(release.get("body") or "本次更新未提供说明。")[:12000],
-            "published_at":release.get("published_at"),"size":total,
-            "sha256":digest_hex,"file_name":filename,
-            "download_path":"/api/app-update/download","updated_at":checked
-        }
-        _write_json_atomic(UPDATE_META,metadata)
-        apk_files=sorted(UPDATE_DIR.glob("BabyLog-*.apk"),key=lambda item:item.stat().st_mtime,reverse=True)
-        for old in apk_files[2:]:
-            try: old.unlink()
-            except OSError: pass
-        status.update({"last_check":checked,"last_success":checked,"last_error":None,"current_tag":tag})
+    deferred_until=int(status.get("next_retry_at") or 0)
+    if deferred_until>checked:
+        raise RuntimeError(f"更新检查正在退避等待，预计 {time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(deferred_until))} 后重试")
+    source="github_api"
+    api_retry_at=int(status.get("api_retry_at") or 0)
+    release=None
+    if api_retry_at>checked:
+        source="github_atom_fallback"
+    else:
+        headers={"Accept":"application/vnd.github+json","User-Agent":"BabyLog-NAS-Updater"}
+        token=os.getenv("BABYLOG_GITHUB_TOKEN","").strip()
+        if token:
+            headers["Authorization"]=f"Bearer {token}"
+        request=urllib.request.Request(UPDATE_RELEASE_API,headers=headers)
+        try:
+            release_payload=_read_update_url_retry(request,timeout=25,max_bytes=2*1024*1024)
+            release=json.loads(release_payload.decode("utf-8"))
+            status["api_retry_at"]=0
+            status["api_last_error"]=None
+        except GitHubRateLimitError as error:
+            api_retry_at=error.retry_at
+            status["api_retry_at"]=api_retry_at
+            status["api_last_error"]=str(error)[:500]
+            source="github_atom_fallback"
+        except Exception:
+            raise
+    if release is None:
+        try:
+            release=_release_from_atom()
+        except GitHubRateLimitError as error:
+            status["api_retry_at"]=max(api_retry_at,error.retry_at)
+            raise
+    if release.get("draft") or release.get("prerelease"):
+        raise ValueError("最新正式 Release 不可用")
+    tag=str(release.get("tag_name","")).strip()
+    if not re.fullmatch(r"v?[0-9A-Za-z][0-9A-Za-z._+-]{0,63}",tag):
+        raise ValueError("Release 版本标签无效")
+    assets=release.get("assets") or []
+    asset=next((item for item in assets if str(item.get("name","")).lower().endswith(".apk")),None)
+    if not asset:
+        raise ValueError("最新 Release 尚未附带 APK")
+    asset_url=str(asset.get("browser_download_url",""))
+    if not asset_url.startswith("https://github.com/rinzaki007/BabyLog/releases/download/"):
+        raise ValueError("APK 下载地址不是官方 Release 地址")
+    filename="BabyLog-"+tag+".apk"
+    target=UPDATE_DIR/filename
+    current=_read_json(UPDATE_META,{})
+    if current.get("tag")==tag and target.is_file() and target.stat().st_size>0:
+        status.update({"last_check":checked,"last_success":status.get("last_success",checked),
+                       "last_error":None,"next_retry_at":0,"failure_count":0,
+                       "current_tag":tag,"source":source})
         _write_json_atomic(UPDATE_STATUS,status)
-        return metadata
-    except Exception as error:
-        status.update({"last_check":checked,"last_error":str(error)[:500]})
-        _write_json_atomic(UPDATE_STATUS,status)
-        raise
+        return current
+    request=urllib.request.Request(asset_url,headers={"User-Agent":"BabyLog-NAS-Updater"})
+    temp=UPDATE_DIR/(filename+".part")
+    expected_size=int(asset.get("size") or 0)
+    expected_digest=str(asset.get("digest") or "").removeprefix("sha256:").strip().lower()
+    if expected_digest and not re.fullmatch(r"[a-f0-9]{64}",expected_digest):
+        raise ValueError("GitHub 返回的 APK SHA-256 格式无效")
+    total,digest_hex=_download_update_asset_retry(request,temp,expected_size,expected_digest)
+    os.replace(temp,target)
+    metadata={
+        "available":True,"tag":tag,"version":tag.lstrip("vV"),
+        "name":str(release.get("name") or ("BabyLog "+tag)),
+        "notes":str(release.get("body") or "本次更新未提供说明。")[:12000],
+        "published_at":release.get("published_at"),"size":total,
+        "sha256":digest_hex,"file_name":filename,
+        "download_path":"/api/app-update/download","updated_at":checked
+    }
+    _write_json_atomic(UPDATE_META,metadata)
+    apk_files=sorted(UPDATE_DIR.glob("BabyLog-*.apk"),key=lambda item:item.stat().st_mtime,reverse=True)
+    for old in apk_files[2:]:
+        try: old.unlink()
+        except OSError: pass
+    status.update({"last_check":checked,"last_success":checked,"last_error":None,
+                   "next_retry_at":0,"failure_count":0,"current_tag":tag,"source":source})
+    _write_json_atomic(UPDATE_STATUS,status)
+    return metadata
+
+
+def _record_update_failure(error):
+    status=_read_json(UPDATE_STATUS,{})
+    now=int(time.time())
+    failures=int(status.get("failure_count") or 0)+1
+    retry_at=getattr(error,"retry_at",None)
+    delay=min(3600,60*(2**min(failures-1,6)))
+    next_retry=int(retry_at or (now+delay))
+    status.update({"last_check":now,"last_error":str(error)[:500],
+                   "failure_count":failures,"next_retry_at":next_retry})
+    _write_json_atomic(UPDATE_STATUS,status)
+    return status
+
 
 async def app_release_sync_loop():
     while True:
-        try: await asyncio.to_thread(refresh_app_release)
-        except Exception as error: print(f"[app-update] Release sync failed: {error}",flush=True)
-        await asyncio.sleep(max(300,int(os.getenv("BABYLOG_UPDATE_CHECK_SECONDS","900"))))
+        try:
+            await asyncio.to_thread(refresh_app_release)
+        except Exception as error:
+            _record_update_failure(error)
+            print(f"[app-update] Release sync failed: {error}",flush=True)
+        status=_read_json(UPDATE_STATUS,{})
+        next_retry=int(status.get("next_retry_at") or 0)
+        if next_retry>int(time.time()):
+            delay=max(30,next_retry-int(time.time()))
+        else:
+            delay=max(300,int(os.getenv("BABYLOG_UPDATE_CHECK_SECONDS","900")))
+        await asyncio.sleep(delay)
+
 
 @app.on_event("startup")
 async def start_app_release_sync():
     global _update_task
     if os.getenv("BABYLOG_UPDATE_SYNC_ENABLED","1").lower() not in {"0","false","no"}:
         _update_task=asyncio.create_task(app_release_sync_loop())
+
 
 @app.on_event("shutdown")
 async def stop_app_release_sync():
@@ -168,7 +323,6 @@ async def stop_app_release_sync():
         try: await _update_task
         except asyncio.CancelledError: pass
         _update_task=None
-
 
 class Credentials(BaseModel):
     username:str|None=Field(default=None,min_length=3,max_length=32)
@@ -237,7 +391,9 @@ def app_update_latest():
     status=_read_json(UPDATE_STATUS,{})
     return {**metadata,"available":bool(metadata.get("available")),"sync_status":{
         "last_check":status.get("last_check"),"last_success":status.get("last_success"),
-        "last_error":status.get("last_error"),"current_tag":status.get("current_tag")
+        "last_error":status.get("last_error"),"current_tag":status.get("current_tag"),
+        "next_retry_at":status.get("next_retry_at"),"api_retry_at":status.get("api_retry_at"),
+        "failure_count":status.get("failure_count",0),"source":status.get("source")
     }}
 
 @app.get("/api/app-update/status")
@@ -247,6 +403,23 @@ def app_update_status():
     return {"available":bool(metadata.get("available")),"version":metadata.get("version"),
             "tag":metadata.get("tag"),"size":metadata.get("size"),
             "sha256":metadata.get("sha256"),**status}
+
+
+@app.post("/api/app-update/check")
+def app_update_check():
+    status=_read_json(UPDATE_STATUS,{})
+    now=int(time.time())
+    manual_after=int(status.get("manual_check_after") or 0)
+    if manual_after>now:
+        return {"checked":False,"message":"手动检查过于频繁，请稍后再试。","status":status}
+    status["manual_check_after"]=now+60
+    _write_json_atomic(UPDATE_STATUS,status)
+    try:
+        metadata=refresh_app_release()
+        return {"checked":True,"metadata":metadata,"status":_read_json(UPDATE_STATUS,{})}
+    except Exception as error:
+        failed=_record_update_failure(error)
+        return {"checked":False,"message":str(error),"status":failed}
 
 @app.get("/api/app-update/download")
 def app_update_download():
