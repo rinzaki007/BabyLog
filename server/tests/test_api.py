@@ -436,7 +436,7 @@ def test_nas_release_mirror_downloads_official_release_and_hashes_apk(client, tm
 
     responses = [FakeResponse(json.dumps(release).encode()), FakeResponse(apk_bytes)]
     def fake_urlopen(request, timeout):
-        assert timeout in (20, 45)
+        assert timeout in (25, 60)
         return responses.pop(0)
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
@@ -447,3 +447,70 @@ def test_nas_release_mirror_downloads_official_release_and_hashes_apk(client, tm
     assert (tmp_path / "updates" / "BabyLog-v9.8.7.apk").read_bytes() == apk_bytes
     assert json.loads((tmp_path / "updates" / "latest.json").read_text("utf-8"))["version"] == "9.8.7"
     assert json.loads((tmp_path / "updates" / "status.json").read_text("utf-8"))["last_error"] is None
+
+
+def test_nas_release_metadata_retries_transient_tls_disconnect(monkeypatch):
+    import urllib.request
+    from app import main
+
+    attempts = {"count": 0}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self, size=-1):
+            return b'{"tag_name":"v1.0.0"}'
+
+    def flaky_urlopen(request, timeout):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise OSError("SSL: UNEXPECTED_EOF_WHILE_READING")
+        return FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", flaky_urlopen)
+    monkeypatch.setattr(main.time, "sleep", lambda _seconds: None)
+    request = urllib.request.Request("https://api.github.com/test")
+    assert main._read_update_url_retry(request, timeout=5, max_bytes=1024) == b'{"tag_name":"v1.0.0"}'
+    assert attempts["count"] == 2
+
+
+def test_nas_release_asset_retries_transient_tls_disconnect(tmp_path, monkeypatch):
+    import hashlib
+    import urllib.request
+    from app import main
+
+    payload = b"apk-after-retry"
+    attempts = {"count": 0}
+
+    class FakeResponse:
+        def __init__(self):
+            self.read_once = False
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self, size=-1):
+            if self.read_once:
+                return b""
+            self.read_once = True
+            return payload
+
+    def flaky_urlopen(request, timeout):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise OSError("SSL: UNEXPECTED_EOF_WHILE_READING")
+        return FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", flaky_urlopen)
+    monkeypatch.setattr(main.time, "sleep", lambda _seconds: None)
+    temp = tmp_path / "release.apk.part"
+    size, digest = main._download_update_asset_retry(
+        urllib.request.Request("https://github.com/rinzaki007/BabyLog/releases/download/test.apk"),
+        temp, len(payload), hashlib.sha256(payload).hexdigest()
+    )
+    assert attempts["count"] == 2
+    assert size == len(payload)
+    assert digest == hashlib.sha256(payload).hexdigest()
+    assert temp.read_bytes() == payload
