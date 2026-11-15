@@ -7,7 +7,10 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import androidx.test.ext.junit.runners.AndroidJUnit4
 
+@RunWith(AndroidJUnit4::class)
 class SecureTokenStoreTest {
     @Test
     fun encryptsTokensWithFreshIvAndRejectsTampering() {
