@@ -76,7 +76,61 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
             if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
+    DailyTrendChart(events)
 }
+
+@Composable
+private fun DailyTrendChart(events: List<BabyEventEntity>) {
+    var range by remember { mutableStateOf("近7天") }
+    var metric by remember { mutableStateOf("喂养奶量") }
+    val days = when (range) { "近30天" -> 30; "近90天" -> 90; else -> 7 }
+    val unit = when (metric) {
+        "喂养奶量" -> "ml"
+        "睡眠小时" -> "小时"
+        else -> "次"
+    }
+    val points = dailyTrendPoints(events, metric, days)
+    val maximum = points.maxOfOrNull { it.value }?.coerceAtLeast(1f) ?: 1f
+    val total = points.sumOf { it.value.toDouble() }.toFloat()
+    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("每日记录趋势", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("${range} · ${metric}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("${"%.1f".format(Locale.CHINA, total)} $unit", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+            SelectionRow(listOf("近7天", "近30天", "近90天"), range) { range = it }
+            SelectionRow(listOf("喂养奶量", "喂养次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
+            Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+                val horizontalPadding = 4.dp.toPx()
+                val topPadding = 8.dp.toPx()
+                val bottomPadding = 8.dp.toPx()
+                val chartHeight = size.height - topPadding - bottomPadding
+                val slotWidth = (size.width - horizontalPadding * 2) / points.size.coerceAtLeast(1)
+                val barWidth = (slotWidth * if (days == 7) 0.52f else 0.68f).coerceAtLeast(1.dp.toPx())
+                points.forEachIndexed { index, point ->
+                    val barHeight = chartHeight * (point.value / maximum)
+                    val left = horizontalPadding + index * slotWidth + (slotWidth - barWidth) / 2f
+                    drawRoundRect(
+                        color = Color(0xFF8874B8).copy(alpha = if (point.value == 0f) 0.16f else 0.85f),
+                        topLeft = Offset(left, topPadding + chartHeight - barHeight),
+                        size = androidx.compose.ui.geometry.Size(barWidth, barHeight.coerceAtLeast(2.dp.toPx())),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                    )
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(points.first().date.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("最高 ${"%.1f".format(Locale.CHINA, maximum)} $unit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(points.last().date.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("每日无记录时按 0 统计；睡眠按记录的时长合计。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
 @Composable
 internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     var metric by remember { mutableStateOf("体重") }
