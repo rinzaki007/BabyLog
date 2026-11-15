@@ -98,6 +98,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             val accessToken = result.getString("access_token")
             SyncPreferences.saveSession(context, accessToken)
             val profile = SyncHttp.request(base, "/api/me", token = accessToken)
+            SyncPreferences.saveAccountEmail(context, profile.optString("username", accountIdentifier.trim()))
             val linkedFamilies = profile.optJSONArray("families")
             require(linkedFamilies != null && linkedFamilies.length() > 0) {
                 "账号初始化失败，请检查 NAS 服务端版本后重试。"
