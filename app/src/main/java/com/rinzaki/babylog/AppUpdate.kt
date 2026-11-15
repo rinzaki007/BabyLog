@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -24,7 +26,6 @@ import java.security.MessageDigest
 
 private const val RELEASE_API = "https://api.github.com/repos/rinzaki007/BabyLog/releases/latest"
 private const val UPDATE_PREFS = "babylog_update_preferences"
-private const val CHECK_INTERVAL = 86_400_000L
 private data class BabyRelease(
     val tag: String, val version: String, val notes: String, val url: String,
     val size: Long, val sha256: String?, val source: String
