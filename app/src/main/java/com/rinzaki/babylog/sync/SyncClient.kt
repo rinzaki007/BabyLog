@@ -21,24 +21,52 @@ import java.net.URL
 import java.io.File
 import java.io.DataOutputStream
 import java.util.concurrent.TimeUnit
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 object SyncPreferences {
     private const val FILE = "babylog_sync"
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     fun server(context: Context) = prefs(context).getString("server", "") ?: ""
-    fun token(context: Context) = prefs(context).getString("token", "") ?: ""
+    fun token(context: Context): String {
+        val preferences = prefs(context)
+        val encrypted = preferences.getString("token_encrypted", null)
+        if (!encrypted.isNullOrBlank()) {
+            return runCatching { SecureTokenStore.decrypt(encrypted) }.getOrElse {
+                // A Keystore key can become unavailable after device security changes.
+                // Fail closed and require a fresh login instead of using an unreadable token.
+                preferences.edit().remove("token_encrypted").remove("token").commit()
+                ""
+            }
+        }
+        val legacy = preferences.getString("token", "").orEmpty()
+        if (legacy.isBlank()) return ""
+        // One-time, lossless migration from the previous plaintext preference.
+        runCatching {
+            val migrated = SecureTokenStore.encrypt(legacy)
+            check(preferences.edit().putString("token_encrypted", migrated).remove("token").commit())
+        }
+        return legacy
+    }
     fun accountEmail(context: Context) = prefs(context).getString("account_email", "") ?: ""
     fun saveAccountEmail(context: Context, value: String) { prefs(context).edit().putString("account_email", value.trim().lowercase()).apply() }
     fun familyId(context: Context) = prefs(context).getString("family_id", "") ?: ""
     fun cursor(context: Context) = prefs(context).getLong("cursor", 0L)
     fun saveServer(context: Context, value: String) { prefs(context).edit().putString("server", value.trim().trimEnd('/')).apply() }
-    fun saveSession(context: Context, token: String) { prefs(context).edit().putString("token", token).remove("family_id").putLong("cursor", 0L).apply() }
+    fun saveSession(context: Context, token: String) {
+        val encrypted = SecureTokenStore.encrypt(token)
+        check(prefs(context).edit().putString("token_encrypted", encrypted).remove("token")
+            .remove("family_id").putLong("cursor", 0L).commit()) { "无法安全保存登录凭据，请重试" }
+    }
     fun saveFamily(context: Context, id: String) { prefs(context).edit().putString("family_id", id).putLong("cursor", 0L).apply() }
     fun saveCursor(context: Context, value: Long) { prefs(context).edit().putLong("cursor", value).apply() }
     fun resetCursor(context: Context) { prefs(context).edit().putLong("cursor", 0L).apply() }
     fun recoveryInProgress(context: Context) = prefs(context).getBoolean("recovery_in_progress", false)
     fun setRecoveryInProgress(context: Context, value: Boolean) { prefs(context).edit().putBoolean("recovery_in_progress", value).apply() }
-    fun clearSession(context: Context) { prefs(context).edit().remove("token").remove("family_id").remove("account_email").putLong("cursor", 0L).apply() }
+    fun clearSession(context: Context) { prefs(context).edit().remove("token").remove("token_encrypted").remove("family_id").remove("account_email").putLong("cursor", 0L).apply() }
     fun lastSyncAt(context: Context) = prefs(context).getLong("last_sync_at", 0L)
     fun lastSyncError(context: Context) = prefs(context).getString("last_sync_error", null)
     fun lastConsistency(context: Context) = prefs(context).getString("last_consistency", null)
@@ -66,6 +94,21 @@ object SyncPreferences {
 }
 
 class SyncHttpException(val statusCode: Int, message: String) : IllegalStateException(message)
+
+internal fun shouldRetrySyncStatus(statusCode: Int): Boolean =
+    statusCode !in 400..499 || statusCode in setOf(408, 425, 429)
+
+private object SyncExecutionMutex {
+    val mutex = Mutex()
+}
+
+private fun replaceDownloadedFile(temp: File, destination: File) {
+    try {
+        Files.move(temp.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    } catch (_: AtomicMoveNotSupportedException) {
+        Files.move(temp.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+    }
+}
 
 object SyncHttp {
     fun request(base: String, path: String, method: String = "GET", token: String? = null, body: JSONObject? = null): JSONObject {
@@ -137,8 +180,7 @@ object SyncHttp {
             try {
                 connection.inputStream.use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
                 if (temp.length() <= 0L) throw java.io.IOException("头像下载内容为空")
-                if (destination.exists() && !destination.delete()) throw java.io.IOException("无法替换旧头像")
-                if (!temp.renameTo(destination)) throw java.io.IOException("无法保存头像")
+                replaceDownloadedFile(temp, destination)
             } catch (error: Exception) {
                 temp.delete()
                 throw error
@@ -209,8 +251,7 @@ object SyncHttp {
                     throw java.io.IOException("照片下载不完整：期望 ${expectedLength} 字节，实际 ${temp.length()} 字节")
                 }
                 if (temp.length() <= 0L) throw java.io.IOException("照片下载内容为空")
-                if (destination.exists() && !destination.delete()) throw java.io.IOException("无法替换旧照片文件")
-                if (!temp.renameTo(destination)) throw java.io.IOException("无法保存下载的照片")
+                replaceDownloadedFile(temp, destination)
             } catch (error: Exception) {
                 temp.delete()
                 throw error
@@ -304,7 +345,9 @@ internal fun syncOperationBelongsToFamily(ownerFamilyId: String?, activeFamilyId
     activeFamilyId.isNotBlank() && ownerFamilyId != null && ownerFamilyId == activeFamilyId
 
 class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = SyncExecutionMutex.mutex.withLock { runSync() }
+
+    private suspend fun runSync(): Result {
         val base = SyncPreferences.server(applicationContext)
         val token = SyncPreferences.token(applicationContext)
         val familyId = SyncPreferences.familyId(applicationContext)
@@ -475,11 +518,18 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
             require(cloudDigest.matches(Regex("[a-fA-F0-9]{64}"))) {
                 "云端一致性校验响应无效"
             }
+            val consistent = localDigest.equals(cloudDigest, ignoreCase = true)
             SyncPreferences.saveConsistency(
                 applicationContext,
-                if (localDigest.equals(cloudDigest, ignoreCase = true)) "一致" else "存在差异，请再次同步核对"
+                if (consistent) "一致" else "存在差异，请再次同步核对"
             )
-            SyncPreferences.markSyncSuccess(applicationContext)
+            if (consistent) {
+                SyncPreferences.markSyncSuccess(applicationContext)
+            } else {
+                // Do not present a completed transfer as a fully healthy sync when
+                // the server-side record fingerprint still differs from this device.
+                SyncPreferences.markSyncFailure(applicationContext, "同步传输已完成，但本机与云端数据摘要不一致；请再次同步核对")
+            }
             Result.success()
         } catch (error: java.net.SocketTimeoutException) {
             SyncPreferences.markSyncFailure(applicationContext, error.message ?: "连接超时")
@@ -490,7 +540,8 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
         } catch (error: Exception) {
             SyncPreferences.markSyncFailure(applicationContext, error.message ?: "同步失败")
             val message = error.message.orEmpty()
-            if (message.contains("HTTP 401") || Regex("HTTP 4[0-9]{2}").containsMatchIn(message)) Result.failure() else Result.retry()
+            val statusCode = Regex("HTTP (\\d{3})").find(message)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            if (statusCode != null && !shouldRetrySyncStatus(statusCode)) Result.failure() else Result.retry()
         }
     }
 
