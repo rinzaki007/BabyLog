@@ -54,6 +54,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -157,7 +158,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var fabOffsetX by remember { mutableStateOf(0f) }
     var fabOffsetY by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
-    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
+    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
@@ -198,12 +199,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
                 NavigationBar(containerColor = Color.White) {
-                    val destinations = listOf("首页", "记录", "成长", "相册")
+                    val destinations = listOf("首页", "记录", "成长", "相册", "疫苗")
                     destinations.forEachIndexed { index, label ->
                         NavigationBarItem(
                             selected = selectedNav == index,
                             onClick = { selectedNav = index },
-                            icon = { Text(listOf("⌂", "＋", "⌁", "▦")[index], style = MaterialTheme.typography.titleLarge) },
+                            icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleLarge) },
                             label = { Text(label) }
                         )
                     }
@@ -253,15 +254,15 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     detectHorizontalDragGestures(
                         onHorizontalDrag = { change, dragAmount -> horizontalTravel += dragAmount },
                         onDragEnd = {
-                            if (horizontalTravel < -swipeThreshold) selectedNav = (selectedNav + 1).coerceAtMost(3)
+                            if (horizontalTravel < -swipeThreshold) selectedNav = (selectedNav + 1).coerceAtMost(4)
                             else if (horizontalTravel > swipeThreshold) selectedNav = (selectedNav - 1).coerceAtLeast(0)
                             horizontalTravel = 0f
                         },
                         onDragCancel = { horizontalTravel = 0f }
                     )
                 },
-                contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 36.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (selectedNav == 0) item {
                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -475,7 +476,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     } else if (selectedNav == 1) items(filteredEvents, key = { it.id }) { event ->
                         EventCard(event, onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
                     }
-                    if (selectedNav == 2) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
+                    if (selectedNav == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
                         scope.launch {
                             val vaccine = existing?.copy(occurredAt = timestamp, payloadJson = payload.toString(), updatedAt = now, syncStatus = "PENDING")
@@ -1497,9 +1498,9 @@ private fun BabyProfileCard(baby: BabyEntity, onEdit: () -> Unit) {
     val months = java.time.temporal.ChronoUnit.MONTHS.between(birthDate, today).coerceAtLeast(0)
     val ageText = if (months < 1) "第 $days 天" else "$months 个月"
     Card(shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(baby.avatarUri, 76)
+                Avatar(baby.avatarUri, 62)
                 Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(baby.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text("${baby.sex ?: "宝宝"} · $ageText", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1518,7 +1519,7 @@ private fun BabyProfileCard(baby: BabyEntity, onEdit: () -> Unit) {
 
 @Composable
 private fun ProfileMetric(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.background(Color.White.copy(alpha = 0.72f), RoundedCornerShape(15.dp)).padding(vertical = 10.dp, horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.background(Color.White.copy(alpha = 0.72f), RoundedCornerShape(13.dp)).padding(vertical = 7.dp, horizontal = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -1533,7 +1534,7 @@ private fun TodaySummary(events: List<BabyEventEntity>) {
         runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0)
     }
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("今天的小日常", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Text("${today.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
@@ -1549,7 +1550,7 @@ private fun TodaySummary(events: List<BabyEventEntity>) {
 
 @Composable
 private fun SummaryPill(emoji: String, label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.background(Color(0xFFFFF5F0), RoundedCornerShape(16.dp)).padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.background(Color(0xFFFFF5F0), RoundedCornerShape(14.dp)).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(emoji)
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1558,10 +1559,10 @@ private fun SummaryPill(emoji: String, label: String, value: String, modifier: M
 
 @Composable
 private fun ActionCard(emoji: String, title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = modifier.heightIn(min = 62.dp), shape = RoundedCornerShape(15.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)) {
+    Card(onClick = onClick, modifier = modifier.heightIn(min = 76.dp), shape = RoundedCornerShape(17.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            Surface(shape = RoundedCornerShape(11.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(34.dp)) {
-                Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.titleMedium) }
+            Surface(shape = RoundedCornerShape(11.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(40.dp)) {
+                Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.titleLarge) }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
@@ -1741,19 +1742,19 @@ private fun EventCard(event: BabyEventEntity, onEdit: () -> Unit, onDelete: () -
         else -> Triple("📝", "记录", "")
     }
     val time = SimpleDateFormat("yyyy年M月d日 HH时mm分", Locale.CHINA).format(Date(event.occurredAt))
-    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = CircleShape, color = Color(0xFFF2EDF7), modifier = Modifier.size(42.dp)) {
+    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = CircleShape, color = Color(0xFFF2EDF7), modifier = Modifier.size(36.dp)) {
                 Box(contentAlignment = Alignment.Center) { Text(emoji) }
             }
-            Column(Modifier.weight(1f).padding(start = 11.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.weight(1f).padding(start = 9.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(title, fontWeight = FontWeight.SemiBold)
                 Text(detail + if (payload.optString("note").isNotBlank()) " · " + payload.optString("note") else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onEdit) { Text("编辑") }
-                TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 1.dp)) { Text("编辑", style = MaterialTheme.typography.labelMedium) }
+                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 1.dp)) { Text("删除", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium) }
             }
         }
     }
@@ -1769,46 +1770,60 @@ private fun DateTimeOptionDialog(
 ) {
     var selected by remember(initial) { mutableStateOf(initial) }
     val currentYear = LocalDate.now().year
+    val dateLabel = selected.format(DateTimeFormatter.ofPattern("yyyy年M月d日 EEEE", Locale.CHINA))
+    val timeLabel = selected.format(DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA))
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (includeTime) "选择日期和时间" else "选择日期") },
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(if (includeTime) "设置日期与时间" else "选择日期", fontWeight = FontWeight.Bold)
+                Text("记录会保存为你选择的时间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
         text = {
-            Column(
-                Modifier.fillMaxWidth().heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text("快捷选择", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("今天" to LocalDate.now(), "昨天" to LocalDate.now().minusDays(1), "前天" to LocalDate.now().minusDays(2)).forEach { (label, day) ->
-                        if (selected.toLocalDate() == day) FilledTonalButton(onClick = { selected = day.atTime(selected.toLocalTime()) }) { Text(label) }
-                        else OutlinedButton(onClick = { selected = day.atTime(selected.toLocalTime()) }) { Text(label) }
+            Column(Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                Surface(color = Color(0xFFF1ECF7), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 13.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(dateLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        if (includeTime) Text(timeLabel, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     }
                 }
-                Text("日期", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("快速选择日期", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    listOf("今天" to LocalDate.now(), "昨天" to LocalDate.now().minusDays(1), "前天" to LocalDate.now().minusDays(2)).forEach { (label, day) ->
+                        val active = selected.toLocalDate() == day
+                        if (active) FilledTonalButton(onClick = { selected = day.atTime(selected.toLocalTime()) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp)) { Text(label) }
+                        else OutlinedButton(onClick = { selected = day.atTime(selected.toLocalTime()) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp)) { Text(label) }
+                    }
+                }
+                Text("选择具体日期", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     OptionPicker("年", selected.year.toString(), (1900..currentYear).toList().map(Int::toString)) { value ->
                         val year = value.toInt()
                         val maxDay = selected.month.length(java.time.Year.isLeap(year.toLong()))
                         selected = selected.withYear(year).withDayOfMonth(selected.dayOfMonth.coerceAtMost(maxDay))
                     }
-                    OptionPicker("月", selected.monthValue.toString(), (1..12).toList().map(Int::toString)) { value ->
+                    OptionPicker("月", "%02d".format(selected.monthValue), (1..12).toList().map { "%02d".format(it) }) { value ->
                         val month = value.toInt()
                         val maxDay = selected.withMonth(month).month.length(java.time.Year.isLeap(selected.year.toLong()))
                         selected = selected.withMonth(month).withDayOfMonth(selected.dayOfMonth.coerceAtMost(maxDay))
                     }
-                    OptionPicker("日", selected.dayOfMonth.toString(), (1..selected.month.length(java.time.Year.isLeap(selected.year.toLong()))).toList().map(Int::toString)) { value ->
+                    OptionPicker("日", "%02d".format(selected.dayOfMonth), (1..selected.month.length(java.time.Year.isLeap(selected.year.toLong()))).toList().map { "%02d".format(it) }) { value ->
                         selected = selected.withDayOfMonth(value.toInt())
                     }
                 }
                 if (includeTime) {
-                    Text("时间（24小时制）", fontWeight = FontWeight.SemiBold)
-                    Text("点击下方选项调整时间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("设置时间", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text("24 小时制", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Column(Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text("小时", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             OptionPicker("时", "%02d".format(selected.hour), (0..23).toList().map { "%02d".format(it) }) { selected = selected.withHour(it.toInt()) }
                         }
-                        Column(Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text("分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             OptionPicker("分", "%02d".format(selected.minute), (0..59).toList().map { "%02d".format(it) }) { selected = selected.withMinute(it.toInt()) }
                         }
@@ -1816,7 +1831,7 @@ private fun DateTimeOptionDialog(
                 }
             }
         },
-        confirmButton = { Button(onClick = { onConfirm(selected) }) { Text("确定") } },
+        confirmButton = { Button(onClick = { onConfirm(selected) }) { Text("确认时间") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }
@@ -1825,8 +1840,8 @@ private fun DateTimeOptionDialog(
 private fun OptionPicker(label: String, selected: String, options: List<String>, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
-            Text("$selected $label", fontWeight = FontWeight.SemiBold)
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp), shape = RoundedCornerShape(13.dp)) {
+            Text("$selected $label", fontWeight = FontWeight.Bold)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
