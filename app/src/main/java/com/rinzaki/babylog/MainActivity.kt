@@ -1057,10 +1057,10 @@ private fun BabyAlbumSection(
                 modifier = Modifier.fillMaxSize()
             ) {
                 Column(
-                    Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 18.dp),
+                    Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(
                                 SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(photo.takenAt)),
@@ -1100,7 +1100,7 @@ private fun BabyAlbumSection(
                             Text("照片暂时无法读取", color = Color(0xFF716B78))
                         }
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             photo.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注",
                             color = Color(0xFF514A58),
@@ -1111,7 +1111,7 @@ private fun BabyAlbumSection(
                         }
                     }
                     Row(
-                        Modifier.fillMaxWidth(),
+                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
