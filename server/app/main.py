@@ -593,14 +593,16 @@ def web_overview(response:Response,uid:str=Depends(current_user),
                       "photos":{"total":len(photo_filtered),"offset":photo_offset,"limit":photo_limit,"has_more":photo_offset+photo_limit<len(photo_filtered)}}}
 
 @app.get("/api/web/export")
-def web_export(uid:str=Depends(current_user)):
+def web_export(include_photos:bool=False,uid:str=Depends(current_user)):
     profile,family=_web_family(uid); fid=family["id"]
     with connect() as db:
         rows=db.execute("SELECT entity_type,entity_id,payload,version,updated_at FROM records WHERE family_id=? AND deleted=0 ORDER BY entity_type,entity_id",(fid,)).fetchall()
-        photo_rows=db.execute("SELECT id,relative_path,mime_type,size_bytes FROM photos WHERE family_id=?",(fid,)).fetchall()
+        photo_rows=db.execute("SELECT id,relative_path,mime_type,size_bytes FROM photos WHERE family_id=?",(fid,)).fetchall() if include_photos else []
     photo_files={p["id"]:p for p in photo_rows}
     entries=[]; assets=[]
     for row in rows:
+        if row["entity_type"]=="photo" and not include_photos:
+            continue
         try: payload=json.loads(row["payload"])
         except (TypeError,ValueError): continue
         entry={"entity_type":row["entity_type"],"entity_id":row["entity_id"],"payload":payload,
@@ -613,11 +615,14 @@ def web_export(uid:str=Depends(current_user)):
                     asset=f"photos/{row['entity_id']}{path.suffix.lower()}"
                     assets.append((asset,path)); entry["asset_path"]=asset
         elif row["entity_type"]=="baby" and payload.get("hasAvatar"):
-            try: avatar=(AVATAR_DIR/str(uuid.UUID(fid))/f"{uuid.UUID(row['entity_id'])}.jpg").resolve()
-            except ValueError: avatar=None
-            if avatar and AVATAR_DIR.resolve() in avatar.parents and avatar.is_file():
-                asset=f"avatars/{row['entity_id']}.jpg"
-                assets.append((asset,avatar)); entry["asset_path"]=asset
+            if include_photos:
+                try: avatar=(AVATAR_DIR/str(uuid.UUID(fid))/f"{uuid.UUID(row['entity_id'])}.jpg").resolve()
+                except ValueError: avatar=None
+                if avatar and AVATAR_DIR.resolve() in avatar.parents and avatar.is_file():
+                    asset=f"avatars/{row['entity_id']}.jpg"
+                    assets.append((asset,avatar)); entry["asset_path"]=asset
+            else:
+                payload["hasAvatar"]=False
         entries.append(entry)
     backup={"format":"babylog-backup","format_version":1,"exported_at":int(time.time()),
             "family_name":family["name"],"records":entries}
