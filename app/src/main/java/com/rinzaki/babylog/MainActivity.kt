@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -211,14 +213,19 @@ private fun BabyLogApp(dao: BabyLogDao) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
-                NavigationBar(containerColor = Color.White) {
+                NavigationBar(
+                    modifier = Modifier.navigationBarsPadding().height(64.dp),
+                    containerColor = Color.White,
+                    tonalElevation = 0.dp,
+                    windowInsets = WindowInsets(0.dp)
+                ) {
                     val destinations = listOf("首页", "记录", "成长", "相册", "疫苗")
                     destinations.forEachIndexed { index, label ->
                         NavigationBarItem(
                             selected = selectedNav == index,
                             onClick = { selectedNav = index },
-                            icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleLarge) },
-                            label = { Text(label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, lineHeight = 18.sp, fontWeight = if (selectedNav == index) FontWeight.SemiBold else FontWeight.Medium), maxLines = 1) }
+                            icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleMedium) },
+                            label = { Text(label, style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 14.sp, fontWeight = if (selectedNav == index) FontWeight.SemiBold else FontWeight.Medium), maxLines = 1) }
                         )
                     }
                 }

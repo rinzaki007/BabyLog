@@ -84,6 +84,59 @@ private object BabyUpdater {
     }
 
     private fun fetchOfficialRelease(): BabyRelease {
+        var manifestFailure: Exception? = null
+        try {
+            return fetchStaticReleaseManifest()
+        } catch (error: Exception) {
+            manifestFailure = error
+        }
+
+        try {
+            return fetchOfficialReleaseLegacy()
+        } catch (legacyFailure: Exception) {
+            throw IllegalStateException(
+                "官方更新源暂不可用：静态更新清单失败（${manifestFailure?.message ?: "未知错误"}）；GitHub 回退失败（${legacyFailure.message ?: "未知错误"}）",
+                legacyFailure
+            )
+        }
+    }
+
+    /** Read release metadata from the rate-limit-independent raw GitHub update feed. */
+    private fun fetchStaticReleaseManifest(): BabyRelease {
+        val connection = URL(
+            "https://raw.githubusercontent.com/rinzaki007/BabyLog/updates/latest.json"
+        ).openConnection() as HttpURLConnection
+        val json = try {
+            connection.connectTimeout = 10000
+            connection.readTimeout = 15000
+            connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("User-Agent", "BabyLog-Android")
+            connection.setRequestProperty("Cache-Control", "no-cache")
+            connection.setRequestProperty("Pragma", "no-cache")
+            check(connection.responseCode == 200) { "更新清单 HTTP ${connection.responseCode}" }
+            JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+        } finally { connection.disconnect() }
+
+        val tag = json.optString("tag").trim()
+        val version = json.optString("version").trim()
+        val downloadUrl = json.optString("url").trim()
+        require(tag.matches(Regex("[vV]?\\d+(\\.\\d+){1,3}([-.][A-Za-z0-9.-]+)?"))) { "更新清单版本标签无效" }
+        require(version.matches(Regex("\\d+(\\.\\d+){1,3}([-.][A-Za-z0-9.-]+)?"))) { "更新清单版本号无效" }
+        val parsedUrl = URL(downloadUrl)
+        require(parsedUrl.protocol == "https" && parsedUrl.host.equals("github.com", true) &&
+            parsedUrl.path.startsWith("/rinzaki007/BabyLog/releases/download/") &&
+            parsedUrl.path.endsWith(".apk", true)) { "更新清单下载地址不是官方 APK" }
+
+        return BabyRelease(
+            tag, version, json.optString("notes").ifBlank { "本次更新未提供说明。" },
+            downloadUrl, json.optLong("size", 0L).coerceAtLeast(0L),
+            json.optString("sha256").takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) },
+            "官方 GitHub"
+        )
+    }
+
+    /** Compatibility fallback for installations without a published static feed. */
+    private fun fetchOfficialReleaseLegacy(): BabyRelease {
         val apiFailure: Exception
         try {
             val connection = URL(RELEASE_API).openConnection() as HttpURLConnection
@@ -99,33 +152,16 @@ private object BabyUpdater {
                 val assets = json.optJSONArray("assets")
                 val asset = assets?.let { list ->
                     (0 until list.length()).mapNotNull { list.optJSONObject(it) }
-                        .firstOrNull {
-                            it.optString("name").trim().endsWith(".apk", ignoreCase = true) &&
-                                it.optString("browser_download_url").startsWith("https://")
-                        }
+                        .firstOrNull { it.optString("name").trim().endsWith(".apk", ignoreCase = true) && it.optString("browser_download_url").startsWith("https://") }
                 }
-                if (asset != null) {
-                    return BabyRelease(
-                        tag, tag.removePrefix("v").removePrefix("V"),
-                        json.optString("body").ifBlank { "本次更新未提供说明。" },
-                        asset.optString("browser_download_url"), asset.optLong("size"),
-                        asset.optString("digest").removePrefix("sha256:")
-                            .takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) },
-                        "官方 GitHub"
-                    )
-                }
+                if (asset != null) return BabyRelease(tag, tag.removePrefix("v").removePrefix("V"),
+                    json.optString("body").ifBlank { "本次更新未提供说明。" }, asset.optString("browser_download_url"),
+                    asset.optLong("size"), asset.optString("digest").removePrefix("sha256:").takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) }, "官方 GitHub")
                 return fetchPublicReleasePage(tag, json.optString("body"))
             } finally { connection.disconnect() }
-        } catch (error: Exception) {
-            apiFailure = error
-        }
-        return try {
-            fetchPublicReleasePage()
-        } catch (pageError: Exception) {
-            throw IllegalStateException(
-                "官方更新源检查失败：${apiFailure.message ?: "API 不可用"}；网页回退：${pageError.message ?: "解析失败"}",
-                pageError
-            )
+        } catch (error: Exception) { apiFailure = error }
+        return try { fetchPublicReleasePage() } catch (pageError: Exception) {
+            throw IllegalStateException("GitHub API HTTP 受限（${apiFailure.message ?: "API 不可用"}）；网页回退失败（${pageError.message ?: "解析失败"}）", pageError)
         }
     }
 
