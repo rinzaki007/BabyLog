@@ -11,14 +11,12 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.Canvas
@@ -35,7 +33,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -55,7 +52,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -111,7 +107,6 @@ import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import kotlin.math.roundToInt
 import java.io.File
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -152,11 +147,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var addingEvent by remember { mutableStateOf<String?>(null) }
     var editingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
     var deletingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
-    var showQuickRecordMenu by remember { mutableStateOf(false) }
     var showSyncDetails by remember { mutableStateOf(false) }
-    var quickRecordHidden by remember { mutableStateOf(appContext.getSharedPreferences("babylog_ui", 0).getBoolean("quick_record_hidden", false)) }
-    var fabOffsetX by remember { mutableStateOf(0f) }
-    var fabOffsetY by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
     val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
@@ -210,41 +201,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                 }
             },
-            floatingActionButton = {
-                if (baby != null) {
-                    if (!quickRecordHidden) {
-                        Box {
-                            FloatingActionButton(
-                                onClick = { showQuickRecordMenu = true },
-                                modifier = Modifier
-                                    .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
-                                    .pointerInput(Unit) {
-                                        detectDragGestures { change, dragAmount ->
-                                            change.consume()
-                                            fabOffsetX = (fabOffsetX + dragAmount.x).coerceIn(-520f, 0f)
-                                            fabOffsetY = (fabOffsetY + dragAmount.y).coerceIn(-1200f, 0f)
-                                        }
-                                    }
-                            ) { Text("＋ 记录") }
-                            DropdownMenu(expanded = showQuickRecordMenu, onDismissRequest = { showQuickRecordMenu = false }) {
-                                listOf("FEEDING" to "🍼 喂养", "DIAPER" to "🌿 大小便", "SLEEP" to "🌙 睡眠", "GROWTH" to "📏 成长测量").forEach { (type, label) ->
-                                    DropdownMenuItem(text = { Text(label) }, onClick = { addingEvent = type; showQuickRecordMenu = false })
-                                }
-                                DropdownMenuItem(text = { Text("隐藏快捷记录按钮") }, onClick = {
-                                    quickRecordHidden = true
-                                    appContext.getSharedPreferences("babylog_ui", 0).edit().putBoolean("quick_record_hidden", true).apply()
-                                    showQuickRecordMenu = false
-                                })
-                            }
-                        }
-                    } else {
-                        androidx.compose.material3.SmallFloatingActionButton(onClick = {
-                            quickRecordHidden = false
-                            appContext.getSharedPreferences("babylog_ui", 0).edit().putBoolean("quick_record_hidden", false).apply()
-                        }) { Text("＋") }
-                    }
-                }
-            }
         ) { scaffoldPadding ->
             LazyColumn(
                 state = pageListStates[selectedNav],
@@ -271,10 +227,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 Text("BABYLOG", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 Text("成长的每一天", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                             }
-                            if (quickRecordHidden && baby != null) TextButton(onClick = {
-                                quickRecordHidden = false
-                                appContext.getSharedPreferences("babylog_ui", 0).edit().putBoolean("quick_record_hidden", false).apply()
-                            }) { Text("＋ 记录") }
                             OutlinedButton(onClick = { showSyncSettings = true }, contentPadding = PaddingValues(horizontal = 13.dp, vertical = 7.dp)) {
                                 Text("⚙ 设置")
                             }
@@ -338,7 +290,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                     Text(syncConsistency ?: "尚未校验", style = MaterialTheme.typography.labelSmall, color = if (syncConsistency == "一致") Color(0xFF38845B) else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
                                 }
                                 if (!syncError.isNullOrBlank()) Text("同步提示：$syncError", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
-                                TextButton(onClick = { showSyncSettings = true }) { Text("家庭同步设置") }
                             }
                         }
                     }
@@ -374,11 +325,11 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 if (selectedNav == 0 && baby != null) item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("快捷记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             ActionCard("🍼", "喂养", "配方奶 · ml", Modifier.weight(1f)) { addingEvent = "FEEDING" }
                             ActionCard("🌿", "大小便", "护理情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
                             ActionCard("📏", "成长测量", "体重身长", Modifier.weight(1f)) { addingEvent = "GROWTH" }
                         }
@@ -474,7 +425,9 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     } else if (selectedNav == 1) items(filteredEvents, key = { it.id }) { event ->
-                        EventCard(event, onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            EventCard(event, modifier = Modifier.fillMaxWidth(0.94f), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
+                        }
                     }
                     if (selectedNav == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
@@ -1559,15 +1512,23 @@ private fun SummaryPill(emoji: String, label: String, value: String, modifier: M
 
 @Composable
 private fun ActionCard(emoji: String, title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = modifier.heightIn(min = 76.dp), shape = RoundedCornerShape(17.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            Surface(shape = RoundedCornerShape(11.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(40.dp)) {
-                Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.titleLarge) }
+    Card(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 112.dp),
+        shape = RoundedCornerShape(19.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Surface(shape = RoundedCornerShape(15.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(48.dp)) {
+                Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.headlineSmall) }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
+            Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
     }
 }
@@ -1720,7 +1681,7 @@ private fun SelectionRow(options: List<String>, selected: String, onSelect: (Str
 }
 
 @Composable
-private fun EventCard(event: BabyEventEntity, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onEdit: () -> Unit, onDelete: () -> Unit) {
     val payload = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
     val (emoji, title, detail) = when (event.eventType) {
         "FEEDING" -> Triple("🍼", "喂养", "${payload.optInt("amountMl")} ml 配方奶")
@@ -1741,20 +1702,38 @@ private fun EventCard(event: BabyEventEntity, onEdit: () -> Unit, onDelete: () -
         ).joinToString(" · "))
         else -> Triple("📝", "记录", "")
     }
-    val time = SimpleDateFormat("yyyy年M月d日 HH时mm分", Locale.CHINA).format(Date(event.occurredAt))
-    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = CircleShape, color = Color(0xFFF2EDF7), modifier = Modifier.size(36.dp)) {
-                Box(contentAlignment = Alignment.Center) { Text(emoji) }
+    val time = SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(event.occurredAt))
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            Surface(shape = RoundedCornerShape(13.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(40.dp)) {
+                Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.titleLarge) }
             }
-            Column(Modifier.weight(1f).padding(start = 9.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text(title, fontWeight = FontWeight.SemiBold)
-                Text(detail + if (payload.optString("note").isNotBlank()) " · " + payload.optString("note") else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                Text(
+                    detail + if (payload.optString("note").isNotBlank()) " · " + payload.optString("note") else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2
+                )
                 Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 1.dp)) { Text("编辑", style = MaterialTheme.typography.labelMedium) }
-                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 1.dp)) { Text("删除", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium) }
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp)) {
+                    Text("编辑", style = MaterialTheme.typography.labelSmall)
+                }
+                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp)) {
+                    Text("删除", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
     }
