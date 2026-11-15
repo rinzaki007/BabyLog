@@ -562,7 +562,7 @@ def test_nas_release_rate_limit_falls_back_to_atom_and_downloads_apk(client, tmp
 
     monkeypatch.setenv("BABYLOG_GITHUB_TOKEN", "test-read-only-token")
     apk_bytes = b"apk-from-atom-fallback"
-    feed = b"""<?xml version="1.0" encoding="UTF-8"?>
+    feed = """<?xml version="1.0" encoding="UTF-8"?>
     <feed xmlns="http://www.w3.org/2005/Atom">
       <entry>
         <title>BabyLog v9.8.8</title>
@@ -571,7 +571,7 @@ def test_nas_release_rate_limit_falls_back_to_atom_and_downloads_apk(client, tmp
         <link rel="alternate" href="https://github.com/rinzaki007/BabyLog/releases/tag/v9.8.8"/>
         <content type="html">修复更新镜像同步</content>
       </entry>
-    </feed>"""
+    </feed>""".encode("utf-8")
     calls = []
 
     class FakeResponse:
