@@ -157,6 +157,7 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
     var editing by remember { mutableStateOf<BabyEventEntity?>(null) }
     var editorInitialName by remember { mutableStateOf("") }
     var editorInitialDose by remember { mutableStateOf("") }
+    var visibleHistoryCount by remember { mutableStateOf(6) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("疫苗接种档案", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("独立管理宝宝每一次接种，方便长期查询和核对。", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -192,7 +193,7 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
             }
         } else {
             Text("接种历史", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            events.sortedByDescending { it.occurredAt }.forEach { event ->
+            events.sortedByDescending { it.occurredAt }.take(visibleHistoryCount).forEach { event ->
                 val data = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
                 Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -221,6 +222,12 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
                         }
                     }
                 }
+            }
+            if (events.size > visibleHistoryCount) {
+                OutlinedButton(
+                    onClick = { visibleHistoryCount = (visibleHistoryCount + 6).coerceAtMost(events.size) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("加载更多接种记录（已显示 ${visibleHistoryCount}/${events.size} 条）") }
             }
         }
     }
