@@ -1564,7 +1564,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var date by remember(existing?.id) { mutableStateOf(initialTime.toLocalDate()) }
     var hour by remember(existing?.id) { mutableStateOf(initialTime.hour) }
     var minute by remember(existing?.id) { mutableStateOf(initialTime.minute) }
-    var amount by remember(existing?.id) { mutableStateOf(initialPayload.optInt("amountMl", 120).toFloat()) }
+    var amountText by remember(existing?.id) { mutableStateOf(if (existing == null) "" else initialPayload.optInt("amountMl").takeIf { it > 0 }?.toString().orEmpty()) }
     var urine by remember(existing?.id) { mutableStateOf(if (existing == null) true else initialPayload.optBoolean("urine")) }
     var stool by remember(existing?.id) { mutableStateOf(initialPayload.optBoolean("stool")) }
     var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", "糊状")) }
@@ -1583,7 +1583,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
         onDismissRequest = onDismiss,
         title = { Text(title, fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("记录时间", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 OutlinedButton(onClick = { showEventTimePicker = true }, modifier = Modifier.fillMaxWidth()) {
                     Text(date.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA)) + " · %02d时%02d分".format(hour, minute))
@@ -1591,8 +1591,8 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                 when (eventType) {
                     "FEEDING" -> {
                         OutlinedTextField(
-                            value = amount.toInt().toString(),
-                            onValueChange = { raw -> raw.filter(Char::isDigit).toIntOrNull()?.let { amount = it.coerceIn(0, 1000).toFloat() } },
+                            value = amountText,
+                            onValueChange = { raw -> amountText = raw.filter(Char::isDigit).take(4) },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("本次奶量（ml）") },
                             singleLine = true
@@ -1644,7 +1644,14 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                 val timestamp = date.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                 val payload = JSONObject()
                 when (eventType) {
-                    "FEEDING" -> payload.put("method", "配方奶").put("amountMl", amount.toInt())
+                    "FEEDING" -> {
+                        val amountMl = amountText.toIntOrNull()
+                        if (amountMl == null || amountMl !in 1..1000) {
+                            error = "请输入 1–1000 ml 的奶量"
+                            return@Button
+                        }
+                        payload.put("method", "配方奶").put("amountMl", amountMl)
+                    }
                     "DIAPER" -> {
                         if (!urine && !stool) { error = "请至少选择一项护理情况"; return@Button }
                         payload.put("urine", urine).put("stool", stool)
