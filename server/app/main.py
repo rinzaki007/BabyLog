@@ -372,6 +372,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS records(family_id TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,payload TEXT NOT NULL,version INTEGER NOT NULL,updated_at INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(family_id,entity_type,entity_id));
         CREATE TABLE IF NOT EXISTS changes(seq INTEGER PRIMARY KEY AUTOINCREMENT,family_id TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,operation_id TEXT NOT NULL,payload TEXT NOT NULL,version INTEGER NOT NULL,created_at INTEGER NOT NULL,UNIQUE(family_id,operation_id));
         CREATE TABLE IF NOT EXISTS photos(id TEXT PRIMARY KEY,family_id TEXT NOT NULL,relative_path TEXT NOT NULL,mime_type TEXT NOT NULL,size_bytes INTEGER NOT NULL,created_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS web_import_mappings(family_id TEXT NOT NULL,source_photo_id TEXT NOT NULL,target_photo_id TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(family_id,source_photo_id));
         CREATE INDEX IF NOT EXISTS idx_changes_family_seq ON changes(family_id,seq);
         """)
         columns={row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()}
@@ -697,7 +698,8 @@ async def web_import_preview(file:UploadFile=File(...),uid:str=Depends(current_u
     profile,family=_web_family(uid); fid=family["id"]
     with connect() as db:
         existing={(r["entity_type"],r["entity_id"]) for r in db.execute("SELECT entity_type,entity_id FROM records WHERE family_id=?",(fid,)).fetchall()}
-    additions=[r for r in backup["records"] if (r["entity_type"],r["entity_id"]) not in existing]
+        mapped_photos={r["source_photo_id"] for r in db.execute("SELECT source_photo_id FROM web_import_mappings WHERE family_id=?",(fid,)).fetchall()}
+    additions=[r for r in backup["records"] if (r["entity_type"],r["entity_id"]) not in existing and not (r["entity_type"]=="photo" and r["entity_id"] in mapped_photos)]
     return {"valid":True,"family_name":family["name"],"backup_family_name":str(backup.get("family_name") or ""),
         "total":len(backup["records"]),"new_count":len(additions),"conflict_count":len(backup["records"])-len(additions),
         "photo_count":sum(1 for r in additions if r["entity_type"]=="photo"),
@@ -712,10 +714,18 @@ async def web_import(file:UploadFile=File(...),uid:str=Depends(current_user)):
         with connect() as db:
             db.execute("BEGIN IMMEDIATE")
             for item in backup["records"]:
-                kind=item["entity_type"]; entity_id=item["entity_id"]
-                if db.execute("SELECT 1 FROM records WHERE family_id=? AND entity_type=? AND entity_id=?",(fid,kind,entity_id)).fetchone():
+                kind=item["entity_type"]; source_entity_id=item["entity_id"]; entity_id=source_entity_id
+                if db.execute("SELECT 1 FROM records WHERE family_id=? AND entity_type=? AND entity_id=?",(fid,kind,source_entity_id)).fetchone():
                     skipped+=1; continue
-                payload=dict(item["payload"]); asset=item.get("asset_path")
+                if kind=="photo":
+                    mapped=db.execute("SELECT target_photo_id FROM web_import_mappings WHERE family_id=? AND source_photo_id=?",(fid,source_entity_id)).fetchone()
+                    if mapped:
+                        skipped+=1; continue
+                    collision=db.execute("SELECT 1 FROM photos WHERE id=?",(source_entity_id,)).fetchone()
+                    if collision: entity_id=str(uuid.uuid4())
+                payload=dict(item["payload"])
+                if kind=="photo" and "id" in payload: payload["id"]=entity_id
+                asset=item.get("asset_path")
                 if kind=="baby" and payload.get("hasAvatar"):
                     if asset and asset in assets:
                         folder=AVATAR_DIR/str(uuid.UUID(fid)); folder.mkdir(parents=True,exist_ok=True)
@@ -732,6 +742,7 @@ async def web_import(file:UploadFile=File(...),uid:str=Depends(current_user)):
                     if target.exists(): raise HTTPException(409,"照片目标文件已存在，已停止导入以保护现有文件")
                     temp.write_bytes(assets[asset]); temp.replace(target); written.append(target)
                     db.execute("INSERT INTO photos VALUES (?,?,?,?,?,?)",(entity_id,fid,str(target.relative_to(PHOTO_DIR)),mime,len(assets[asset]),int(time.time())))
+                    db.execute("INSERT INTO web_import_mappings VALUES (?,?,?,?)",(fid,source_entity_id,entity_id,int(time.time())))
                 payload_json=json.dumps(payload,ensure_ascii=False,separators=(",",":"))
                 now=int(time.time())
                 db.execute("INSERT INTO records VALUES (?,?,?,?,?,?,0)",(fid,kind,entity_id,payload_json,1,now))
