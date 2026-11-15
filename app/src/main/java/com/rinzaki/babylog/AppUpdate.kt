@@ -90,7 +90,7 @@ private object BabyUpdater {
                 connection.readTimeout = 15000
                 connection.setRequestProperty("Accept", "application/vnd.github+json")
                 connection.setRequestProperty("User-Agent", "BabyLog-Android")
-                check(connection.responseCode == 200) { "GitHub API HTTP ${connection.responseCode" }
+                check(connection.responseCode == 200) { "GitHub API HTTP ${connection.responseCode}" }
                 val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
                 val tag = json.optString("tag_name").trim()
                 require(tag.isNotBlank()) { "GitHub Release 缺少版本标签" }
@@ -121,7 +121,7 @@ private object BabyUpdater {
             fetchPublicReleasePage()
         } catch (pageError: Exception) {
             throw IllegalStateException(
-                "官方更新源检查失败：${apiFailure.message ?: "API 不可用"；网页回退：${pageError.message ?: "解析失败"",
+                "官方更新源检查失败：${apiFailure.message ?: "API 不可用"}；网页回退：${pageError.message ?: "解析失败"}",
                 pageError
             )
         }
@@ -138,7 +138,7 @@ private object BabyUpdater {
             pageConnection.readTimeout = 20000
             pageConnection.setRequestProperty("User-Agent", "BabyLog-Android")
             check(pageConnection.responseCode == 200) {
-                "更新检查失败（HTTP ${pageConnection.responseCode），请稍后重试"
+                "更新检查失败（HTTP ${pageConnection.responseCode}），请稍后重试"
             }
             pageConnection.inputStream.bufferedReader().use { it.readText() }
         } finally { pageConnection.disconnect() }
@@ -315,7 +315,7 @@ internal fun AppUpdateSection() {
                 version = officialRelease?.version,
                 status = officialMessage,
                 selected = selectedSource == "official",
-                enabled = !checking && !downloading,
+                enabled = checkingSource == null && !downloading,
                 onClick = {
                     selectedSource = "official"
                     context.getSharedPreferences(UPDATE_PREFS, 0).edit().putString("selected_source", "official").apply()
@@ -363,7 +363,7 @@ internal fun AppUpdateSection() {
                 ) { Text(if (checkingSource == "official") "检查中…" else "检查官方") }
                 if (hasUpdate && downloaded == null) {
                     Button(
-                        enabled = !checking && !downloading,
+                        enabled = checkingSource == null && !downloading,
                         modifier = Modifier.weight(1f),
                         onClick = {
                             val target = selectedRelease ?: return@Button
