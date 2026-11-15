@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +74,7 @@ internal fun BabyAlbumSection(
     var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
     var showPhotoDatePicker by remember { mutableStateOf(false) }
     LaunchedEffect(albumFilter, selectedPhotoDate) { visiblePhotoLimit = 60 }
+    val sortedPhotos = remember(photos) { photos.sortedByDescending { it.takenAt } }
     val filteredPhotos = photos.filter { photo ->
         val date = java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
         when (albumFilter) {
@@ -208,6 +212,9 @@ internal fun BabyAlbumSection(
     }
 
     viewingPhoto?.let { photo ->
+        val currentPhotoIndex = sortedPhotos.indexOfFirst { it.id == photo.id }
+        val previousPhoto = sortedPhotos.getOrNull(currentPhotoIndex + 1)
+        val nextPhoto = sortedPhotos.getOrNull(currentPhotoIndex - 1)
         Dialog(
             onDismissRequest = { viewingPhoto = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -244,6 +251,12 @@ internal fun BabyAlbumSection(
                         Column(Modifier.weight(1f)) {
                             Text(SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(photo.takenAt)), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
                             Text(SimpleDateFormat("HH时mm分", Locale.CHINA).format(Date(photo.takenAt)), style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
+                        }
+                        IconButton(onClick = { previousPhoto?.let { viewingPhoto = it } }, enabled = previousPhoto != null) {
+                            Icon(Icons.Filled.ChevronLeft, contentDescription = "上一张", tint = Color.White)
+                        }
+                        IconButton(onClick = { nextPhoto?.let { viewingPhoto = it } }, enabled = nextPhoto != null) {
+                            Icon(Icons.Filled.ChevronRight, contentDescription = "下一张", tint = Color.White)
                         }
                         TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("适应屏幕", color = Color.White) }
                         TextButton(onClick = { viewingPhoto = null }) { Text("关闭", color = Color.White) }
