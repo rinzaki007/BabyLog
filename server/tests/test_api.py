@@ -1,6 +1,9 @@
 import importlib
+import io
+import json
 import os
 import uuid
+import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
@@ -643,3 +646,55 @@ def test_nas_release_respects_persisted_backoff_and_manual_check_cooldown(client
     assert response.status_code == 200
     assert response.json()["checked"] is False
     assert "过于频繁" in response.json()["message"]
+
+
+def test_web_dashboard_login_overview_and_complete_export(client):
+    token = register(client, "web-dashboard@example.test")
+    family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    baby_id = str(uuid.uuid4())
+    event_id = str(uuid.uuid4())
+    pushed = client.post("/api/sync/push", headers=auth(token), json={"family_id": family_id, "changes": [
+        {"operation_id": str(uuid.uuid4()), "entity_type": "baby", "entity_id": baby_id,
+         "operation": "upsert", "payload": {"id": baby_id, "displayName": "小宝", "birthTime": 123456789}, "base_version": 0},
+        {"operation_id": str(uuid.uuid4()), "entity_type": "event", "entity_id": event_id,
+         "operation": "upsert", "payload": {"id": event_id, "eventType": "FEEDING", "occurredAt": 123456789,
+                                             "payloadJson": "{\"amountMl\":120}"}, "base_version": 0}
+    ]})
+    assert pushed.status_code == 200
+
+    # The dashboard shell is public; all personal data APIs require the account session.
+    assert client.get("/").status_code == 200
+    assert client.get("/api/web/overview").status_code == 401
+
+    logged_in = client.post("/api/web/login", json={
+        "email": "web-dashboard@example.test", "password": "correct-horse-battery"
+    })
+    assert logged_in.status_code == 200
+    assert "babylog_session" in logged_in.headers.get("set-cookie", "")
+    overview = client.get("/api/web/overview")
+    assert overview.status_code == 200, overview.text
+    assert overview.json()["counts"] == {"babies": 1, "events": 1, "photos": 0}
+    assert overview.json()["babies"][0]["payload"]["displayName"] == "小宝"
+
+    exported = client.get("/api/web/export")
+    assert exported.status_code == 200
+    assert exported.headers["content-type"].startswith("application/zip")
+    with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+        backup = json.loads(archive.read("backup.json"))
+    assert backup["format"] == "babylog-backup"
+    assert {item["entity_type"] for item in backup["records"]} == {"baby", "event"}
+    assert len(backup["records"]) == 2
+
+
+def test_web_cookie_auth_rejects_cross_origin_mutations(client):
+    register(client, "web-csrf@example.test")
+    login = client.post("/api/web/login", json={
+        "email": "web-csrf@example.test", "password": "correct-horse-battery"
+    })
+    assert login.status_code == 200
+    denied = client.post("/api/families", headers={"Origin": "https://attacker.example"},
+                         json={"name": "不应创建"})
+    assert denied.status_code == 403
+    allowed = client.post("/api/families", headers={"Origin": "http://testserver"},
+                          json={"name": "我的家庭"})
+    assert allowed.status_code == 200
