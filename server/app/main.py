@@ -593,14 +593,16 @@ def web_overview(response:Response,uid:str=Depends(current_user),
                       "photos":{"total":len(photo_filtered),"offset":photo_offset,"limit":photo_limit,"has_more":photo_offset+photo_limit<len(photo_filtered)}}}
 
 @app.get("/api/web/export")
-def web_export(uid:str=Depends(current_user)):
+def web_export(include_photos:bool=False,uid:str=Depends(current_user)):
     profile,family=_web_family(uid); fid=family["id"]
     with connect() as db:
         rows=db.execute("SELECT entity_type,entity_id,payload,version,updated_at FROM records WHERE family_id=? AND deleted=0 ORDER BY entity_type,entity_id",(fid,)).fetchall()
-        photo_rows=db.execute("SELECT id,relative_path,mime_type,size_bytes FROM photos WHERE family_id=?",(fid,)).fetchall()
+        photo_rows=db.execute("SELECT id,relative_path,mime_type,size_bytes FROM photos WHERE family_id=?",(fid,)).fetchall() if include_photos else []
     photo_files={p["id"]:p for p in photo_rows}
     entries=[]; assets=[]
     for row in rows:
+        if row["entity_type"]=="photo" and not include_photos:
+            continue
         try: payload=json.loads(row["payload"])
         except (TypeError,ValueError): continue
         entry={"entity_type":row["entity_type"],"entity_id":row["entity_id"],"payload":payload,
@@ -613,11 +615,14 @@ def web_export(uid:str=Depends(current_user)):
                     asset=f"photos/{row['entity_id']}{path.suffix.lower()}"
                     assets.append((asset,path)); entry["asset_path"]=asset
         elif row["entity_type"]=="baby" and payload.get("hasAvatar"):
-            try: avatar=(AVATAR_DIR/str(uuid.UUID(fid))/f"{uuid.UUID(row['entity_id'])}.jpg").resolve()
-            except ValueError: avatar=None
-            if avatar and AVATAR_DIR.resolve() in avatar.parents and avatar.is_file():
-                asset=f"avatars/{row['entity_id']}.jpg"
-                assets.append((asset,avatar)); entry["asset_path"]=asset
+            if include_photos:
+                try: avatar=(AVATAR_DIR/str(uuid.UUID(fid))/f"{uuid.UUID(row['entity_id'])}.jpg").resolve()
+                except ValueError: avatar=None
+                if avatar and AVATAR_DIR.resolve() in avatar.parents and avatar.is_file():
+                    asset=f"avatars/{row['entity_id']}.jpg"
+                    assets.append((asset,avatar)); entry["asset_path"]=asset
+            else:
+                payload["hasAvatar"]=False
         entries.append(entry)
     backup={"format":"babylog-backup","format_version":1,"exported_at":int(time.time()),
             "family_name":family["name"],"records":entries}
@@ -691,18 +696,29 @@ def _parse_web_backup(archive_path:Path):
         if bad_member: raise HTTPException(400,"备份媒体文件损坏："+Path(bad_member).name)
         return backup,assets
 
-async def _read_web_backup(file:UploadFile):
+async def _read_web_backup(request:Request):
+    """Stream a raw ZIP request body to disk without invoking multipart parsing."""
     DATA_DIR.mkdir(parents=True,exist_ok=True)
+    content_length=request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length)>512*1024*1024:
+                raise HTTPException(413,"备份文件不能超过 512 MB")
+        except ValueError:
+            raise HTTPException(400,"上传请求长度无效")
     fd,temp_name=tempfile.mkstemp(prefix="babylog-import-",suffix=".zip",dir=DATA_DIR)
     temp_path=Path(temp_name); total=0
     try:
         with os.fdopen(fd,"wb") as output:
-            while True:
-                chunk=await file.read(1024*1024)
-                if not chunk: break
+            async for chunk in request.stream():
+                if not chunk:
+                    continue
                 total+=len(chunk)
-                if total>512*1024*1024: raise HTTPException(413,"备份文件不能超过 512 MB")
+                if total>512*1024*1024:
+                    raise HTTPException(413,"备份文件不能超过 512 MB")
                 output.write(chunk)
+            if total<=0:
+                raise HTTPException(400,"备份文件为空")
             output.flush(); os.fsync(output.fileno())
         backup,assets=_parse_web_backup(temp_path)
         return temp_path,backup,assets
@@ -711,8 +727,8 @@ async def _read_web_backup(file:UploadFile):
         raise
 
 @app.post("/api/web/import/preview")
-async def web_import_preview(file:UploadFile=File(...),uid:str=Depends(current_user)):
-    temp_path,backup,assets=await _read_web_backup(file)
+async def web_import_preview(request:Request,uid:str=Depends(current_user)):
+    temp_path,backup,assets=await _read_web_backup(request)
     try:
         profile,family=_web_family(uid); fid=family["id"]
         with connect() as db:
@@ -727,8 +743,8 @@ async def web_import_preview(file:UploadFile=File(...),uid:str=Depends(current_u
         temp_path.unlink(missing_ok=True)
 
 @app.post("/api/web/import")
-async def web_import(file:UploadFile=File(...),uid:str=Depends(current_user)):
-    temp_path,backup,assets=await _read_web_backup(file)
+async def web_import(request:Request,uid:str=Depends(current_user)):
+    temp_path,backup,assets=await _read_web_backup(request)
     written=[]; imported=0; skipped=0
     mime_by_ext={".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp",".heic":"image/heic",".heif":"image/heif"}
     try:
