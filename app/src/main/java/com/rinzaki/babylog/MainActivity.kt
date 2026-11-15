@@ -217,8 +217,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         onDragCancel = { horizontalTravel = 0f }
                     )
                 },
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 22.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 7.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 if (selectedNav == 0) item {
                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -231,20 +231,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 Text("⚙ 设置")
                             }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                if (SyncPreferences.familyId(appContext).isBlank()) "● 离线保存" else "● 家庭同步已连接",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                if (lastSyncAt > 0L) "最近同步 " + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt)) else "尚未同步",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                         if (!syncError.isNullOrBlank()) Text("同步提示：" + syncError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                     }
                 }
@@ -255,7 +241,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth().clickable { showSyncDetails = !showSyncDetails }
                         ) {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val syncLabel = when {
                                     SyncPreferences.familyId(appContext).isBlank() -> "离线保存"
                                     syncing -> "正在同步"
@@ -277,7 +263,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                         if (showSyncDetails) Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text(if (syncing) "正在交换本地与云端数据…" else "自动同步已开启", style = MaterialTheme.typography.bodyMedium)
@@ -323,13 +309,13 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     } else BabyProfileCard(baby) { editingProfile = true }
                 }
                 if (selectedNav == 0 && baby != null) item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("快捷记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("快捷记录", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             ActionCard("🍼", "喂养", "配方奶 · ml", Modifier.weight(1f)) { addingEvent = "FEEDING" }
                             ActionCard("🌿", "大小便", "护理情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
                             ActionCard("📏", "成长测量", "体重身长", Modifier.weight(1f)) { addingEvent = "GROWTH" }
                         }
@@ -449,7 +435,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     } }) }
                 } else if (selectedNav == 0) item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                if (selectedNav == 0) item { Text(if (SyncPreferences.familyId(appContext).isBlank()) "离线模式 · 数据仅保存在本机" else "家庭同步已配置", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }
@@ -1451,17 +1436,17 @@ private fun BabyProfileCard(baby: BabyEntity, onEdit: () -> Unit) {
     val months = java.time.temporal.ChronoUnit.MONTHS.between(birthDate, today).coerceAtLeast(0)
     val ageText = if (months < 1) "第 $days 天" else "$months 个月"
     Card(shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(baby.avatarUri, 62)
-                Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Avatar(baby.avatarUri, 54)
+                Column(Modifier.weight(1f).padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(baby.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text("${baby.sex ?: "宝宝"} · $ageText", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("出生于 $birthDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 TextButton(onClick = onEdit) { Text("编辑资料") }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ProfileMetric("出生体重", baby.birthWeightGrams?.let { "$it g" } ?: "未记录", Modifier.weight(1f))
                 ProfileMetric("出生身长", baby.birthLengthCm?.let { "${"%.1f".format(Locale.getDefault(), it)} cm" } ?: "未记录", Modifier.weight(1f))
                 ProfileMetric("出生头围", baby.birthHeadCircumferenceCm?.let { "${"%.1f".format(Locale.getDefault(), it)} cm" } ?: "未记录", Modifier.weight(1f))
@@ -1472,7 +1457,7 @@ private fun BabyProfileCard(baby: BabyEntity, onEdit: () -> Unit) {
 
 @Composable
 private fun ProfileMetric(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.background(Color.White.copy(alpha = 0.72f), RoundedCornerShape(13.dp)).padding(vertical = 7.dp, horizontal = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.background(Color.White.copy(alpha = 0.72f), RoundedCornerShape(11.dp)).padding(vertical = 5.dp, horizontal = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -1487,7 +1472,7 @@ private fun TodaySummary(events: List<BabyEventEntity>) {
         runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0)
     }
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("今天的小日常", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Text("${today.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
@@ -1503,7 +1488,7 @@ private fun TodaySummary(events: List<BabyEventEntity>) {
 
 @Composable
 private fun SummaryPill(emoji: String, label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.background(Color(0xFFFFF5F0), RoundedCornerShape(14.dp)).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.background(Color(0xFFFFF5F0), RoundedCornerShape(12.dp)).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(emoji)
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1514,21 +1499,21 @@ private fun SummaryPill(emoji: String, label: String, value: String, modifier: M
 private fun ActionCard(emoji: String, title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 112.dp),
+        modifier = modifier.heightIn(min = 88.dp),
         shape = RoundedCornerShape(19.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 7.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            Surface(shape = RoundedCornerShape(15.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(48.dp)) {
+            Surface(shape = RoundedCornerShape(13.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(40.dp)) {
                 Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.headlineSmall) }
             }
-            Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
     }
 }
@@ -1705,33 +1690,35 @@ private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onE
     val time = SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(event.occurredAt))
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Surface(shape = RoundedCornerShape(13.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(40.dp)) {
-                Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.titleLarge) }
+            Surface(shape = RoundedCornerShape(11.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(34.dp)) {
+                Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.titleMedium) }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.weight(1f))
+                    Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
                 Text(
                     detail + if (payload.optString("note").isNotBlank()) " · " + payload.optString("note") else "",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2
+                    maxLines = 1
                 )
-                Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
                     Text("编辑", style = MaterialTheme.typography.labelSmall)
                 }
-                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp)) {
+                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
                     Text("删除", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                 }
             }
