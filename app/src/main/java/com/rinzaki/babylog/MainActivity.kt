@@ -243,7 +243,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                 }
             }
-        ) { scaffoldPadding ->            }
         ) { scaffoldPadding ->
             LazyColumn(
                 state = pageListStates[selectedNav],
