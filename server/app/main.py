@@ -478,7 +478,15 @@ def register(body:Credentials):
     except sqlite3.IntegrityError: raise HTTPException(409,"该账号名或邮箱已注册")
     return {"access_token":issue_token(uid),"token_type":"bearer","user_id":uid,"username":username}
 @app.post("/api/auth/login")
-def login(body:Credentials,request:Request,response:Response):
+def login(body:Credentials):
+    identifier=clean_username(body.username or body.email or "")
+    with connect() as db:
+        user=db.execute("SELECT * FROM users WHERE username=? OR email=?",(identifier,clean_email(identifier))).fetchone()
+    if not user or not password_hash.verify(body.password,user["password_hash"]): raise HTTPException(401,"账号名/邮箱或密码错误")
+    return {"access_token":issue_token(user["id"]),"token_type":"bearer","user_id":user["id"],"username":user["username"]}
+
+@app.post("/api/web/login")
+def web_login(body:Credentials,request:Request,response:Response):
     identifier=clean_username(body.username or body.email or "")
     with connect() as db:
         user=db.execute("SELECT * FROM users WHERE username=? OR email=?",(identifier,clean_email(identifier))).fetchone()
@@ -487,10 +495,10 @@ def login(body:Credentials,request:Request,response:Response):
     web_ttl=min(TOKEN_TTL,12*3600)
     response.set_cookie("babylog_session",issue_token(user["id"],web_ttl),max_age=web_ttl,
         httponly=True,secure=secure,samesite="strict",path="/")
-    return {"access_token":issue_token(user["id"]),"token_type":"bearer","user_id":user["id"],"username":user["username"]}
+    return {"logged_in":True,"username":user["username"]}
 
-@app.post("/api/auth/logout")
-def logout(request:Request,response:Response):
+@app.post("/api/web/logout")
+def web_logout(request:Request,response:Response):
     response.delete_cookie("babylog_session",path="/",httponly=True,
         secure=(request.headers.get("x-forwarded-proto","").split(",")[0].strip().lower()=="https" or request.url.scheme=="https"),
         samesite="strict")
