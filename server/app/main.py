@@ -691,18 +691,29 @@ def _parse_web_backup(archive_path:Path):
         if bad_member: raise HTTPException(400,"备份媒体文件损坏："+Path(bad_member).name)
         return backup,assets
 
-async def _read_web_backup(file:UploadFile):
+async def _read_web_backup(request:Request):
+    """Stream a raw ZIP request body to disk without invoking multipart parsing."""
     DATA_DIR.mkdir(parents=True,exist_ok=True)
+    content_length=request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length)>512*1024*1024:
+                raise HTTPException(413,"备份文件不能超过 512 MB")
+        except ValueError:
+            raise HTTPException(400,"上传请求长度无效")
     fd,temp_name=tempfile.mkstemp(prefix="babylog-import-",suffix=".zip",dir=DATA_DIR)
     temp_path=Path(temp_name); total=0
     try:
         with os.fdopen(fd,"wb") as output:
-            while True:
-                chunk=await file.read(1024*1024)
-                if not chunk: break
+            async for chunk in request.stream():
+                if not chunk:
+                    continue
                 total+=len(chunk)
-                if total>512*1024*1024: raise HTTPException(413,"备份文件不能超过 512 MB")
+                if total>512*1024*1024:
+                    raise HTTPException(413,"备份文件不能超过 512 MB")
                 output.write(chunk)
+            if total<=0:
+                raise HTTPException(400,"备份文件为空")
             output.flush(); os.fsync(output.fileno())
         backup,assets=_parse_web_backup(temp_path)
         return temp_path,backup,assets
@@ -711,8 +722,8 @@ async def _read_web_backup(file:UploadFile):
         raise
 
 @app.post("/api/web/import/preview")
-async def web_import_preview(file:UploadFile=File(...),uid:str=Depends(current_user)):
-    temp_path,backup,assets=await _read_web_backup(file)
+async def web_import_preview(request:Request,uid:str=Depends(current_user)):
+    temp_path,backup,assets=await _read_web_backup(request)
     try:
         profile,family=_web_family(uid); fid=family["id"]
         with connect() as db:
@@ -727,8 +738,8 @@ async def web_import_preview(file:UploadFile=File(...),uid:str=Depends(current_u
         temp_path.unlink(missing_ok=True)
 
 @app.post("/api/web/import")
-async def web_import(file:UploadFile=File(...),uid:str=Depends(current_user)):
-    temp_path,backup,assets=await _read_web_backup(file)
+async def web_import(request:Request,uid:str=Depends(current_user)):
+    temp_path,backup,assets=await _read_web_backup(request)
     written=[]; imported=0; skipped=0
     mime_by_ext={".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp",".heic":"image/heic",".heif":"image/heif"}
     try:
