@@ -688,6 +688,61 @@ def test_web_dashboard_login_overview_and_complete_export(client):
 
 
 
+
+def test_web_export_can_exclude_or_include_photo_assets(client):
+    token = register(client, "web-export-options@example.test")
+    family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    baby_id = str(uuid.uuid4())
+    photo_id = str(uuid.uuid4())
+
+    avatar = client.post(
+        f"/api/babies/{baby_id}/avatar", headers=auth(token),
+        params={"family_id": family_id},
+        files={"file": ("avatar.jpg", bytes([255, 216, 255]) + b"avatar", "image/jpeg")}
+    )
+    assert avatar.status_code == 200, avatar.text
+
+    photo = client.post(
+        "/api/photos/upload", headers=auth(token),
+        params={"family_id": family_id, "photo_id": photo_id},
+        files={"file": ("photo.jpg", bytes([255, 216, 255]) + b"photo", "image/jpeg")}
+    )
+    assert photo.status_code == 200, photo.text
+
+    pushed = client.post("/api/sync/push", headers=auth(token), json={"family_id": family_id, "changes": [
+        {"operation_id": str(uuid.uuid4()), "entity_type": "baby", "entity_id": baby_id,
+         "operation": "upsert", "payload": {"id": baby_id, "displayName": "小宝", "hasAvatar": True}, "base_version": 0},
+        {"operation_id": str(uuid.uuid4()), "entity_type": "event", "entity_id": str(uuid.uuid4()),
+         "operation": "upsert", "payload": {"eventType": "FEEDING", "amountMl": 120}, "base_version": 0},
+        {"operation_id": str(uuid.uuid4()), "entity_type": "photo", "entity_id": photo_id,
+         "operation": "upsert", "payload": {"id": photo_id, "babyId": baby_id, "caption": "满月",
+                                             "takenAt": 123456789, "createdAt": 123456789,
+                                             "updatedAt": 123456789, "mimeType": "image/jpeg"}, "base_version": 0},
+    ]})
+    assert pushed.status_code == 200, pushed.text
+
+    login = client.post("/api/web/login", json={
+        "email": "web-export-options@example.test", "password": "correct-horse-battery"
+    })
+    assert login.status_code == 200
+
+    data_only = client.get("/api/web/export")
+    assert data_only.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(data_only.content)) as archive:
+        manifest = json.loads(archive.read("backup.json"))
+        assert {item["entity_type"] for item in manifest["records"]} == {"baby", "event"}
+        baby = next(item for item in manifest["records"] if item["entity_type"] == "baby")
+        assert baby["payload"]["hasAvatar"] is False
+        assert set(archive.namelist()) == {"backup.json"}
+
+    complete = client.get("/api/web/export?include_photos=true")
+    assert complete.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(complete.content)) as archive:
+        manifest = json.loads(archive.read("backup.json"))
+        assert {item["entity_type"] for item in manifest["records"]} == {"baby", "event", "photo"}
+        assert "photos/" + photo_id + ".jpg" in archive.namelist()
+        assert "avatars/" + baby_id + ".jpg" in archive.namelist()
+
 def test_web_dashboard_pagination_date_filters_and_safe_import(client):
     source_token = register(client, "web-import-source@example.test")
     family_id = client.get("/api/me", headers=auth(source_token)).json()["families"][0]["id"]
