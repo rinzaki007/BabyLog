@@ -666,7 +666,7 @@ def test_web_dashboard_login_overview_and_complete_export(client):
     assert client.get("/").status_code == 200
     assert client.get("/api/web/overview").status_code == 401
 
-    logged_in = client.post("/api/auth/login", json={
+    logged_in = client.post("/api/web/login", json={
         "email": "web-dashboard@example.test", "password": "correct-horse-battery"
     })
     assert logged_in.status_code == 200
@@ -688,7 +688,7 @@ def test_web_dashboard_login_overview_and_complete_export(client):
 
 def test_web_cookie_auth_rejects_cross_origin_mutations(client):
     register(client, "web-csrf@example.test")
-    login = client.post("/api/auth/login", json={
+    login = client.post("/api/web/login", json={
         "email": "web-csrf@example.test", "password": "correct-horse-battery"
     })
     assert login.status_code == 200
