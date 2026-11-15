@@ -34,6 +34,26 @@ private object BabyUpdater {
     fun shouldCheck(context: Context) = System.currentTimeMillis() -
         context.getSharedPreferences(UPDATE_PREFS, 0).getLong("last_check", 0L) >= CHECK_INTERVAL
 
+    fun nasStatus(context: Context): String {
+        val base = SyncPreferences.server(context).trim().trimEnd('/')
+        if (base.isBlank()) return "NAS 更新镜像：尚未配置 NAS 地址"
+        val connection = URL("$base/api/app-update/status").openConnection() as HttpURLConnection
+        return try {
+            connection.connectTimeout = 5000
+            connection.readTimeout = 7000
+            check(connection.responseCode == 200) { "HTTP ${connection.responseCode}" }
+            val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+            val error = json.optString("last_error")
+            when {
+                error.isNotBlank() && error != "null" -> "NAS 更新镜像同步异常：$error"
+                json.optBoolean("available") -> "NAS 已缓存 v${json.optString("version")}，手机可走内网高速下载"
+                else -> "NAS 更新镜像尚未准备好安装包，后台会自动检查"
+            }
+        } catch (error: Exception) {
+            "NAS 更新镜像暂不可用：${error.message ?: "连接失败"}"
+        } finally { connection.disconnect() }
+    }
+
     fun currentVersion(context: Context): String {
         @Suppress("DEPRECATION")
         return context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0.0.0"
@@ -206,6 +226,7 @@ internal fun AppUpdateSection() {
     var downloading by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
     var message by remember { mutableStateOf("优先从 NAS 本地获取更新；NAS 不可用时自动回退官方渠道。") }
+    var nasStatus by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val current = remember { BabyUpdater.currentVersion(context) }
     val hasUpdate = release?.let { BabyUpdater.newer(it.version, current) } == true
@@ -216,6 +237,7 @@ internal fun AppUpdateSection() {
             checking = true; error = null
             message = if (SyncPreferences.server(context).isBlank()) "正在检查官方更新源…" else "正在优先检查 NAS 更新源…"
             try {
+                nasStatus = withContext(Dispatchers.IO) { BabyUpdater.nasStatus(context) }
                 release = BabyUpdater.check(context); downloaded = null
                 message = if (release?.let { BabyUpdater.newer(it.version, current) } == true)
                     "发现新版本 v${release?.version}" else "当前已是最新版本 v$current"
@@ -234,6 +256,7 @@ internal fun AppUpdateSection() {
                 Text("v$current", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
             Text(message, style = MaterialTheme.typography.bodyMedium)
+            nasStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             if (hasUpdate) {
                 Text("最新版本：v${release!!.version}", color = MaterialTheme.colorScheme.primary)
