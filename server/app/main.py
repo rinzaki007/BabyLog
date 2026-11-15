@@ -1,9 +1,10 @@
-import asyncio, hashlib, json, os, re, secrets, sqlite3, time, uuid
+import asyncio, hashlib, json, os, re, secrets, sqlite3, time, uuid, tempfile, zipfile
 from pathlib import Path
 from typing import Any
 import jwt
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, Request, Response
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field
@@ -380,18 +381,30 @@ def init_db():
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)")
 init_db()
 
-def issue_token(uid):
-    now=int(time.time()); return jwt.encode({"sub":uid,"iss":JWT_ISSUER,"iat":now,"exp":now+TOKEN_TTL},JWT_SECRET,algorithm="HS256")
-def current_user(creds:HTTPAuthorizationCredentials|None=Depends(bearer)):
+def issue_token(uid, ttl:int|None=None):
+    now=int(time.time()); return jwt.encode({"sub":uid,"iss":JWT_ISSUER,"iat":now,"exp":now+(TOKEN_TTL if ttl is None else ttl)},JWT_SECRET,algorithm="HS256")
+def current_user(request:Request,creds:HTTPAuthorizationCredentials|None=Depends(bearer)):
     if not JWT_SECRET or len(JWT_SECRET)<32: raise HTTPException(503,"服务器未配置有效的 BABYLOG_JWT_SECRET")
-    if creds is None: raise HTTPException(401,"需要登录")
-    try: return jwt.decode(creds.credentials,JWT_SECRET,algorithms=["HS256"],issuer=JWT_ISSUER,options={"require":["exp","iat","sub","iss"]})["sub"]
+    cookie_token=request.cookies.get("babylog_session")
+    token=creds.credentials if creds else cookie_token
+    if not token: raise HTTPException(401,"需要登录")
+    if not creds and cookie_token and request.method not in {"GET","HEAD","OPTIONS"}:
+        origin=request.headers.get("origin","")
+        host=request.headers.get("x-forwarded-host") or request.headers.get("host","")
+        if not origin or not host or origin.split("://",1)[-1].rstrip("/").lower()!=host.lower():
+            raise HTTPException(403,"网页请求来源校验失败")
+    try: return jwt.decode(token,JWT_SECRET,algorithms=["HS256"],issuer=JWT_ISSUER,options={"require":["exp","iat","sub","iss"]})["sub"]
     except jwt.PyJWTError: raise HTTPException(401,"登录凭证无效或已过期")
 def require_member(db,fid,uid):
     if not db.execute("SELECT 1 FROM family_members WHERE family_id=? AND user_id=?",(fid,uid)).fetchone(): raise HTTPException(403,"无权访问该家庭")
 def clean_email(email): return email.strip().lower()
 def clean_username(value): return value.strip().lower()
 def valid_username(value): return 3 <= len(value) <= 32 and all(c.isalnum() or c in "._-" for c in value)
+
+WEB_PAGE=Path(__file__).with_name("web.html")
+@app.get("/",include_in_schema=False)
+def web_home():
+    return FileResponse(WEB_PAGE,media_type="text/html",headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"})
 
 @app.get("/health")
 def health():
@@ -465,12 +478,24 @@ def register(body:Credentials):
     except sqlite3.IntegrityError: raise HTTPException(409,"该账号名或邮箱已注册")
     return {"access_token":issue_token(uid),"token_type":"bearer","user_id":uid,"username":username}
 @app.post("/api/auth/login")
-def login(body:Credentials):
+def login(body:Credentials,request:Request,response:Response):
     identifier=clean_username(body.username or body.email or "")
     with connect() as db:
         user=db.execute("SELECT * FROM users WHERE username=? OR email=?",(identifier,clean_email(identifier))).fetchone()
     if not user or not password_hash.verify(body.password,user["password_hash"]): raise HTTPException(401,"账号名/邮箱或密码错误")
+    secure=(request.headers.get("x-forwarded-proto","").split(",")[0].strip().lower()=="https" or request.url.scheme=="https")
+    web_ttl=min(TOKEN_TTL,12*3600)
+    response.set_cookie("babylog_session",issue_token(user["id"],web_ttl),max_age=web_ttl,
+        httponly=True,secure=secure,samesite="strict",path="/")
     return {"access_token":issue_token(user["id"]),"token_type":"bearer","user_id":user["id"],"username":user["username"]}
+
+@app.post("/api/auth/logout")
+def logout(request:Request,response:Response):
+    response.delete_cookie("babylog_session",path="/",httponly=True,
+        secure=(request.headers.get("x-forwarded-proto","").split(",")[0].strip().lower()=="https" or request.url.scheme=="https"),
+        samesite="strict")
+    return {"logged_out":True}
+
 @app.get("/api/me")
 def me(uid:str=Depends(current_user)):
     # Provision a default data space for legacy accounts on first profile lookup.
@@ -507,6 +532,87 @@ def change_password(body:PasswordChange,uid:str=Depends(current_user)):
             raise HTTPException(401,"当前密码错误")
         db.execute("UPDATE users SET password_hash=? WHERE id=?",(password_hash.hash(body.new_password),uid))
     return {"updated":True}
+
+
+def _web_family(uid:str):
+    profile=me(uid)
+    if not profile["families"]: raise HTTPException(404,"尚未创建数据空间")
+    return profile,profile["families"][0]
+
+@app.get("/api/web/overview")
+def web_overview(uid:str=Depends(current_user)):
+    profile,family=_web_family(uid); fid=family["id"]
+    with connect() as db:
+        rows=db.execute("SELECT entity_type,entity_id,payload,version,updated_at FROM records WHERE family_id=? AND deleted=0 ORDER BY updated_at DESC",(fid,)).fetchall()
+        photo_rows=db.execute("SELECT id,relative_path,mime_type,size_bytes,created_at FROM photos WHERE family_id=?",(fid,)).fetchall()
+    babies=[]; events=[]; photos=[]
+    for row in rows:
+        try: payload=json.loads(row["payload"])
+        except (TypeError,ValueError): continue
+        item={"id":row["entity_id"],"payload":payload,"version":row["version"],"updated_at":row["updated_at"]}
+        if row["entity_type"]=="baby":
+            item["avatar_url"]=f"/api/babies/{row['entity_id']}/avatar?family_id={fid}" if payload.get("hasAvatar") else None
+            babies.append(item)
+        elif row["entity_type"]=="event":
+            try: item["details"]=json.loads(payload.get("payloadJson") or "{}")
+            except (TypeError,ValueError): item["details"]={}
+            events.append(item)
+        elif row["entity_type"]=="photo":
+            item["photo_url"]=f"/api/photos/{row['entity_id']}?family_id={fid}"
+            photos.append(item)
+    photo_files={r["id"]:r for r in photo_rows}
+    for item in photos:
+        meta=photo_files.get(item["id"])
+        if meta:
+            item["mime_type"]=meta["mime_type"]; item["size_bytes"]=meta["size_bytes"]
+        else: item["missing_file"]=True
+    events.sort(key=lambda x:int(x["payload"].get("occurredAt") or 0),reverse=True)
+    photos.sort(key=lambda x:int(x["payload"].get("takenAt") or 0),reverse=True)
+    return {"user":{"username":profile["username"]},"family":family,
+        "counts":{"babies":len(babies),"events":len(events),"photos":len(photos)},
+        "babies":babies,"events":events[:100],"photos":photos[:120]}
+
+@app.get("/api/web/export")
+def web_export(uid:str=Depends(current_user)):
+    profile,family=_web_family(uid); fid=family["id"]
+    with connect() as db:
+        rows=db.execute("SELECT entity_type,entity_id,payload,version,updated_at FROM records WHERE family_id=? AND deleted=0 ORDER BY entity_type,entity_id",(fid,)).fetchall()
+        photo_rows=db.execute("SELECT id,relative_path,mime_type,size_bytes FROM photos WHERE family_id=?",(fid,)).fetchall()
+    photo_files={p["id"]:p for p in photo_rows}
+    entries=[]; assets=[]
+    for row in rows:
+        try: payload=json.loads(row["payload"])
+        except (TypeError,ValueError): continue
+        entry={"entity_type":row["entity_type"],"entity_id":row["entity_id"],"payload":payload,
+               "version":row["version"],"updated_at":row["updated_at"]}
+        if row["entity_type"]=="photo":
+            meta=photo_files.get(row["entity_id"])
+            if meta:
+                path=(PHOTO_DIR/meta["relative_path"]).resolve()
+                if PHOTO_DIR.resolve() in path.parents and path.is_file():
+                    asset=f"photos/{row['entity_id']}{path.suffix.lower()}"
+                    assets.append((asset,path)); entry["asset_path"]=asset
+        elif row["entity_type"]=="baby" and payload.get("hasAvatar"):
+            try: avatar=(AVATAR_DIR/str(uuid.UUID(fid))/f"{uuid.UUID(row['entity_id'])}.jpg").resolve()
+            except ValueError: avatar=None
+            if avatar and AVATAR_DIR.resolve() in avatar.parents and avatar.is_file():
+                asset=f"avatars/{row['entity_id']}.jpg"
+                assets.append((asset,avatar)); entry["asset_path"]=asset
+        entries.append(entry)
+    backup={"format":"babylog-backup","format_version":1,"exported_at":int(time.time()),
+            "family_name":family["name"],"records":entries}
+    DATA_DIR.mkdir(parents=True,exist_ok=True)
+    fd,temp_path=tempfile.mkstemp(prefix="babylog-backup-",suffix=".zip",dir=DATA_DIR)
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(temp_path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("backup.json",json.dumps(backup,ensure_ascii=False,separators=(",",":")))
+            for archive_name,source in assets: archive.write(source,archive_name)
+    except Exception:
+        Path(temp_path).unlink(missing_ok=True); raise
+    filename=f"BabyLog-backup-{time.strftime('%Y%m%d-%H%M%S')}.zip"
+    return FileResponse(temp_path,media_type="application/zip",filename=filename,
+        headers={"Cache-Control":"no-store"},background=BackgroundTask(lambda:Path(temp_path).unlink(missing_ok=True)))
 
 @app.post("/api/families")
 def create_family(body:FamilyCreate,uid:str=Depends(current_user)):
