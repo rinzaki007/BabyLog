@@ -546,8 +546,10 @@ private fun BabyAlbumSection(
     var pendingPhotoUris by remember { mutableStateOf<List<android.net.Uri>>(emptyList()) }
     var showPhotoTimePicker by remember { mutableStateOf(false) }
     var albumFilter by remember { mutableStateOf("全部") }
+    var visiblePhotoLimit by remember { mutableStateOf(60) }
     var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
     var showPhotoDatePicker by remember { mutableStateOf(false) }
+    LaunchedEffect(albumFilter, selectedPhotoDate) { visiblePhotoLimit = 60 }
     val filteredPhotos = photos.filter { photo ->
         val date = java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
         when (albumFilter) {
@@ -613,7 +615,9 @@ private fun BabyAlbumSection(
                 }
             }
         } else {
-            val grouped = filteredPhotos.sortedByDescending { it.takenAt }.groupBy {
+            val sortedFilteredPhotos = filteredPhotos.sortedByDescending { it.takenAt }
+            val visiblePhotos = sortedFilteredPhotos.take(visiblePhotoLimit)
+            val grouped = visiblePhotos.groupBy {
                 SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(it.takenAt))
             }
             if (filteredPhotos.isEmpty()) Text("这个日期范围内还没有照片。", modifier = Modifier.fillMaxWidth().padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -672,6 +676,12 @@ private fun BabyAlbumSection(
                         }
                     }
                 }
+            }
+            if (visiblePhotos.size < filteredPhotos.size) {
+                OutlinedButton(
+                    onClick = { visiblePhotoLimit = (visiblePhotoLimit + 60).coerceAtMost(filteredPhotos.size) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("加载更多照片（已显示 ${visiblePhotos.size}/${filteredPhotos.size} 张）") }
             }
         }
     }
