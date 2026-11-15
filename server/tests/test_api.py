@@ -701,7 +701,7 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
         event_id = str(uuid.uuid4()); event_ids.append(event_id)
         changes.append({"operation_id": str(uuid.uuid4()), "entity_type": "event", "entity_id": event_id,
             "operation": "upsert", "payload": {"id": event_id, "eventType": "FEEDING", "occurredAt": stamp,
-                "payloadJson": "{\\"amountMl\\":120}"}, "base_version": 0})
+                "payloadJson": '{"amountMl":120}'}, "base_version": 0})
     photo_id = str(uuid.uuid4())
     photo_bytes = b"baby-photo-image"
     photo_upload = client.post(f"/api/photos/upload?family_id={family_id}&photo_id={photo_id}", headers=auth(source_token), files={"file": ("photo.jpg", photo_bytes, "image/jpeg")})
