@@ -668,6 +668,8 @@ def _parse_web_backup(raw:bytes):
             if key in seen: raise HTTPException(400,"备份中存在重复记录")
             seen.add(key); item["entity_id"]=entity_id
             asset=item.get("asset_path")
+            if item["entity_type"]=="photo" and not asset:
+                raise HTTPException(400,"备份照片缺少原始图片文件")
             if asset:
                 prefix="photos/" if item["entity_type"]=="photo" else "avatars/" if item["entity_type"]=="baby" else None
                 if not prefix or not isinstance(asset,str) or not asset.startswith(prefix) or Path(asset).name!=asset[len(prefix):] or ".." in Path(asset).parts:
@@ -716,6 +718,7 @@ async def web_import(file:UploadFile=File(...),uid:str=Depends(current_user)):
                     if asset and asset in assets:
                         folder=AVATAR_DIR/str(uuid.UUID(fid)); folder.mkdir(parents=True,exist_ok=True)
                         target=folder/f"{entity_id}.jpg"; temp=target.with_suffix(".jpg.import")
+                        if target.exists(): raise HTTPException(409,"头像目标文件已存在，已停止导入以保护现有文件")
                         temp.write_bytes(assets[asset]); temp.replace(target); written.append(target)
                     else: payload["hasAvatar"]=False
                 if kind=="photo":
@@ -724,6 +727,7 @@ async def web_import(file:UploadFile=File(...),uid:str=Depends(current_user)):
                     if not mime: raise HTTPException(400,"备份照片格式不受支持")
                     folder=PHOTO_DIR/fid; folder.mkdir(parents=True,exist_ok=True)
                     target=folder/f"{entity_id}{ext}"; temp=target.with_suffix(target.suffix+".import")
+                    if target.exists(): raise HTTPException(409,"照片目标文件已存在，已停止导入以保护现有文件")
                     temp.write_bytes(assets[asset]); temp.replace(target); written.append(target)
                     db.execute("INSERT INTO photos VALUES (?,?,?,?,?,?)",(entity_id,fid,str(target.relative_to(PHOTO_DIR)),mime,len(assets[asset]),int(time.time())))
                 payload_json=json.dumps(payload,ensure_ascii=False,separators=(",",":"))
