@@ -1,22 +1,33 @@
 # 开发与 CI 约定
 
-BabyLog Android 与 NAS 同步服务属于同一个产品版本，必须一起维护、一起验证。
+BabyLog Android 客户端、NAS 同步服务和网页管理面板属于同一个产品版本，必须一起维护、一起验证。
 
 ## 主分支 CI
 
-每次向 main 推送或创建 PR 时，CI 并行执行：
+向 `main` 推送或创建 PR 时，CI 并行执行：
 
-1. Android：构建 debug APK。
-2. Sync API：运行 FastAPI 接口测试，覆盖注册登录、家庭邀请、成员隔离、增量同步、幂等和照片上传下载。
-3. Docker：构建 NAS 同步服务镜像，并校验 Compose 配置。
+1. **Android**：构建 debug APK。
+2. **Sync API**：运行 FastAPI 接口测试，覆盖认证、家庭数据访问、增量同步、幂等、照片上传下载、网页面板、备份导出与安全导入。
+3. **Docker**：构建 NAS 同步服务镜像，并校验 Compose 配置及容器启动。
 
-三个任务全部通过才视为该提交通过 CI。Android APK 作为 Actions artifact 上传；Docker 镜像目前只做 CI 构建验证，不会因每次代码变更自动推送 GHCR 或触发 NAS 更新。
+三个任务全部通过才视为该提交通过 CI。Android APK 作为 Actions artifact 上传；Docker 镜像由 CI 构建验证，不代表 NAS 已自动更新。除非专门配置发布流程，合并代码后仍需由部署者在 NAS / Dockge 更新容器。
 
-## API 兼容原则
+## API 与数据兼容原则
 
 - Android 和服务端共用 `docs/FAMILY_SYNC.md` 中定义的 API 契约。
+- Android 现有 Bearer Token 同步 API 必须保持兼容；网页面板使用独立的 Cookie 会话与 CSRF 来源校验。
 - 破坏性 API 变更必须同步更新 Android 客户端、服务端和契约测试。
 - 数据库迁移必须保留已有本地宝宝档案、事件和照片。
 - 离线记录优先写入 Room；服务器未配置时不发起网络请求。
-- Docker 数据目录必须持久化；升级不得覆盖数据库和照片。
+- Docker 数据目录必须持久化；升级不得覆盖数据库、照片和头像。
+- 备份导入必须保持增量新增原则：跳过目标端已存在的记录，不覆盖或删除现有数据。
+- ZIP 导入应在临时文件中流式接收与校验，限制上传体积、条目数量、解压体积和媒体路径，避免将整个归档一次性载入内存。
+- 数据备份默认不包含照片和头像；完整媒体备份必须由用户主动选择。
+
+## 发布与部署
+
+- 代码合并到 `main` 不等于 NAS 容器已更新。
+- 服务端或网页面板改动需要重新构建 / 更新 NAS 容器；仅 Android 改动才需要重新安装 APK。
+- 普通升级必须保留 NAS 数据卷和已配置的 `BABYLOG_JWT_SECRET`。
+- 不应将真实账号、密码、JWT 密钥、家庭数据或照片写入测试样例与仓库。
 - 未通过 Android 构建、API 测试或 Docker 构建的变更，不应标记为完成。
