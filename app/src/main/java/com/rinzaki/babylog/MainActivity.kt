@@ -54,6 +54,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -157,7 +158,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var fabOffsetX by remember { mutableStateOf(0f) }
     var fabOffsetY by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
-    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
+    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
