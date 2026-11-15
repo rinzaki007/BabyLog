@@ -514,3 +514,132 @@ def test_nas_release_asset_retries_transient_tls_disconnect(tmp_path, monkeypatc
     assert size == len(payload)
     assert digest == hashlib.sha256(payload).hexdigest()
     assert temp.read_bytes() == payload
+
+
+def test_nas_release_rate_limit_uses_reset_header_without_repeating_api_call(monkeypatch):
+    import email.message
+    import urllib.error
+    import urllib.request
+    from app import main
+
+    headers = email.message.Message()
+    headers["X-RateLimit-Remaining"] = "0"
+    headers["X-RateLimit-Reset"] = "1700000120"
+    error = urllib.error.HTTPError(
+        "https://api.github.com/releases/latest", 403, "rate limited", headers,
+        __import__("io").BytesIO(b'{"message":"API rate limit exceeded"}')
+    )
+    attempts = {"count": 0}
+    def limited_urlopen(request, timeout):
+        attempts["count"] += 1
+        raise error
+
+    monkeypatch.setattr(urllib.request, "urlopen", limited_urlopen)
+    monkeypatch.setattr(main.time, "time", lambda: 1700000000)
+    monkeypatch.setattr(main.time, "sleep", lambda _seconds: pytest.fail("rate limits must not be retried immediately"))
+    request = urllib.request.Request("https://api.github.com/releases/latest")
+    with pytest.raises(main.GitHubRateLimitError) as caught:
+        main._read_update_url_retry(request, timeout=5, max_bytes=1024)
+    assert attempts["count"] == 1
+    assert caught.value.retry_at == 1700000125
+
+    secondary = urllib.error.HTTPError(
+        "https://api.github.com/releases/latest", 403, "secondary rate limit",
+        email.message.Message(), __import__("io").BytesIO(b'{"message":"secondary rate limit"}')
+    )
+    assert main._rate_limit_retry_at(secondary, 0) == 1700000060
+    assert main._rate_limit_retry_at(secondary, 2) == 1700000240
+
+
+def test_nas_release_rate_limit_falls_back_to_atom_and_downloads_apk(client, tmp_path, monkeypatch):
+    import hashlib
+    import io
+    import json
+    import email.message
+    import urllib.error
+    import urllib.request
+    from app import main
+
+    monkeypatch.setenv("BABYLOG_GITHUB_TOKEN", "test-read-only-token")
+    apk_bytes = b"apk-from-atom-fallback"
+    feed = """<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <entry>
+        <title>BabyLog v9.8.8</title>
+        <id>tag:github.com,2008:Repository/123/v9.8.8</id>
+        <updated>2026-11-15T04:00:00Z</updated>
+        <link rel="alternate" href="https://github.com/rinzaki007/BabyLog/releases/tag/v9.8.8"/>
+        <content type="html">修复更新镜像同步</content>
+      </entry>
+    </feed>""".encode("utf-8")
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+            self.read_once = False
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self, size=-1):
+            if self.read_once:
+                return b""
+            self.read_once = True
+            return self.payload
+
+    def fake_urlopen(request, timeout):
+        url = request.full_url
+        calls.append((url, request.headers))
+        if "api.github.com" in url:
+            assert request.get_header("Authorization") == "Bearer test-read-only-token"
+            headers = email.message.Message()
+            headers["X-RateLimit-Remaining"] = "0"
+            headers["X-RateLimit-Reset"] = str(int(main.time.time()) + 600)
+            raise urllib.error.HTTPError(
+                url, 403, "rate limit exceeded", headers,
+                io.BytesIO(b'{"message":"API rate limit exceeded"}')
+            )
+        if url == main.UPDATE_RELEASE_FEED:
+            return FakeResponse(feed)
+        if url.endswith("/v9.8.8/app-release.apk"):
+            return FakeResponse(apk_bytes)
+        raise AssertionError(f"unexpected URL: {url}")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    metadata = main.refresh_app_release()
+
+    assert metadata["tag"] == "v9.8.8"
+    assert metadata["size"] == len(apk_bytes)
+    assert metadata["sha256"] == hashlib.sha256(apk_bytes).hexdigest()
+    assert (tmp_path / "updates" / "BabyLog-v9.8.8.apk").read_bytes() == apk_bytes
+    status = json.loads((tmp_path / "updates" / "status.json").read_text("utf-8"))
+    assert status["source"] == "github_atom_fallback"
+    assert status["api_retry_at"] > int(main.time.time())
+    assert status["last_error"] is None
+    assert any(url == main.UPDATE_RELEASE_FEED for url, _headers in calls)
+
+
+def test_nas_release_respects_persisted_backoff_and_manual_check_cooldown(client, tmp_path, monkeypatch):
+    import json
+    from app import main
+
+    update_dir = tmp_path / "updates"
+    update_dir.mkdir()
+    now = int(main.time.time())
+    (update_dir / "status.json").write_text(json.dumps({
+        "next_retry_at": now + 900,
+        "manual_check_after": now + 60,
+        "failure_count": 4
+    }), "utf-8")
+
+    def unexpected_urlopen(*args, **kwargs):
+        pytest.fail("a request must not be sent during the persisted backoff window")
+
+    monkeypatch.setattr("urllib.request.urlopen", unexpected_urlopen)
+    with pytest.raises(main.UpdateDeferredError):
+        main.refresh_app_release()
+    response = client.post("/api/app-update/check")
+    assert response.status_code == 200
+    assert response.json()["checked"] is False
+    assert "过于频繁" in response.json()["message"]
