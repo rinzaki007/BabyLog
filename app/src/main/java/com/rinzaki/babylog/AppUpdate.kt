@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.rinzaki.babylog.sync.SyncPreferences
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -270,7 +272,7 @@ internal fun AppUpdateSection() {
     var nasMessage by remember { mutableStateOf("尚未检查") }
     var officialMessage by remember { mutableStateOf("尚未检查") }
     var selectedSource by remember {
-        mutableStateOf(context.getSharedPreferences(UPDATE_PREFS, 0).getString("selected_source", "nas") ?: "nas")
+        mutableStateOf("")
     }
     var downloaded by remember { mutableStateOf<File?>(null) }
     var checkingSource by remember { mutableStateOf<String?>(null) }
@@ -278,32 +280,39 @@ internal fun AppUpdateSection() {
     var progress by remember { mutableFloatStateOf(0f) }
     var error by remember { mutableStateOf<String?>(null) }
     val current = remember { BabyUpdater.currentVersion(context) }
-    val selectedRelease = if (selectedSource == "nas") nasRelease else officialRelease
+    val selectedRelease = when (selectedSource) { "nas" -> nasRelease; "official" -> officialRelease; else -> null }
     val hasUpdate = selectedRelease?.let { BabyUpdater.newer(it.version, current) } == true
 
-    fun checkUpdate(source: String) {
+    fun checkUpdate() {
         if (checkingSource != null || downloading) return
         scope.launch {
-            checkingSource = source
+            checkingSource = "both"
             error = null
             downloaded = null
+            selectedSource = ""
+            context.getSharedPreferences(UPDATE_PREFS, 0).edit().remove("selected_source").apply()
+            nasMessage = "正在检查内网版本…"
+            officialMessage = "正在检查官方版本…"
             try {
-                if (source == "nas") {
-                    nasMessage = "正在检查内网版本…"
-                    val result = BabyUpdater.checkNas(context)
-                    nasRelease = result.first
-                    nasMessage = result.second
-                    if (result.first == null && selectedSource == "nas") error = result.second
-                } else {
-                    officialMessage = "正在检查官方版本…"
-                    val result = BabyUpdater.checkOfficial()
-                    officialRelease = result.first
-                    officialMessage = result.second
-                    if (result.first == null && selectedSource == "official") error = result.second
+                val results = coroutineScope {
+                    val nas = async { BabyUpdater.checkNas(context) }
+                    val official = async { BabyUpdater.checkOfficial() }
+                    nas.await() to official.await()
                 }
+                nasRelease = results.first.first
+                nasMessage = results.first.second
+                officialRelease = results.second.first
+                officialMessage = results.second.second
+                val now = System.currentTimeMillis()
                 context.getSharedPreferences(UPDATE_PREFS, 0).edit()
-                    .putLong("last_check_$source", System.currentTimeMillis()).apply()
-            } finally { checkingSource = null }
+                    .putLong("last_check_nas", now)
+                    .putLong("last_check_official", now)
+                    .apply()
+            } catch (e: Exception) {
+                error = e.message ?: "检查更新时发生错误"
+            } finally {
+                checkingSource = null
+            }
         }
     }
 
@@ -317,18 +326,19 @@ internal fun AppUpdateSection() {
                 Text("应用更新", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("当前 v$current", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
-            Text("分别查看两个渠道的版本，选择来源后再下载。", style = MaterialTheme.typography.bodySmall,
+            Text("先检查两个渠道的最新版本，再选择要下载的安装包。", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             UpdateSourceCard(
                 title = "内网更新 · NAS",
                 version = nasRelease?.version,
                 status = nasMessage,
                 selected = selectedSource == "nas",
-                enabled = checkingSource == null && !downloading,
+                enabled = checkingSource == null && !downloading && nasRelease != null,
                 onClick = {
                     selectedSource = "nas"
                     context.getSharedPreferences(UPDATE_PREFS, 0).edit().putString("selected_source", "nas").apply()
                     downloaded = null
+                    error = null
                 },
                 current = current
             )
@@ -337,11 +347,12 @@ internal fun AppUpdateSection() {
                 version = officialRelease?.version,
                 status = officialMessage,
                 selected = selectedSource == "official",
-                enabled = checkingSource == null && !downloading,
+                enabled = checkingSource == null && !downloading && officialRelease != null,
                 onClick = {
                     selectedSource = "official"
                     context.getSharedPreferences(UPDATE_PREFS, 0).edit().putString("selected_source", "official").apply()
                     downloaded = null
+                    error = null
                 },
                 current = current
             )
@@ -361,8 +372,8 @@ internal fun AppUpdateSection() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 5)
             } else {
                 Text(
-                    if (selectedSource == "nas") "内网版本暂不可用，可切换官方来源或检查 NAS 配置。"
-                    else "官方版本暂不可用，请检查网络后重试。",
+                    if (nasRelease == null && officialRelease == null && nasMessage == "尚未检查" && officialMessage == "尚未检查") "请先点击“检查更新”，获取两个渠道的版本信息。"
+                    else "请选择一个检查成功的更新渠道。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -374,16 +385,11 @@ internal fun AppUpdateSection() {
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
-                    onClick = { checkUpdate("nas") },
+                    onClick = { checkUpdate() },
                     enabled = checkingSource == null && !downloading,
                     modifier = Modifier.weight(1f)
-                ) { Text(if (checkingSource == "nas") "检查中…" else "检查内网") }
-                OutlinedButton(
-                    onClick = { checkUpdate("official") },
-                    enabled = checkingSource == null && !downloading,
-                    modifier = Modifier.weight(1f)
-                ) { Text(if (checkingSource == "official") "检查中…" else "检查官方") }
-                if (hasUpdate && downloaded == null) {
+                ) { Text(if (checkingSource == "both") "检查中…" else "检查更新") }
+                if (hasUpdate && downloaded == null && selectedRelease != null) {
                     Button(
                         enabled = checkingSource == null && !downloading,
                         modifier = Modifier.weight(1f),
@@ -402,7 +408,9 @@ internal fun AppUpdateSection() {
                                 }
                             }
                         }
-                    ) { Text("下载所选版本") }
+                    ) {
+                        Text("下载" + (if (selectedSource == "nas") "NAS" else "GitHub") + "版本 v" + selectedRelease.version)
+                    }
                 }
                 downloaded?.let { file ->
                     Button(
@@ -414,7 +422,7 @@ internal fun AppUpdateSection() {
                     ) { Text("安装更新") }
                 }
             }
-            Text("下载时严格使用所选渠道，不会自动切换来源。安装仍需 Android 系统确认，不会删除本地记录。",
+            Text("版本检查会同时查询 NAS 和 GitHub；选择渠道后才会下载对应安装包，不会自动切换来源。安装仍需 Android 系统确认，不会删除本地记录。",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

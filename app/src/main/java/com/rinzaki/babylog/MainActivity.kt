@@ -127,10 +127,10 @@ private val BabyLogTypography = Typography().copy(
     titleSmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
     bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 22.sp),
     bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
-    bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
-    labelLarge = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
-    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 16.sp),
-    labelSmall = TextStyle(fontSize = 11.sp, lineHeight = 15.sp)
+    bodySmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    labelMedium = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
+    labelSmall = TextStyle(fontSize = 12.sp, lineHeight = 17.sp)
 )
 
 private val WarmColors = lightColorScheme(
@@ -217,8 +217,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         NavigationBarItem(
                             selected = selectedNav == index,
                             onClick = { selectedNav = index },
-                            icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleMedium) },
-                            label = { Text(label) }
+                            icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleLarge) },
+                            label = { Text(label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, lineHeight = 18.sp, fontWeight = if (selectedNav == index) FontWeight.SemiBold else FontWeight.Medium), maxLines = 1) }
                         )
                     }
                 }
@@ -808,17 +808,19 @@ private fun TrendsSummary(events: List<BabyEventEntity>) {
                 Text("数据统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Text("${recent.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Text("统计周期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("近7天", "近30天", "近90天", "全部"), range) { range = it }
+            Text("记录类型", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("全部", "喂养", "护理", "睡眠", "成长"), category) { category = it }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
             }
-            if (category == "全部" || category == "喂养") Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (category == "全部" || category == "喂养") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("🍼", "配方奶总量", "${milk} ml", Modifier.weight(1f))
                 SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
             }
-            if (category == "全部" || category == "护理") Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
                 SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
             }
@@ -1510,10 +1512,16 @@ private fun TodaySummary(events: List<BabyEventEntity>) {
 
 @Composable
 private fun SummaryPill(emoji: String, label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.background(Color(0xFFFFF5F0), RoundedCornerShape(12.dp)).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier.fillMaxWidth().heightIn(min = 84.dp)
+            .background(Color(0xFFFFF5F0), RoundedCornerShape(14.dp))
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
+    ) {
         Text(emoji)
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 
@@ -1675,13 +1683,43 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
 
 @Composable
 private fun SelectionRow(options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        options.chunked(4).forEach { group ->
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+    val columns = if (options.size <= 4) options.size.coerceAtLeast(1) else 3
+    val rows = options.chunked(columns)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        rows.forEachIndexed { rowIndex, group ->
+            val missing = columns - group.size
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (missing > 0) Spacer(Modifier.weight(missing / 2f))
                 group.forEach { option ->
-                    if (selected == option) FilledTonalButton(onClick = { onSelect(option) }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp)) { Text(option) }
-                    else OutlinedButton(onClick = { onSelect(option) }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp)) { Text(option) }
+                    val modifier = Modifier.weight(1f)
+                    if (selected == option) {
+                        FilledTonalButton(
+                            onClick = { onSelect(option) },
+                            modifier = modifier,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(option, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { onSelect(option) },
+                            modifier = modifier,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(option, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
+                if (missing > 0) Spacer(Modifier.weight(missing / 2f))
             }
         }
     }
