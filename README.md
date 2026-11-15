@@ -10,6 +10,7 @@
 [![Android CI](https://github.com/rinzaki007/BabyLog/actions/workflows/android.yml/badge.svg?branch=main)](https://github.com/rinzaki007/BabyLog/actions/workflows/android.yml)
 [![Latest Release](https://img.shields.io/github/v/release/rinzaki007/BabyLog?label=最新版本)](https://github.com/rinzaki007/BabyLog/releases/latest)
 [![Android](https://img.shields.io/badge/平台-Android-3DDC84?logo=android&logoColor=white)](https://github.com/rinzaki007/BabyLog)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
 
@@ -116,11 +117,17 @@ NAS 服务启动后，可在浏览器打开服务地址进入网页面板，使�
 | 部署方式 | Docker Compose、Dockge |
 | 版本构建 | GitHub Actions |
 
-## 🛠️ 参与开发
+## 🌍 开源许可与贡献
 
-Android 客户端与 NAS 服务端作为同一产品维护。CI 会分别验证 Android 构建、同步 API 测试和 Docker 镜像构建。
+BabyLog 以 **MIT License** 开源。你可以在遵守许可证条款的前提下自由使用、复制、修改、合并、发布、分发、再许可和销售本软件副本；分发软件或其重要部分时，请保留原版权声明和许可证文本。完整条款见 [LICENSE](LICENSE)。
 
-开始前建议先阅读 [开发与 CI 约定](docs/DEVELOPMENT.md)。涉及同步协议、数据库结构、照片或备份处理的改动，也请同步检查 [家庭同步说明](docs/FAMILY_SYNC.md)。
+欢迎提交 Issue 和 Pull Request，参与改进功能、修复问题与完善文档。贡献前请阅读 [贡献指南](CONTRIBUTING.md) 和 [开发与 CI 约定](docs/DEVELOPMENT.md)。涉及同步协议、数据库结构、照片或备份处理的改动，也请同步检查 [家庭同步说明](docs/FAMILY_SYNC.md)。
+
+**第三方组件说明：** MIT 许可适用于本仓库作者拥有版权并纳入本项目的代码及文档；第三方依赖、字体、图标、图片、商标和其他素材仍分别适用其各自许可证或使用条款。使用或再分发时，请自行遵守相关要求。BabyLog 不授予对第三方品牌或服务的额外权利。
+
+## 🛡️ 免责声明
+
+软件按“现状”提供，不附带任何明示或默示保证。请根据自身环境评估并安全部署；尤其应妥善保护宝宝及家庭隐私数据、备份文件、账号凭据和服务器密钥。MIT License 的完整免责声明与责任限制以 [LICENSE](LICENSE) 为准。
 
 ## 🔐 隐私与安全提醒
 
