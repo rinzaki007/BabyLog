@@ -543,6 +543,13 @@ def test_nas_release_rate_limit_uses_reset_header_without_repeating_api_call(mon
     assert attempts["count"] == 1
     assert caught.value.retry_at == 1700000125
 
+    secondary = urllib.error.HTTPError(
+        "https://api.github.com/releases/latest", 403, "secondary rate limit",
+        email.message.Message(), __import__("io").BytesIO(b'{"message":"secondary rate limit"}')
+    )
+    assert main._rate_limit_retry_at(secondary, 0) == 1700000060
+    assert main._rate_limit_retry_at(secondary, 2) == 1700000240
+
 
 def test_nas_release_rate_limit_falls_back_to_atom_and_downloads_apk(client, tmp_path, monkeypatch):
     import hashlib
