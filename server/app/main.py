@@ -652,6 +652,7 @@ def _parse_web_backup(raw:bytes):
             names.add(name); total+=info.file_size
             if total>512*1024*1024: raise HTTPException(413,"备份解压后超过 512 MB")
         if "backup.json" not in names: raise HTTPException(400,"备份缺少 backup.json")
+        if archive.getinfo("backup.json").file_size>20*1024*1024: raise HTTPException(413,"备份清单超过 20 MB")
         try: backup=json.loads(archive.read("backup.json"))
         except Exception: raise HTTPException(400,"备份清单无法读取")
         if not isinstance(backup,dict) or backup.get("format")!="babylog-backup" or backup.get("format_version")!=1:
@@ -667,12 +668,13 @@ def _parse_web_backup(raw:bytes):
             key=(item["entity_type"],entity_id)
             if key in seen: raise HTTPException(400,"备份中存在重复记录")
             seen.add(key); item["entity_id"]=entity_id
+            if item["payload"].get("id") not in (None,entity_id): raise HTTPException(400,"备份记录 ID 与内容不一致")
             asset=item.get("asset_path")
             if item["entity_type"]=="photo" and not asset:
                 raise HTTPException(400,"备份照片缺少原始图片文件")
             if asset:
                 prefix="photos/" if item["entity_type"]=="photo" else "avatars/" if item["entity_type"]=="baby" else None
-                if not prefix or not isinstance(asset,str) or not asset.startswith(prefix) or Path(asset).name!=asset[len(prefix):] or ".." in Path(asset).parts:
+                if not prefix or not isinstance(asset,str) or not asset.startswith(prefix) or Path(asset).name!=asset[len(prefix):] or Path(asset).stem!=entity_id or ".." in Path(asset).parts:
                     raise HTTPException(400,"备份包含无效媒体路径")
                 if asset not in names: raise HTTPException(400,"备份缺少媒体文件")
                 content=archive.read(asset)
