@@ -709,13 +709,13 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
     target_token = register(client, "web-import-target@example.test")
     target_login = client.post("/api/web/login", json={"email": "web-import-target@example.test", "password": "correct-horse-battery"})
     assert target_login.status_code == 200
-    preview = client.post("/api/web/import/preview", files={"file": ("backup.zip", exported.content, "application/zip")})
+    preview = client.post("/api/web/import/preview", headers={"Origin": "http://testserver"}, files={"file": ("backup.zip", exported.content, "application/zip")})
     assert preview.status_code == 200, preview.text
     assert preview.json()["new_count"] == 4
-    imported = client.post("/api/web/import", files={"file": ("backup.zip", exported.content, "application/zip")})
+    imported = client.post("/api/web/import", headers={"Origin": "http://testserver"}, files={"file": ("backup.zip", exported.content, "application/zip")})
     assert imported.status_code == 200, imported.text
     assert imported.json() == {"imported": 4, "skipped_existing": 0}
-    repeated = client.post("/api/web/import", files={"file": ("backup.zip", exported.content, "application/zip")})
+    repeated = client.post("/api/web/import", headers={"Origin": "http://testserver"}, files={"file": ("backup.zip", exported.content, "application/zip")})
     assert repeated.status_code == 200
     assert repeated.json() == {"imported": 0, "skipped_existing": 4}
     overview = client.get("/api/web/overview?event_limit=1&event_offset=1")
@@ -730,7 +730,7 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
 def test_web_import_rejects_invalid_archive_without_changing_existing_data(client):
     token = register(client, "web-import-invalid@example.test")
     client.post("/api/web/login", json={"email": "web-import-invalid@example.test", "password": "correct-horse-battery"})
-    invalid = client.post("/api/web/import", files={"file": ("bad.zip", b"not a zip", "application/zip")})
+    invalid = client.post("/api/web/import", headers={"Origin": "http://testserver"}, files={"file": ("bad.zip", b"not a zip", "application/zip")})
     assert invalid.status_code == 400
     overview = client.get("/api/web/overview")
     assert overview.status_code == 200
