@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.verticalScroll
@@ -62,6 +63,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,8 +80,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.room.Room
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
@@ -110,6 +114,24 @@ import java.util.UUID
 import java.io.File
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+
+private val BabyLogTypography = Typography().copy(
+    displayLarge = TextStyle(fontSize = 30.sp, lineHeight = 36.sp),
+    displayMedium = TextStyle(fontSize = 28.sp, lineHeight = 34.sp),
+    displaySmall = TextStyle(fontSize = 26.sp, lineHeight = 32.sp),
+    headlineLarge = TextStyle(fontSize = 24.sp, lineHeight = 30.sp),
+    headlineMedium = TextStyle(fontSize = 22.sp, lineHeight = 28.sp),
+    headlineSmall = TextStyle(fontSize = 20.sp, lineHeight = 26.sp),
+    titleLarge = TextStyle(fontSize = 18.sp, lineHeight = 24.sp),
+    titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 22.sp),
+    titleSmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 22.sp),
+    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
+    labelLarge = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
+    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 16.sp),
+    labelSmall = TextStyle(fontSize = 11.sp, lineHeight = 15.sp)
+)
 
 private val WarmColors = lightColorScheme(
     primary = Color(0xFF7564A8), onPrimary = Color.White,
@@ -185,7 +207,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
     var selectedNav by remember { mutableStateOf(0) }
 
-    MaterialTheme(colorScheme = WarmColors) {
+    MaterialTheme(colorScheme = WarmColors, typography = BabyLogTypography) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
@@ -195,7 +217,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         NavigationBarItem(
                             selected = selectedNav == index,
                             onClick = { selectedNav = index },
-                            icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleLarge) },
+                            icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleMedium) },
                             label = { Text(label) }
                         )
                     }
@@ -217,8 +239,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         onDragCancel = { horizontalTravel = 0f }
                     )
                 },
-                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 7.dp, bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
+                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
                 if (selectedNav == 0) item {
                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -1747,9 +1769,9 @@ private fun DateTimeOptionDialog(
             }
         },
         text = {
-            Column(Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Surface(color = Color(0xFFF1ECF7), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.fillMaxWidth().padding(vertical = 13.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(dateLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         if (includeTime) Text(timeLabel, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     }
@@ -1758,23 +1780,26 @@ private fun DateTimeOptionDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     listOf("今天" to LocalDate.now(), "昨天" to LocalDate.now().minusDays(1), "前天" to LocalDate.now().minusDays(2)).forEach { (label, day) ->
                         val active = selected.toLocalDate() == day
-                        if (active) FilledTonalButton(onClick = { selected = day.atTime(selected.toLocalTime()) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp)) { Text(label) }
-                        else OutlinedButton(onClick = { selected = day.atTime(selected.toLocalTime()) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp)) { Text(label) }
+                        if (active) FilledTonalButton(onClick = { selected = day.atTime(selected.toLocalTime()) }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 5.dp)) { Text(label) }
+                        else OutlinedButton(onClick = { selected = day.atTime(selected.toLocalTime()) }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 5.dp)) { Text(label) }
                     }
                 }
                 Text("选择具体日期", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    OptionPicker("年", selected.year.toString(), (1900..currentYear).toList().map(Int::toString)) { value ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().widthIn(max = 340.dp).align(Alignment.CenterHorizontally),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OptionPicker("年", selected.year.toString(), (1900..currentYear).toList().map(Int::toString), modifier = Modifier.weight(1.25f)) { value ->
                         val year = value.toInt()
                         val maxDay = selected.month.length(java.time.Year.isLeap(year.toLong()))
                         selected = selected.withYear(year).withDayOfMonth(selected.dayOfMonth.coerceAtMost(maxDay))
                     }
-                    OptionPicker("月", "%02d".format(selected.monthValue), (1..12).toList().map { "%02d".format(it) }) { value ->
+                    OptionPicker("月", "%02d".format(selected.monthValue), (1..12).toList().map { "%02d".format(it) }, modifier = Modifier.weight(1f)) { value ->
                         val month = value.toInt()
                         val maxDay = selected.withMonth(month).month.length(java.time.Year.isLeap(selected.year.toLong()))
                         selected = selected.withMonth(month).withDayOfMonth(selected.dayOfMonth.coerceAtMost(maxDay))
                     }
-                    OptionPicker("日", "%02d".format(selected.dayOfMonth), (1..selected.month.length(java.time.Year.isLeap(selected.year.toLong()))).toList().map { "%02d".format(it) }) { value ->
+                    OptionPicker("日", "%02d".format(selected.dayOfMonth), (1..selected.month.length(java.time.Year.isLeap(selected.year.toLong()))).toList().map { "%02d".format(it) }, modifier = Modifier.weight(1f)) { value ->
                         selected = selected.withDayOfMonth(value.toInt())
                     }
                 }
@@ -1797,15 +1822,21 @@ private fun DateTimeOptionDialog(
                 }
             }
         },
-        confirmButton = { Button(onClick = { onConfirm(selected) }) { Text("确认时间") } },
+        confirmButton = { Button(onClick = { onConfirm(selected) }) { Text(if (includeTime) "确认时间" else "确认日期") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }
 
 @Composable
-private fun OptionPicker(label: String, selected: String, options: List<String>, onSelect: (String) -> Unit) {
+private fun OptionPicker(
+    label: String,
+    selected: String,
+    options: List<String>,
+    modifier: Modifier = Modifier,
+    onSelect: (String) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
+    Box(modifier = modifier) {
         OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp), shape = RoundedCornerShape(13.dp)) {
             Text("$selected $label", fontWeight = FontWeight.Bold)
         }
