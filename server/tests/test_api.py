@@ -694,6 +694,7 @@ def test_web_export_can_exclude_or_include_photo_assets(client):
     family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
     baby_id = str(uuid.uuid4())
     photo_id = str(uuid.uuid4())
+    event_id = str(uuid.uuid4())
 
     avatar = client.post(
         f"/api/babies/{baby_id}/avatar", headers=auth(token),
@@ -712,8 +713,8 @@ def test_web_export_can_exclude_or_include_photo_assets(client):
     pushed = client.post("/api/sync/push", headers=auth(token), json={"family_id": family_id, "changes": [
         {"operation_id": str(uuid.uuid4()), "entity_type": "baby", "entity_id": baby_id,
          "operation": "upsert", "payload": {"id": baby_id, "displayName": "小宝", "hasAvatar": True}, "base_version": 0},
-        {"operation_id": str(uuid.uuid4()), "entity_type": "event", "entity_id": str(uuid.uuid4()),
-         "operation": "upsert", "payload": {"eventType": "FEEDING", "amountMl": 120}, "base_version": 0},
+        {"operation_id": str(uuid.uuid4()), "entity_type": "event", "entity_id": event_id,
+         "operation": "upsert", "payload": {"id": event_id, "eventType": "FEEDING", "amountMl": 120}, "base_version": 0},
         {"operation_id": str(uuid.uuid4()), "entity_type": "photo", "entity_id": photo_id,
          "operation": "upsert", "payload": {"id": photo_id, "babyId": baby_id, "caption": "满月",
                                              "takenAt": 123456789, "createdAt": 123456789,
