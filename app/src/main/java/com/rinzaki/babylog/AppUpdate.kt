@@ -37,8 +37,9 @@ private object BabyUpdater {
     fun nasStatus(context: Context): String {
         val base = SyncPreferences.server(context).trim().trimEnd('/')
         if (base.isBlank()) return "NAS 更新镜像：尚未配置 NAS 地址"
-        val connection = URL("$base/api/app-update/status").openConnection() as HttpURLConnection
+        var connection: HttpURLConnection? = null
         return try {
+            connection = URL("$base/api/app-update/status").openConnection() as HttpURLConnection
             connection.connectTimeout = 5000
             connection.readTimeout = 7000
             check(connection.responseCode == 200) { "HTTP ${connection.responseCode}" }
@@ -51,7 +52,7 @@ private object BabyUpdater {
             }
         } catch (error: Exception) {
             "NAS 更新镜像暂不可用：${error.message ?: "连接失败"}"
-        } finally { connection.disconnect() }
+        } finally { connection?.disconnect() }
     }
 
     fun currentVersion(context: Context): String {
@@ -73,6 +74,7 @@ private object BabyUpdater {
         val current = currentVersion(context)
         val base = SyncPreferences.server(context).trim().trimEnd('/')
         var nasFailure: String? = null
+        var nasReleaseFallback: BabyRelease? = null
         if (base.isNotBlank()) {
             try {
                 val connection = URL("$base/api/app-update/latest").openConnection() as HttpURLConnection
@@ -95,6 +97,7 @@ private object BabyUpdater {
                         )
                     } else null
                 } finally { connection.disconnect() }
+                nasReleaseFallback = nasRelease
                 if (nasRelease != null && newer(nasRelease.version, current)) {
                     context.getSharedPreferences(UPDATE_PREFS, 0).edit()
                         .putLong("last_check", System.currentTimeMillis()).apply()
@@ -108,6 +111,7 @@ private object BabyUpdater {
         val release = try {
             fetchOfficialRelease()
         } catch (error: Exception) {
+            nasReleaseFallback?.let { return@withContext it }
             val detail = error.message ?: "官方更新检查失败"
             throw IllegalStateException(
                 if (nasFailure != null) "NAS 更新源不可用（$nasFailure）；官方更新源也暂时无法访问（$detail）"
