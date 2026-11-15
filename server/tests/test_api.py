@@ -726,7 +726,10 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
     assert imported.status_code == 200, imported.text
     assert imported.json() == {"imported": 5, "skipped_existing": 0}
     target_family = client.get("/api/me", headers=auth(target_token)).json()["families"][0]["id"]
-    restored_photo = client.get(f"/api/photos/{photo_id}?family_id={target_family}")
+    target_overview = client.get("/api/web/overview?photo_limit=10")
+    imported_photo_id = target_overview.json()["photos"][0]["id"]
+    assert imported_photo_id != photo_id
+    restored_photo = client.get(f"/api/photos/{imported_photo_id}?family_id={target_family}")
     assert restored_photo.status_code == 200 and restored_photo.content == photo_bytes
     restored_avatar = client.get(f"/api/babies/{baby_id}/avatar?family_id={target_family}")
     assert restored_avatar.status_code == 200 and restored_avatar.content == avatar_bytes
