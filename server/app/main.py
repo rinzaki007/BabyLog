@@ -29,6 +29,12 @@ class GitHubRateLimitError(RuntimeError):
         self.retry_at=int(retry_at)
 
 
+class UpdateDeferredError(RuntimeError):
+    def __init__(self, message, retry_at):
+        super().__init__(message)
+        self.retry_at=int(retry_at)
+
+
 def _read_json(path:Path, default:dict):
     try: return json.loads(path.read_text("utf-8"))
     except (OSError, ValueError): return default
@@ -201,7 +207,7 @@ def refresh_app_release():
     status=_read_json(UPDATE_STATUS,{})
     deferred_until=int(status.get("next_retry_at") or 0)
     if deferred_until>checked:
-        raise RuntimeError(f"更新检查正在退避等待，预计 {time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(deferred_until))} 后重试")
+        raise UpdateDeferredError(f"更新检查正在退避等待，预计 {time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(deferred_until))} 后重试",deferred_until)
     source="github_api"
     api_retry_at=int(status.get("api_retry_at") or 0)
     release=None
@@ -222,6 +228,7 @@ def refresh_app_release():
             api_retry_at=error.retry_at
             status["api_retry_at"]=api_retry_at
             status["api_last_error"]=str(error)[:500]
+            _write_json_atomic(UPDATE_STATUS,status)
             source="github_atom_fallback"
         except Exception:
             raise
@@ -282,6 +289,9 @@ def refresh_app_release():
 def _record_update_failure(error):
     status=_read_json(UPDATE_STATUS,{})
     now=int(time.time())
+    existing_retry=int(status.get("next_retry_at") or 0)
+    if isinstance(error,UpdateDeferredError) or existing_retry>now:
+        return status
     failures=int(status.get("failure_count") or 0)+1
     retry_at=getattr(error,"retry_at",None)
     delay=min(3600,60*(2**min(failures-1,6)))
