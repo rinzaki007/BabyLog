@@ -127,10 +127,10 @@ private val BabyLogTypography = Typography().copy(
     titleSmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
     bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 22.sp),
     bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
-    bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
-    labelLarge = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
-    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 16.sp),
-    labelSmall = TextStyle(fontSize = 11.sp, lineHeight = 15.sp)
+    bodySmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    labelMedium = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
+    labelSmall = TextStyle(fontSize = 12.sp, lineHeight = 17.sp)
 )
 
 private val WarmColors = lightColorScheme(
@@ -217,8 +217,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         NavigationBarItem(
                             selected = selectedNav == index,
                             onClick = { selectedNav = index },
-                            icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleMedium) },
-                            label = { Text(label) }
+                            icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleLarge) },
+                            label = { Text(label, style = MaterialTheme.typography.labelLarge) }
                         )
                     }
                 }
@@ -1675,13 +1675,43 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
 
 @Composable
 private fun SelectionRow(options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        options.chunked(4).forEach { group ->
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+    val columns = if (options.size <= 4) options.size.coerceAtLeast(1) else 3
+    val rows = options.chunked(columns)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        rows.forEachIndexed { rowIndex, group ->
+            val missing = columns - group.size
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (missing > 0) Spacer(Modifier.weight(missing / 2f))
                 group.forEach { option ->
-                    if (selected == option) FilledTonalButton(onClick = { onSelect(option) }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp)) { Text(option) }
-                    else OutlinedButton(onClick = { onSelect(option) }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp)) { Text(option) }
+                    val modifier = Modifier.weight(1f)
+                    if (selected == option) {
+                        FilledTonalButton(
+                            onClick = { onSelect(option) },
+                            modifier = modifier,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(option, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { onSelect(option) },
+                            modifier = modifier,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(option, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
+                if (missing > 0) Spacer(Modifier.weight(missing / 2f))
             }
         }
     }
