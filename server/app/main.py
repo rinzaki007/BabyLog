@@ -31,6 +31,64 @@ def _write_json_atomic(path:Path, payload:dict):
     temp.write_text(json.dumps(payload,ensure_ascii=False,indent=2),"utf-8")
     os.replace(temp,path)
 
+def _read_update_url_retry(request, timeout, max_bytes):
+    import urllib.request
+    last_error=None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request,timeout=timeout) as response:
+                payload=response.read(max_bytes+1)
+            if len(payload)>max_bytes:
+                raise ValueError("GitHub 更新响应超过大小限制")
+            return payload
+        except Exception as error:
+            last_error=error
+            if attempt<2:
+                time.sleep((2,5)[attempt])
+    raise RuntimeError(f"GitHub 更新信息连续请求失败（已重试 3 次）：{last_error}") from last_error
+
+
+def _download_update_asset_retry(request, temp, expected_size, expected_digest):
+    import urllib.request
+    last_error=None
+    for attempt in range(3):
+        digest=hashlib.sha256()
+        total=0
+        try:
+            if temp.exists():
+                temp.unlink()
+            with urllib.request.urlopen(request,timeout=60) as response, temp.open("wb") as output:
+                while True:
+                    chunk=response.read(1024*1024)
+                    if not chunk:
+                        break
+                    total+=len(chunk)
+                    if total>UPDATE_MAX_BYTES:
+                        raise ValueError("APK 超过 250 MB 安全限制")
+                    digest.update(chunk)
+                    output.write(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+            if expected_size and total!=expected_size:
+                raise ValueError(f"APK 下载大小校验失败（收到 {total} / 预期 {expected_size} 字节）")
+            if total<=0:
+                raise ValueError("下载到的 APK 为空")
+            actual_digest=digest.hexdigest()
+            if expected_digest and not actual_digest.lower()==expected_digest.lower():
+                raise ValueError("APK SHA-256 与 GitHub 提供的摘要不一致")
+            return total,actual_digest
+        except Exception as error:
+            last_error=error
+            try:
+                if temp.exists():
+                    temp.unlink()
+            except OSError:
+                pass
+            if attempt<2:
+                time.sleep((2,5)[attempt])
+    raise RuntimeError(f"GitHub APK 下载连续失败（已重试 3 次）：{last_error}") from last_error
+
+
 def refresh_app_release():
     import urllib.request
     UPDATE_DIR.mkdir(parents=True,exist_ok=True)
@@ -40,8 +98,8 @@ def refresh_app_release():
         request=urllib.request.Request(UPDATE_RELEASE_API,headers={
             "Accept":"application/vnd.github+json","User-Agent":"BabyLog-NAS-Updater"
         })
-        with urllib.request.urlopen(request,timeout=20) as response:
-            release=json.loads(response.read(2*1024*1024).decode("utf-8"))
+        release_payload=_read_update_url_retry(request,timeout=25,max_bytes=2*1024*1024)
+        release=json.loads(release_payload.decode("utf-8"))
         if release.get("draft") or release.get("prerelease"):
             raise ValueError("最新正式 Release 不可用")
         tag=str(release.get("tag_name","")).strip()
@@ -63,27 +121,18 @@ def refresh_app_release():
             return current
         request=urllib.request.Request(asset_url,headers={"User-Agent":"BabyLog-NAS-Updater"})
         temp=UPDATE_DIR/(filename+".part")
-        digest=hashlib.sha256(); total=0
-        try:
-            with urllib.request.urlopen(request,timeout=45) as response, temp.open("wb") as output:
-                while True:
-                    chunk=response.read(1024*1024)
-                    if not chunk: break
-                    total+=len(chunk)
-                    if total>UPDATE_MAX_BYTES: raise ValueError("APK 超过 250 MB 安全限制")
-                    digest.update(chunk); output.write(chunk)
-            expected_size=int(asset.get("size") or 0)
-            if expected_size and total!=expected_size: raise ValueError("APK 下载大小校验失败")
-            if total<=0: raise ValueError("下载到的 APK 为空")
-            os.replace(temp,target)
-        finally:
-            if temp.exists(): temp.unlink()
+        expected_size=int(asset.get("size") or 0)
+        expected_digest=str(asset.get("digest") or "").removeprefix("sha256:").strip().lower()
+        if expected_digest and not re.fullmatch(r"[a-f0-9]{64}",expected_digest):
+            raise ValueError("GitHub 返回的 APK SHA-256 格式无效")
+        total,digest_hex=_download_update_asset_retry(request,temp,expected_size,expected_digest)
+        os.replace(temp,target)
         metadata={
             "available":True,"tag":tag,"version":tag.lstrip("vV"),
             "name":str(release.get("name") or ("BabyLog "+tag)),
             "notes":str(release.get("body") or "本次更新未提供说明。")[:12000],
             "published_at":release.get("published_at"),"size":total,
-            "sha256":digest.hexdigest(),"file_name":filename,
+            "sha256":digest_hex,"file_name":filename,
             "download_path":"/api/app-update/download","updated_at":checked
         }
         _write_json_atomic(UPDATE_META,metadata)
