@@ -25,7 +25,7 @@
 | 📈 **成长曲线** | 记录身高、体重等数据，查看变化趋势 |
 | 🖼️ **成长相册** | 按时间浏览照片，查看大图与照片信息 |
 | 💉 **疫苗接种** | 查看接种安排，记录已完成的疫苗 |
-| 🏡 **家庭同步** | 连接自建 NAS，在家庭成员设备间同步档案、记录和照片 |
+| 🏡 **家庭同步** | 同一账号登录的多台设备通过自建 NAS 同步档案、记录和照片 |
 | 🔄 **应用更新** | 支持检查 NAS 内网更新源和 GitHub 官方更新源 |
 
 ## 🌱 设计理念
@@ -33,20 +33,20 @@
 - **离线优先**：不登录、不联网、不配置服务器，也可以完整记录日常数据。
 - **数据由自己掌握**：手机端使用本地数据库保存记录；家庭同步服务可部署在自己的 NAS。
 - **同步按需开启**：不强制绑定第三方云服务，不依赖 Supabase。
-- **家庭成员独立账号**：家长分别登录，再加入同一个家庭空间。
+- **同一账号多设备**：家庭内的手机使用同一个 BabyLog 账号登录并同步同一份宝宝档案，不需要为每位家庭成员分别注册账号。
 - **谨慎处理数据**：同步冲突不会静默覆盖；升级服务端时保留 NAS 上的数据库和照片。
 
 ## 📱 获取与使用
 
 1. 前往 [GitHub Releases](https://github.com/rinzaki007/BabyLog/releases) 获取 Android 安装包。
 2. 安装后即可离线使用，先创建宝宝档案并开始记录。
-3. 如需多设备共享，再部署 NAS 同步服务，并在 App 设置中填写服务器地址、登录账号或加入家庭。
+3. 如需多设备共享，先部署 NAS 同步服务；每台手机填写相同的服务器地址，并使用同一个 BabyLog 账号登录。
 
 > 不使用家庭同步功能时，无需部署 Docker，也无需准备 NAS。
 
 ## 🏡 自建 NAS 同步
 
-服务端位于 `server/`，使用 FastAPI、SQLite WAL 和 NAS 文件系统。可通过 Docker Compose 或 Dockge 部署。
+服务端位于 `server/`，使用 FastAPI、SQLite WAL 和 NAS 文件系统。仓库根目录已提供 `docker-compose.yml`，下载项目后可直接通过 Docker Compose 或 Dockge 部署。
 
 | 项目 | 默认值 / 说明 |
 | --- | --- |
@@ -56,7 +56,7 @@
 | 数据存储 | SQLite 数据库与照片文件 |
 | 容器运行用户 | 完成目录准备后，以非 root 用户 UID/GID `10001` 运行 |
 
-部署前请设置独立且足够长的 `BABYLOG_JWT_SECRET`，并将数据目录映射到 NAS 的持久化存储位置。建议通过 HTTPS 反向代理访问服务，不要将 SQLite 数据库文件或 NAS 管理端口直接暴露到公网。
+**快速部署：** 将仓库下载到 NAS，进入项目目录，先复制 `.env.example` 为 `.env`，把 `BABYLOG_JWT_SECRET` 替换为至少 32 位的随机密钥，并按需修改 `BABYLOG_DATA_PATH`（默认 `./data`）和 `BABYLOG_PORT`（默认 `18765`），然后执行 `docker compose up -d --build`。Dockge 用户也可以直接导入仓库根目录的 `docker-compose.yml`，配置相同的环境变量和持久化目录后启动。\n\nCompose 核心配置如下（密钥务必自行生成，不要使用示例值）：\n\n```yaml\nservices:\n  babylog-sync:\n    build:\n      context: ./server\n    image: babylog-sync:latest\n    container_name: babylog-sync\n    restart: unless-stopped\n    environment:\n      BABYLOG_DATA_DIR: /data\n      BABYLOG_JWT_SECRET: ${BABYLOG_JWT_SECRET:?请先设置 BABYLOG_JWT_SECRET}\n      BABYLOG_TOKEN_TTL_SECONDS: ${BABYLOG_TOKEN_TTL_SECONDS:-2592000}\n      BABYLOG_MAX_PHOTO_BYTES: ${BABYLOG_MAX_PHOTO_BYTES:-20971520}\n    ports:\n      - "${BABYLOG_PORT:-18765}:18765"\n    volumes:\n      - ${BABYLOG_DATA_PATH:-./data}:/data\n```\n\n建议通过 HTTPS 反向代理访问服务，不要将 SQLite 数据库文件或 NAS 管理端口直接暴露到公网。
 
 详细步骤与同步范围请查看：
 
