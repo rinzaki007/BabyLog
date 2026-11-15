@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.background
@@ -156,7 +157,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var fabOffsetX by remember { mutableStateOf(0f) }
     var fabOffsetY by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
-    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
+    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
@@ -197,12 +198,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
                 NavigationBar(containerColor = Color.White) {
-                    val destinations = listOf("首页", "记录", "疫苗", "趋势", "相册")
+                    val destinations = listOf("首页", "记录", "成长", "相册")
                     destinations.forEachIndexed { index, label ->
                         NavigationBarItem(
                             selected = selectedNav == index,
                             onClick = { selectedNav = index },
-                            icon = { Text(listOf("⌂", "＋", "✚", "⌁", "▦")[index], style = MaterialTheme.typography.titleLarge) },
+                            icon = { Text(listOf("⌂", "＋", "⌁", "▦")[index], style = MaterialTheme.typography.titleLarge) },
                             label = { Text(label) }
                         )
                     }
@@ -252,7 +253,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     detectHorizontalDragGestures(
                         onHorizontalDrag = { change, dragAmount -> horizontalTravel += dragAmount },
                         onDragEnd = {
-                            if (horizontalTravel < -swipeThreshold) selectedNav = (selectedNav + 1).coerceAtMost(4)
+                            if (horizontalTravel < -swipeThreshold) selectedNav = (selectedNav + 1).coerceAtMost(3)
                             else if (horizontalTravel > swipeThreshold) selectedNav = (selectedNav - 1).coerceAtLeast(0)
                             horizontalTravel = 0f
                         },
@@ -341,19 +342,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                 }
-                if (selectedNav == 0 && baby != null) item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("快捷记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ActionCard("🍼", "喂养", "配方奶 · ml", Modifier.weight(1f)) { addingEvent = "FEEDING" }
-                            ActionCard("🌿", "大小便", "护理情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
-                            ActionCard("📏", "成长测量", "体重身长", Modifier.weight(1f)) { addingEvent = "GROWTH" }
-                        }
-                    }
-                }
                 if (selectedNav == 0) item {
                     if (baby == null || editingProfile) {
                         BabyProfileEditor(baby) { name, birthDate, sex, avatar, weight, length, head ->
@@ -382,12 +370,25 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     } else BabyProfileCard(baby) { editingProfile = true }
                 }
+                if (selectedNav == 0 && baby != null) item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("快捷记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ActionCard("🍼", "喂养", "配方奶 · ml", Modifier.weight(1f)) { addingEvent = "FEEDING" }
+                            ActionCard("🌿", "大小便", "护理情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
+                            ActionCard("📏", "成长测量", "体重身长", Modifier.weight(1f)) { addingEvent = "GROWTH" }
+                        }
+                    }
+                }
                 if (baby != null) {
                     if (selectedNav == 0) item { TodaySummary(normalEvents) }
 
-                    if (selectedNav == 3) item { TrendsSummary(normalEvents) }
-                    if (selectedNav == 3) item { GrowthSection(baby, normalEvents) }
-                    if (selectedNav == 4) item {
+                    if (selectedNav == 2) item { TrendsSummary(normalEvents) }
+                    if (selectedNav == 2) item { GrowthSection(baby, normalEvents) }
+                    if (selectedNav == 3) item {
                         BabyAlbumSection(
                             baby = baby,
                             photos = photos,
@@ -1145,10 +1146,23 @@ private fun BabyAlbumSection(
             var zoom by remember(photo.id) { mutableStateOf(1f) }
             var panX by remember(photo.id) { mutableStateOf(0f) }
             var panY by remember(photo.id) { mutableStateOf(0f) }
+            var viewportSize by remember(photo.id) { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+            fun clampPhotoPan(nextZoom: Float, x: Float, y: Float): Pair<Float, Float> {
+                val image = bitmap
+                if (nextZoom <= 1f || image == null || viewportSize.width == 0 || viewportSize.height == 0) return 0f to 0f
+                val fitScale = minOf(viewportSize.width.toFloat() / image.width.toFloat(), viewportSize.height.toFloat() / image.height.toFloat())
+                val fittedWidth = image.width * fitScale
+                val fittedHeight = image.height * fitScale
+                val maxX = ((fittedWidth * nextZoom - viewportSize.width) / 2f).coerceAtLeast(0f)
+                val maxY = ((fittedHeight * nextZoom - viewportSize.height) / 2f).coerceAtLeast(0f)
+                return x.coerceIn(-maxX, maxX) to y.coerceIn(-maxY, maxY)
+            }
             val zoomState = rememberTransformableState { zoomChange, panChange, _ ->
-                zoom = (zoom * zoomChange).coerceIn(1f, 5f)
-                panX += panChange.x
-                panY += panChange.y
+                val nextZoom = (zoom * zoomChange).coerceIn(1f, 5f)
+                zoom = nextZoom
+                val bounded = clampPhotoPan(nextZoom, panX + panChange.x, panY + panChange.y)
+                panX = bounded.first
+                panY = bounded.second
             }
             Surface(shape = RoundedCornerShape(0.dp), color = Color.Black, modifier = Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize()) {
@@ -1157,14 +1171,15 @@ private fun BabyAlbumSection(
                             Text(SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(photo.takenAt)), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
                             Text(SimpleDateFormat("HH时mm分", Locale.CHINA).format(Date(photo.takenAt)), style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
                         }
-                        TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("重置", color = Color.White) }
+                        TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("适应屏幕", color = Color.White) }
                         TextButton(onClick = { viewingPhoto = null }) { Text("关闭", color = Color.White) }
                     }
                     Box(
                         Modifier.fillMaxWidth().weight(1f)
+                            .onSizeChanged { viewportSize = it }
                             .pointerInput(photo.id) {
                                 detectTapGestures(onDoubleTap = {
-                                    if (zoom > 1f) { zoom = 1f; panX = 0f; panY = 0f } else zoom = 2.5f
+                                    if (zoom > 1f) { zoom = 1f; panX = 0f; panY = 0f } else { zoom = 2.5f; val bounded = clampPhotoPan(zoom, panX, panY); panX = bounded.first; panY = bounded.second }
                                 })
                             }
                             .transformable(zoomState),
@@ -1543,11 +1558,15 @@ private fun SummaryPill(emoji: String, label: String, value: String, modifier: M
 
 @Composable
 private fun ActionCard(emoji: String, title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 9.dp, horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(emoji, style = MaterialTheme.typography.titleLarge)
-            Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Card(onClick = onClick, modifier = modifier.heightIn(min = 62.dp), shape = RoundedCornerShape(15.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Surface(shape = RoundedCornerShape(11.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(34.dp)) {
+                Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.titleMedium) }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
         }
     }
 }
@@ -1783,16 +1802,18 @@ private fun DateTimeOptionDialog(
                 }
                 if (includeTime) {
                     Text("时间（24小时制）", fontWeight = FontWeight.SemiBold)
-                    Surface(color = Color(0xFFF2EDF7), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                        Text(selected.format(DateTimeFormatter.ofPattern("HH时mm分", Locale.CHINA)), modifier = Modifier.padding(vertical = 12.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OptionPicker("时", "%02d".format(selected.hour), (0..23).toList().map { "%02d".format(it) }) { selected = selected.withHour(it.toInt()) }
-                        OptionPicker("分", "%02d".format(selected.minute), (0..59).toList().map { "%02d".format(it) }) { selected = selected.withMinute(it.toInt()) }
+                    Text("点击下方选项调整时间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text("小时", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            OptionPicker("时", "%02d".format(selected.hour), (0..23).toList().map { "%02d".format(it) }) { selected = selected.withHour(it.toInt()) }
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text("分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            OptionPicker("分", "%02d".format(selected.minute), (0..59).toList().map { "%02d".format(it) }) { selected = selected.withMinute(it.toInt()) }
+                        }
                     }
                 }
-                Text(selected.format(DateTimeFormatter.ofPattern(if (includeTime) "yyyy年M月d日 HH时mm分" else "yyyy年M月d日", Locale.CHINA)),
-                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
         },
         confirmButton = { Button(onClick = { onConfirm(selected) }) { Text("确定") } },
@@ -1804,8 +1825,8 @@ private fun DateTimeOptionDialog(
 private fun OptionPicker(label: String, selected: String, options: List<String>, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
-            Text("$selected$label")
+        OutlinedButton(onClick = { expanded = true }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
+            Text("$selected $label", fontWeight = FontWeight.SemiBold)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
