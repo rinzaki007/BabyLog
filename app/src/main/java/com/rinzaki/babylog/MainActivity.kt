@@ -267,7 +267,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 Text("⚙ 设置")
                             }
                         }
-                        if (!syncError.isNullOrBlank()) Text("同步提示：" + syncError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                     }
                 }
                 if (selectedNav == 0) item {
