@@ -404,7 +404,7 @@ def valid_username(value): return 3 <= len(value) <= 32 and all(c.isalnum() or c
 WEB_PAGE=Path(__file__).with_name("web.html")
 @app.get("/",include_in_schema=False)
 def web_home():
-    return FileResponse(WEB_PAGE,media_type="text/html",headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"})
+    return FileResponse(WEB_PAGE,media_type="text/html",headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","X-Frame-Options":"DENY","Referrer-Policy":"no-referrer","Content-Security-Policy":"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"})
 
 @app.get("/health")
 def health():
@@ -540,7 +540,8 @@ def _web_family(uid:str):
     return profile,profile["families"][0]
 
 @app.get("/api/web/overview")
-def web_overview(uid:str=Depends(current_user)):
+def web_overview(response:Response,uid:str=Depends(current_user)):
+    response.headers["Cache-Control"]="no-store"
     profile,family=_web_family(uid); fid=family["id"]
     with connect() as db:
         rows=db.execute("SELECT entity_type,entity_id,payload,version,updated_at FROM records WHERE family_id=? AND deleted=0 ORDER BY updated_at DESC",(fid,)).fetchall()
