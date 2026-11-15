@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("BABYLOG_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("BABYLOG_JWT_SECRET", "test-only-secret-that-is-at-least-32-bytes-long")
+    monkeypatch.setenv("BABYLOG_UPDATE_SYNC_ENABLED", "0")
     import app.main as main
     importlib.reload(main)
     with TestClient(main.app) as test_client:
@@ -346,3 +347,54 @@ def test_legacy_email_account_can_login_and_change_username(client):
     assert client.post("/api/auth/login", json={
         "email": "legacy-parent@example.test", "password": "correct-horse-battery"
     }).status_code == 200
+
+
+def test_nas_app_update_metadata_and_download(client, tmp_path):
+    from app import main
+
+    update_dir = tmp_path / "updates"
+    update_dir.mkdir()
+    apk_bytes = b"fake-signed-apk-content"
+    apk_name = "BabyLog-v1.2.3.apk"
+    (update_dir / apk_name).write_bytes(apk_bytes)
+    digest = __import__("hashlib").sha256(apk_bytes).hexdigest()
+    (update_dir / "latest.json").write_text(__import__("json").dumps({
+        "available": True, "tag": "v1.2.3", "version": "1.2.3",
+        "name": "BabyLog v1.2.3", "notes": "更新说明", "size": len(apk_bytes),
+        "sha256": digest, "file_name": apk_name,
+        "download_path": "/api/app-update/download"
+    }), "utf-8")
+    (update_dir / "status.json").write_text(__import__("json").dumps({
+        "last_check": 100, "last_success": 100, "last_error": None,
+        "current_tag": "v1.2.3"
+    }), "utf-8")
+
+    latest = client.get("/api/app-update/latest")
+    assert latest.status_code == 200
+    assert latest.json()["available"] is True
+    assert latest.json()["version"] == "1.2.3"
+    assert latest.json()["sha256"] == digest
+    assert latest.json()["sync_status"]["last_error"] is None
+
+    status = client.get("/api/app-update/status")
+    assert status.status_code == 200
+    assert status.json()["current_tag"] == "v1.2.3"
+
+    download = client.get("/api/app-update/download")
+    assert download.status_code == 200
+    assert download.content == apk_bytes
+    assert download.headers["x-checksum-sha256"] == digest
+
+
+def test_nas_app_update_download_rejects_missing_or_unsafe_file(client, tmp_path):
+    from app import main
+
+    missing = client.get("/api/app-update/download")
+    assert missing.status_code == 404
+
+    update_dir = tmp_path / "updates"
+    update_dir.mkdir(exist_ok=True)
+    (update_dir / "latest.json").write_text(__import__("json").dumps({
+        "available": True, "file_name": "../outside.apk"
+    }), "utf-8")
+    assert client.get("/api/app-update/download").status_code == 404
