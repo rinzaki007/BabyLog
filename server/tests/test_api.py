@@ -686,6 +686,74 @@ def test_web_dashboard_login_overview_and_complete_export(client):
     assert len(backup["records"]) == 2
 
 
+
+def test_web_dashboard_pagination_date_filters_and_safe_import(client):
+    source_token = register(client, "web-import-source@example.test")
+    family_id = client.get("/api/me", headers=auth(source_token)).json()["families"][0]["id"]
+    baby_id = str(uuid.uuid4())
+    changes = [{"operation_id": str(uuid.uuid4()), "entity_type": "baby", "entity_id": baby_id,
+                "operation": "upsert", "payload": {"id": baby_id, "displayName": "来源宝宝", "hasAvatar": True}, "base_version": 0}]
+    avatar_bytes = b"baby-avatar-image"
+    avatar_upload = client.post(f"/api/babies/{baby_id}/avatar?family_id={family_id}", headers=auth(source_token), files={"file": ("avatar.jpg", avatar_bytes, "image/jpeg")})
+    assert avatar_upload.status_code == 200
+    event_ids = []
+    for stamp in (1000, 2000, 3000):
+        event_id = str(uuid.uuid4()); event_ids.append(event_id)
+        changes.append({"operation_id": str(uuid.uuid4()), "entity_type": "event", "entity_id": event_id,
+            "operation": "upsert", "payload": {"id": event_id, "eventType": "FEEDING", "occurredAt": stamp,
+                "payloadJson": '{"amountMl":120}'}, "base_version": 0})
+    photo_id = str(uuid.uuid4())
+    photo_bytes = b"baby-photo-image"
+    photo_upload = client.post(f"/api/photos/upload?family_id={family_id}&photo_id={photo_id}", headers=auth(source_token), files={"file": ("photo.jpg", photo_bytes, "image/jpeg")})
+    assert photo_upload.status_code == 200
+    changes.append({"operation_id": str(uuid.uuid4()), "entity_type": "photo", "entity_id": photo_id,
+        "operation": "upsert", "payload": {"id": photo_id, "takenAt": 2500, "caption": "导入测试照片"}, "base_version": 0})
+    pushed = client.post("/api/sync/push", headers=auth(source_token), json={"family_id": family_id, "changes": changes})
+    assert pushed.status_code == 200
+    source_login = client.post("/api/web/login", json={"email": "web-import-source@example.test", "password": "correct-horse-battery"})
+    assert source_login.status_code == 200
+    exported = client.get("/api/web/export")
+    assert exported.status_code == 200
+
+    target_token = register(client, "web-import-target@example.test")
+    target_login = client.post("/api/web/login", json={"email": "web-import-target@example.test", "password": "correct-horse-battery"})
+    assert target_login.status_code == 200
+    preview = client.post("/api/web/import/preview", headers={"Origin": "http://testserver"}, files={"file": ("backup.zip", exported.content, "application/zip")})
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["new_count"] == 5
+    assert preview.json()["photo_count"] == 1
+    imported = client.post("/api/web/import", headers={"Origin": "http://testserver"}, files={"file": ("backup.zip", exported.content, "application/zip")})
+    assert imported.status_code == 200, imported.text
+    assert imported.json() == {"imported": 5, "skipped_existing": 0}
+    target_family = client.get("/api/me", headers=auth(target_token)).json()["families"][0]["id"]
+    target_overview = client.get("/api/web/overview?photo_limit=10")
+    imported_photo_id = target_overview.json()["photos"][0]["id"]
+    assert imported_photo_id != photo_id
+    restored_photo = client.get(f"/api/photos/{imported_photo_id}?family_id={target_family}")
+    assert restored_photo.status_code == 200 and restored_photo.content == photo_bytes
+    restored_avatar = client.get(f"/api/babies/{baby_id}/avatar?family_id={target_family}")
+    assert restored_avatar.status_code == 200 and restored_avatar.content == avatar_bytes
+    repeated = client.post("/api/web/import", headers={"Origin": "http://testserver"}, files={"file": ("backup.zip", exported.content, "application/zip")})
+    assert repeated.status_code == 200
+    assert repeated.json() == {"imported": 0, "skipped_existing": 5}
+    overview = client.get("/api/web/overview?event_limit=1&event_offset=1")
+    assert overview.status_code == 200
+    assert overview.json()["pagination"]["events"]["total"] == 3
+    assert len(overview.json()["events"]) == 1
+    filtered = client.get("/api/web/overview?event_from=1500&event_to=2500&event_limit=10")
+    assert filtered.status_code == 200
+    assert [item["payload"]["occurredAt"] for item in filtered.json()["events"]] == [2000]
+    assert filtered.json()["counts"]["events"] == 3
+
+def test_web_import_rejects_invalid_archive_without_changing_existing_data(client):
+    token = register(client, "web-import-invalid@example.test")
+    client.post("/api/web/login", json={"email": "web-import-invalid@example.test", "password": "correct-horse-battery"})
+    invalid = client.post("/api/web/import", headers={"Origin": "http://testserver"}, files={"file": ("bad.zip", b"not a zip", "application/zip")})
+    assert invalid.status_code == 400
+    overview = client.get("/api/web/overview")
+    assert overview.status_code == 200
+    assert overview.json()["counts"] == {"babies": 0, "events": 0, "photos": 0}
+
 def test_web_cookie_auth_rejects_cross_origin_mutations(client):
     register(client, "web-csrf@example.test")
     login = client.post("/api/web/login", json={
