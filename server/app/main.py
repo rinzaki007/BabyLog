@@ -625,9 +625,13 @@ def web_export(uid:str=Depends(current_user)):
     fd,temp_path=tempfile.mkstemp(prefix="babylog-backup-",suffix=".zip",dir=DATA_DIR)
     os.close(fd)
     try:
+        # Compress the small JSON manifest, but store photos/avatars as-is.
+        # JPEG/PNG/HEIC files are already compressed; deflating them wastes NAS CPU
+        # and delays the first download byte without meaningfully shrinking the ZIP.
         with zipfile.ZipFile(temp_path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("backup.json",json.dumps(backup,ensure_ascii=False,separators=(",",":")))
-            for archive_name,source in assets: archive.write(source,archive_name)
+            for archive_name,source in assets:
+                archive.write(source,archive_name,compress_type=zipfile.ZIP_STORED)
     except Exception:
         Path(temp_path).unlink(missing_ok=True); raise
     filename=f"BabyLog-backup-{time.strftime('%Y%m%d-%H%M%S')}.zip"
