@@ -82,47 +82,109 @@ private object BabyUpdater {
     }
 
     private fun fetchOfficialRelease(): BabyRelease {
-        val release = try {
+        val apiFailure: Exception
+        try {
             val connection = URL(RELEASE_API).openConnection() as HttpURLConnection
             try {
-                connection.connectTimeout = 12000; connection.readTimeout = 15000
+                connection.connectTimeout = 12000
+                connection.readTimeout = 15000
                 connection.setRequestProperty("Accept", "application/vnd.github+json")
                 connection.setRequestProperty("User-Agent", "BabyLog-Android")
                 check(connection.responseCode == 200) { "GitHub API HTTP ${connection.responseCode}" }
                 val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-                val assets = json.optJSONArray("assets") ?: error("Release 没有附件")
-                val asset = (0 until assets.length()).mapNotNull { assets.optJSONObject(it) }
-                    .firstOrNull { it.optString("name").endsWith(".apk", true) } ?: error("最新 Release 尚未附带 APK")
-                val tag = json.optString("tag_name")
-                BabyRelease(
-                    tag, tag.removePrefix("v").removePrefix("V"),
-                    json.optString("body").ifBlank { "本次更新未提供说明。" },
-                    asset.optString("browser_download_url"), asset.optLong("size"),
-                    asset.optString("digest").removePrefix("sha256:").takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) },
-                    "官方 GitHub"
-                )
+                val tag = json.optString("tag_name").trim()
+                require(tag.isNotBlank()) { "GitHub Release 缺少版本标签" }
+                val assets = json.optJSONArray("assets")
+                val asset = assets?.let { list ->
+                    (0 until list.length()).mapNotNull { list.optJSONObject(it) }
+                        .firstOrNull {
+                            it.optString("name").trim().endsWith(".apk", ignoreCase = true) &&
+                                it.optString("browser_download_url").startsWith("https://")
+                        }
+                }
+                if (asset != null) {
+                    return BabyRelease(
+                        tag, tag.removePrefix("v").removePrefix("V"),
+                        json.optString("body").ifBlank { "本次更新未提供说明。" },
+                        asset.optString("browser_download_url"), asset.optLong("size"),
+                        asset.optString("digest").removePrefix("sha256:")
+                            .takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) },
+                        "官方 GitHub"
+                    )
+                }
+                return fetchPublicReleasePage(tag, json.optString("body"))
             } finally { connection.disconnect() }
-        } catch (_: Exception) {
-            fetchPublicReleasePage()
+        } catch (error: Exception) {
+            apiFailure = error
         }
-        require(release.version.isNotBlank() && release.url.startsWith("https://")) { "Release 信息无效" }
-        return release
+        return try {
+            fetchPublicReleasePage()
+        } catch (pageError: Exception) {
+            throw IllegalStateException(
+                "官方更新源检查失败：${apiFailure.message ?: "API 不可用"}；网页回退：${pageError.message ?: "解析失败"}",
+                pageError
+            )
+        }
     }
 
-    private fun fetchPublicReleasePage(): BabyRelease {
-        val connection = URL("https://github.com/rinzaki007/BabyLog/releases/latest").openConnection() as HttpURLConnection
-        return try {
-            connection.connectTimeout = 12000; connection.readTimeout = 20000
-            connection.setRequestProperty("User-Agent", "BabyLog-Android")
-            check(connection.responseCode == 200) { "更新检查失败（HTTP ${connection.responseCode}），请稍后重试" }
-            val html = connection.inputStream.bufferedReader().use { it.readText() }
-            val tag = Regex("/releases/tag/([^\\\"?#]+)").find(html)?.groupValues?.get(1).orEmpty()
-            require(tag.isNotBlank()) { "暂时没有可用的正式 Release" }
-            val pattern = Regex("href=\\\"([^\\\"]*/releases/download/" + Regex.escape(tag) + "/[^\\\"]+\\.apk)", RegexOption.IGNORE_CASE)
-            val assetPath = pattern.find(html)?.groupValues?.get(1)?.replace("&amp;", "&") ?: error("最新 Release 尚未附带 APK")
-            val url = if (assetPath.startsWith("http")) assetPath else "https://github.com" + assetPath
-            BabyRelease(tag, tag.removePrefix("v").removePrefix("V"), "可从 GitHub Releases 查看本次更新说明。", url, 0L, null, "官方 GitHub")
-        } finally { connection.disconnect() }
+    private fun fetchPublicReleasePage(
+        knownTag: String? = null,
+        notes: String = "可从 GitHub Releases 查看本次更新说明。"
+    ): BabyRelease {
+        val pageConnection = URL("https://github.com/rinzaki007/BabyLog/releases/latest")
+            .openConnection() as HttpURLConnection
+        val pageHtml = try {
+            pageConnection.connectTimeout = 12000
+            pageConnection.readTimeout = 20000
+            pageConnection.setRequestProperty("User-Agent", "BabyLog-Android")
+            check(pageConnection.responseCode == 200) {
+                "更新检查失败（HTTP ${pageConnection.responseCode}），请稍后重试"
+            }
+            pageConnection.inputStream.bufferedReader().use { it.readText() }
+        } finally { pageConnection.disconnect() }
+
+        val canonicalTag = Regex("""/releases/tag/([^"'?#]+)""")
+            .find(pageHtml)?.groupValues?.get(1)?.replace("&amp;", "&")
+        val tag = knownTag?.takeIf { it.isNotBlank() } ?: canonicalTag
+            ?: error("暂时没有可用的正式 Release")
+        val decodedTag = runCatching { java.net.URLDecoder.decode(tag, "UTF-8") }.getOrDefault(tag)
+
+        fun findApk(html: String): String? {
+            val hrefPattern = Regex(
+                """href\s*=\s*["']([^"']+\.apk(?:\?[^"']*)?)["']""",
+                RegexOption.IGNORE_CASE
+            )
+            return hrefPattern.findAll(html).mapNotNull { match ->
+                match.groupValues[1].replace("&amp;", "&").let { href ->
+                    when {
+                        href.startsWith("https://") -> href
+                        href.startsWith("/") -> "https://github.com$href"
+                        else -> null
+                    }
+                }
+            }.firstOrNull()
+        }
+
+        val expandedConnection = URL(
+            "https://github.com/rinzaki007/BabyLog/releases/expanded_assets/" +
+                java.net.URLEncoder.encode(decodedTag, "UTF-8").replace("+", "%20")
+        ).openConnection() as HttpURLConnection
+        val expandedHtml = try {
+            expandedConnection.connectTimeout = 12000
+            expandedConnection.readTimeout = 20000
+            expandedConnection.setRequestProperty("User-Agent", "BabyLog-Android")
+            if (expandedConnection.responseCode == 200)
+                expandedConnection.inputStream.bufferedReader().use { it.readText() }
+            else ""
+        } finally { expandedConnection.disconnect() }
+
+        val assetUrl = findApk(expandedHtml) ?: findApk(pageHtml)
+            ?: error("GitHub Release（$decodedTag）附件列表中未找到 APK")
+        return BabyRelease(
+            decodedTag, decodedTag.removePrefix("v").removePrefix("V"),
+            notes.ifBlank { "可从 GitHub Releases 查看本次更新说明。" },
+            assetUrl, 0L, null, "官方 GitHub"
+        )
     }
 
     suspend fun download(context: Context, release: BabyRelease, progress: (Float) -> Unit): File =
@@ -189,7 +251,7 @@ internal fun AppUpdateSection() {
         mutableStateOf(context.getSharedPreferences(UPDATE_PREFS, 0).getString("selected_source", "nas") ?: "nas")
     }
     var downloaded by remember { mutableStateOf<File?>(null) }
-    var checking by remember { mutableStateOf(false) }
+    var checkingSource by remember { mutableStateOf<String?>(null) }
     var downloading by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -197,33 +259,31 @@ internal fun AppUpdateSection() {
     val selectedRelease = if (selectedSource == "nas") nasRelease else officialRelease
     val hasUpdate = selectedRelease?.let { BabyUpdater.newer(it.version, current) } == true
 
-    fun checkUpdate() {
-        if (checking || downloading) return
+    fun checkUpdate(source: String) {
+        if (checkingSource != null || downloading) return
         scope.launch {
-            checking = true
+            checkingSource = source
             error = null
             downloaded = null
-            nasMessage = "正在检查内网版本…"
-            officialMessage = "正在检查官方版本…"
             try {
-                val nasResult = BabyUpdater.checkNas(context)
-                nasRelease = nasResult.first
-                nasMessage = nasResult.second
-                val officialResult = BabyUpdater.checkOfficial()
-                officialRelease = officialResult.first
-                officialMessage = officialResult.second
-                context.getSharedPreferences(UPDATE_PREFS, 0).edit()
-                    .putLong("last_check", System.currentTimeMillis()).apply()
-                if (nasRelease == null && officialRelease == null) {
-                    error = "两个更新源暂时都无法获取版本信息，请检查网络或稍后重试。"
+                if (source == "nas") {
+                    nasMessage = "正在检查内网版本…"
+                    val result = BabyUpdater.checkNas(context)
+                    nasRelease = result.first
+                    nasMessage = result.second
+                    if (result.first == null && selectedSource == "nas") error = result.second
+                } else {
+                    officialMessage = "正在检查官方版本…"
+                    val result = BabyUpdater.checkOfficial()
+                    officialRelease = result.first
+                    officialMessage = result.second
+                    if (result.first == null && selectedSource == "official") error = result.second
                 }
-            } finally {
-                checking = false
-            }
+                context.getSharedPreferences(UPDATE_PREFS, 0).edit()
+                    .putLong("last_check_$source", System.currentTimeMillis()).apply()
+            } finally { checkingSource = null }
         }
     }
-
-    LaunchedEffect(Unit) { checkUpdate() }
 
     Card(
         Modifier.fillMaxWidth(),
@@ -242,7 +302,7 @@ internal fun AppUpdateSection() {
                 version = nasRelease?.version,
                 status = nasMessage,
                 selected = selectedSource == "nas",
-                enabled = !checking && !downloading,
+                enabled = checkingSource == null && !downloading,
                 onClick = {
                     selectedSource = "nas"
                     context.getSharedPreferences(UPDATE_PREFS, 0).edit().putString("selected_source", "nas").apply()
@@ -255,7 +315,7 @@ internal fun AppUpdateSection() {
                 version = officialRelease?.version,
                 status = officialMessage,
                 selected = selectedSource == "official",
-                enabled = !checking && !downloading,
+                enabled = checkingSource == null && !downloading,
                 onClick = {
                     selectedSource = "official"
                     context.getSharedPreferences(UPDATE_PREFS, 0).edit().putString("selected_source", "official").apply()
@@ -292,13 +352,18 @@ internal fun AppUpdateSection() {
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
-                    onClick = { checkUpdate() },
-                    enabled = !checking && !downloading,
+                    onClick = { checkUpdate("nas") },
+                    enabled = checkingSource == null && !downloading,
                     modifier = Modifier.weight(1f)
-                ) { Text(if (checking) "检查中…" else "检查两个来源") }
+                ) { Text(if (checkingSource == "nas") "检查中…" else "检查内网") }
+                OutlinedButton(
+                    onClick = { checkUpdate("official") },
+                    enabled = checkingSource == null && !downloading,
+                    modifier = Modifier.weight(1f)
+                ) { Text(if (checkingSource == "official") "检查中…" else "检查官方") }
                 if (hasUpdate && downloaded == null) {
                     Button(
-                        enabled = !checking && !downloading,
+                        enabled = checkingSource == null && !downloading,
                         modifier = Modifier.weight(1f),
                         onClick = {
                             val target = selectedRelease ?: return@Button
