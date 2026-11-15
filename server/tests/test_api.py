@@ -292,3 +292,57 @@ def test_same_account_devices_resolve_to_one_automatic_family(client):
     assert second.status_code == 200
     assert len(second.json()["families"]) == 1
     assert second.json()["families"][0]["id"] == family_id
+
+
+def test_username_account_login_and_security_changes(client):
+    registered = client.post("/api/auth/register", json={
+        "username": "family_parent", "password": "correct-horse-battery"
+    })
+    assert registered.status_code == 200, registered.text
+    token = registered.json()["access_token"]
+    assert registered.json()["username"] == "family_parent"
+
+    profile = client.get("/api/me", headers=auth(token))
+    assert profile.status_code == 200
+    assert profile.json()["username"] == "family_parent"
+
+    login = client.post("/api/auth/login", json={
+        "username": "FAMILY_PARENT", "password": "correct-horse-battery"
+    })
+    assert login.status_code == 200
+
+    renamed = client.post("/api/account/username", headers=auth(token), json={
+        "username": "baby_family", "current_password": "correct-horse-battery"
+    })
+    assert renamed.status_code == 200
+    assert renamed.json()["username"] == "baby_family"
+    assert client.post("/api/auth/login", json={
+        "username": "family_parent", "password": "correct-horse-battery"
+    }).status_code == 401
+
+    changed = client.post("/api/account/password", headers=auth(token), json={
+        "current_password": "correct-horse-battery", "new_password": "new-secure-password"
+    })
+    assert changed.status_code == 200
+    assert client.post("/api/auth/login", json={
+        "username": "baby_family", "password": "correct-horse-battery"
+    }).status_code == 401
+    assert client.post("/api/auth/login", json={
+        "username": "baby_family", "password": "new-secure-password"
+    }).status_code == 200
+
+
+def test_legacy_email_account_can_login_and_change_username(client):
+    token = register(client, "legacy-parent@example.test")
+    login = client.post("/api/auth/login", json={
+        "email": "legacy-parent@example.test", "password": "correct-horse-battery"
+    })
+    assert login.status_code == 200
+    changed = client.post("/api/account/username", headers=auth(token), json={
+        "username": "legacy_parent", "current_password": "correct-horse-battery"
+    })
+    assert changed.status_code == 200
+    # Existing email-based login remains valid for older app versions.
+    assert client.post("/api/auth/login", json={
+        "email": "legacy-parent@example.test", "password": "correct-horse-battery"
+    }).status_code == 200
