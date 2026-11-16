@@ -287,6 +287,7 @@ internal fun BabyAlbumSection(
             onDismissRequest = closeViewer,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
+            var showViewerChrome by remember(photo.id) { mutableStateOf(true) }
             var zoom by remember(photo.id) { mutableStateOf(1f) }
             var panX by remember(photo.id) { mutableStateOf(0f) }
             var panY by remember(photo.id) { mutableStateOf(0f) }
@@ -394,6 +395,7 @@ internal fun BabyAlbumSection(
                 }
             ) {
                 Column(Modifier.fillMaxSize()) {
+                    if (showViewerChrome) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             AnimatedContent(
@@ -430,18 +432,21 @@ internal fun BabyAlbumSection(
                                     if (page == pagerState.currentPage) {
                                         Modifier
                                             .pointerInput(pagePhoto.id) {
-                                                detectTapGestures(onDoubleTap = {
-                                                    if (zoom > 1f) {
-                                                        zoom = 1f
-                                                        panX = 0f
-                                                        panY = 0f
-                                                    } else {
-                                                        zoom = 2.5f
-                                                        val bounded = clampPhotoPan(zoom, panX, panY)
-                                                        panX = bounded.first
-                                                        panY = bounded.second
+                                                detectTapGestures(
+                                                    onTap = { showViewerChrome = !showViewerChrome },
+                                                    onDoubleTap = {
+                                                        if (zoom > 1f) {
+                                                            zoom = 1f
+                                                            panX = 0f
+                                                            panY = 0f
+                                                        } else {
+                                                            zoom = 2.5f
+                                                            val bounded = clampPhotoPan(zoom, panX, panY)
+                                                            panX = bounded.first
+                                                            panY = bounded.second
+                                                        }
                                                     }
-                                                })
+                                                )
                                             }
                                             .transformable(zoomState, canPan = { zoom > 1.01f })
                                     } else Modifier
@@ -478,21 +483,24 @@ internal fun BabyAlbumSection(
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
-                    Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                        galleryMessage?.let { Text(it, color = Color(0xFFD7C9F4), style = MaterialTheme.typography.bodySmall) }
                     }
-                    Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
-                        TextButton(onClick = {
-                            albumScope.launch {
-                                galleryMessage = runCatching {
-                                    withContext(Dispatchers.IO) { savePhotoToGallery(context, photoOriginalCache[activePhoto.id] ?: activePhoto.localPath) }
-                                    "已保存到手机相册"
-                                }.getOrElse { "保存失败：${it.message}" }
-                            }
-                        }) { Text("保存到手机", color = Color.White) }
-                        TextButton(onClick = { deletingPhoto = activePhoto; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
+                    if (showViewerChrome) {
+                        Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                            galleryMessage?.let { Text(it, color = Color(0xFFD7C9F4), style = MaterialTheme.typography.bodySmall) }
+                        }
+                        Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
+                            TextButton(onClick = {
+                                albumScope.launch {
+                                    galleryMessage = runCatching {
+                                        withContext(Dispatchers.IO) { savePhotoToGallery(context, photoOriginalCache[activePhoto.id] ?: activePhoto.localPath) }
+                                        "已保存到手机相册"
+                                    }.getOrElse { "保存失败：${it.message}" }
+                                }
+                            }) { Text("保存到手机", color = Color.White) }
+                            TextButton(onClick = { deletingPhoto = activePhoto; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
+                        }
                     }
                 }
             }
