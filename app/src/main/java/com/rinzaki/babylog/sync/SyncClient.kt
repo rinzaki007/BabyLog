@@ -376,6 +376,7 @@ private suspend fun releasePhotoOriginalIfEnabled(
     photoId: String
 ) {
     if (!SyncPreferences.cloudPhotoStorageEnabled(context)) return
+    if (SyncPreferences.server(context).isBlank() || SyncPreferences.token(context).isBlank() || SyncPreferences.familyId(context).isBlank()) return
     val photo = dao.getPhoto(photoId) ?: return
     if (!photo.originalOnDevice || photo.deletedAt != null) return
     val original = File(photo.localPath)
