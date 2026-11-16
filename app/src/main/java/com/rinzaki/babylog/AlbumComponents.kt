@@ -112,7 +112,7 @@ internal fun BabyAlbumSection(
             Column(Modifier.weight(1f)) {
                 Text("成长相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "共 ${photos.size} 张照片 · 按拍摄日期排列",
+                    "共 ${photoCount} 张照片 · 按拍摄日期排列",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -157,7 +157,11 @@ internal fun BabyAlbumSection(
             val grouped = visiblePhotos.groupBy {
                 SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(it.takenAt))
             }
-            if (filteredPhotos.isEmpty()) Text("这个日期范围内还没有照片。", modifier = Modifier.fillMaxWidth().padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (filteredPhotos.isEmpty()) Text(
+                if (loadedPhotos.size < photoCount) "当前已加载的照片中暂无匹配结果，可以继续加载更早的照片。" else "这个日期范围内还没有照片。",
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             grouped.forEach { (day, dayPhotos) ->
                 val photoRows = dayPhotos.chunked(3)
                 Row(
@@ -240,19 +244,19 @@ internal fun BabyAlbumSection(
     viewingPhoto?.let { photo ->
         // Photo navigation follows the active album filter, matching the visible timeline.
         val currentPhotoIndex = sortedFilteredPhotos.indexOfFirst { it.id == photo.id }
-        val previousPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex + 1)
-        val nextPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex - 1)
+        val previousPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex - 1)
+        val nextPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex + 1)
         val viewerScope = rememberCoroutineScope()
         val openingScale = remember(photo.id) { Animatable(0.96f) }
         val openingAlpha = remember(photo.id) { Animatable(0f) }
         LaunchedEffect(photo.id) {
-            openingScale.animateTo(1f, animationSpec = tween(260))
+            launch { openingScale.animateTo(1f, animationSpec = tween(260)) }
             openingAlpha.animateTo(1f, animationSpec = tween(220))
         }
         val closeViewer: () -> Unit = {
             viewerScope.launch {
+                launch { openingScale.animateTo(0.97f, animationSpec = tween(160)) }
                 openingAlpha.animateTo(0f, animationSpec = tween(160))
-                openingScale.animateTo(0.97f, animationSpec = tween(160))
                 viewingPhoto = null
             }
         }
