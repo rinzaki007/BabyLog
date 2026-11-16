@@ -22,6 +22,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.io.File
 import java.io.DataOutputStream
+import android.graphics.BitmapFactory
 import java.util.concurrent.TimeUnit
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -33,6 +34,8 @@ object SyncPreferences {
     private const val FILE = "babylog_sync"
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     fun server(context: Context) = prefs(context).getString("server", "") ?: ""
+    fun cloudPhotoStorageEnabled(context: Context) = prefs(context).getBoolean("cloud_photo_storage", false)
+    fun setCloudPhotoStorageEnabled(context: Context, enabled: Boolean) { prefs(context).edit().putBoolean("cloud_photo_storage", enabled).apply() }
     fun token(context: Context, encryptLegacy: (String) -> String = SecureTokenStore::encrypt): String {
         val preferences = prefs(context)
         val encrypted = preferences.getString("token_encrypted", null)
@@ -334,6 +337,57 @@ object SyncHttp {
     }
 }
 
+/**
+ * Builds a lightweight JPEG preview without touching the source. The caller must
+ * persist the new path in Room before deleting the original file.
+ */
+internal fun createPhotoPreview(source: File, destination: File): Boolean {
+    if (!source.isFile || source.length() <= 0L) return false
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(source.absolutePath, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return false
+    var sample = 1
+    while (bounds.outWidth / sample > 1600 || bounds.outHeight / sample > 2000) sample *= 2
+    val bitmap = BitmapFactory.decodeFile(source.absolutePath, BitmapFactory.Options().apply {
+        inSampleSize = sample
+        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+    }) ?: return false
+    return try {
+        destination.parentFile?.mkdirs()
+        val temp = File(destination.parentFile, destination.name + ".part")
+        val saved = temp.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 78, it) }
+        if (!saved || !temp.isFile || temp.length() <= 0L) {
+            temp.delete()
+            false
+        } else {
+            replaceDownloadedFile(temp, destination)
+            true
+        }
+    } catch (_: Exception) {
+        false
+    } finally {
+        bitmap.recycle()
+    }
+}
+
+private suspend fun releasePhotoOriginalIfEnabled(
+    context: Context,
+    dao: BabyLogDao,
+    photoId: String
+) {
+    if (!SyncPreferences.cloudPhotoStorageEnabled(context)) return
+    val photo = dao.getPhoto(photoId) ?: return
+    if (!photo.originalOnDevice || photo.deletedAt != null) return
+    val original = File(photo.localPath)
+    if (!original.isFile) return
+    val mime = photo.photoMimeType ?: mimeTypeForPath(photo.localPath)
+    val preview = File(context.filesDir, "baby_album_previews/$photoId.jpg")
+    if (!createPhotoPreview(original, preview)) return
+    // Commit the preview path first. A crash before this write leaves the original intact.
+    dao.upsertPhoto(photo.copy(localPath = preview.absolutePath, originalOnDevice = false, photoMimeType = mime))
+    if (original.absolutePath != preview.absolutePath) original.delete()
+}
+
 object SyncScheduler {
     private val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
     fun enqueue(context: Context) {
@@ -394,7 +448,7 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
             val file = File(photo.localPath)
             if (!file.isFile) SyncHttp.downloadPhoto(base, familyId, photo.id, token, file)
             require(file.isFile && file.length() > 0L) { "照片文件不可用，已停止覆盖：" + photo.id }
-            SyncHttp.uploadPhoto(base, familyId, photo.id, token, file, mimeTypeForPath(photo.localPath))
+            if (photo.originalOnDevice) SyncHttp.uploadPhoto(base, familyId, photo.id, token, file, photo.photoMimeType ?: mimeTypeForPath(photo.localPath))
         }
         items.put(JSONObject().put("operation_id", java.util.UUID.randomUUID().toString())
             .put("entity_type", "photo").put("entity_id", photo.id)
@@ -412,7 +466,10 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
         when (item.optString("entity_type")) {
             "baby" -> dao.setBabyServerVersion(id, version)
             "event" -> dao.setEventServerVersion(id, version)
-            "photo" -> dao.setPhotoServerVersion(id, version, "SYNCED")
+            "photo" -> {
+                dao.setPhotoServerVersion(id, version, "SYNCED")
+                releasePhotoOriginalIfEnabled(context, dao, id)
+            }
         }
     }
     dao.clearSyncOperationsForFamily(familyId, snapshotStartedAt)
@@ -470,7 +527,9 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                             return@forEach
                         }
                         val localFile = File(photo.localPath)
-                        if (!localFile.isFile) {
+                        if (!photo.originalOnDevice) {
+                            // The NAS already owns the original; metadata-only updates must not upload a preview.
+                        } else if (!localFile.isFile) {
                             // A previous upload may already exist on the NAS even if the local cache was removed.
                             // Restore it before deciding that this queued operation is unrecoverable.
                             try {
@@ -482,7 +541,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                             }
                         }
                         try {
-                            SyncHttp.uploadPhoto(base, familyId, photo.id, token, localFile, mimeTypeForPath(photo.localPath))
+                            if (photo.originalOnDevice) SyncHttp.uploadPhoto(base, familyId, photo.id, token, localFile, photo.photoMimeType ?: mimeTypeForPath(photo.localPath))
                         } catch (error: SyncHttpException) {
                             if (error.statusCode in 400..499) {
                                 dao.markOperationConflict(operation.operationId, error.message ?: "照片上传被服务器拒绝")
@@ -527,7 +586,10 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                     when (operation.entityType) {
                         "baby" -> dao.setBabyServerVersion(operation.entityId, version)
                         "event" -> dao.setEventServerVersion(operation.entityId, version)
-                        "photo" -> dao.setPhotoServerVersion(operation.entityId, version, "SYNCED")
+                        "photo" -> {
+                            dao.setPhotoServerVersion(operation.entityId, version, "SYNCED")
+                            releasePhotoOriginalIfEnabled(applicationContext, dao, operation.entityId)
+                        }
                     }
                     dao.removeOperation(opId)
                 }
@@ -689,34 +751,40 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 } else {
                     val mime = payload.optString("mimeType", "image/jpeg")
                     val extension = extensionForMime(mime)
-                    val localFile = existing?.let { File(it.localPath) }
-                    val target = if (localFile != null && localFile.isFile && existing?.serverVersion == version) localFile
-                        else File(applicationContext.filesDir, "baby_album/$id$extension")
-                    if (localFile == null || !localFile.isFile || existing?.serverVersion != version) {
+                    val unchanged = existing != null && existing.serverVersion == version
+                    var storedPath = if (unchanged) existing!!.localPath else ""
+                    var originalOnDevice = unchanged && existing!!.originalOnDevice
+                    if (!unchanged) {
+                        val original = File(applicationContext.filesDir, "baby_album_originals/$id$extension")
                         try {
                             SyncHttp.downloadPhoto(SyncPreferences.server(applicationContext), familyId, id,
-                                SyncPreferences.token(applicationContext), target)
+                                SyncPreferences.token(applicationContext), original)
                         } catch (error: SyncHttpException) {
-                            // The server may retain an old photo-upsert change after its
-                            // photo row/file has disappeared (for example after a restore
-                            // or an incomplete historical sync). Treat only 404 as a
-                            // missing remote photo, record its tombstone locally, and
-                            // continue pulling later changes instead of retrying forever.
                             if (error.statusCode == 404) {
-                                dao.softDeletePhotoFromServer(
-                                    id,
-                                    item.optLong("created_at", System.currentTimeMillis() / 1000L) * 1000L,
-                                    version
-                                )
+                                dao.softDeletePhotoFromServer(id, item.optLong("created_at", System.currentTimeMillis() / 1000L) * 1000L, version)
                                 return
                             }
                             throw error
+                        }
+                        if (SyncPreferences.cloudPhotoStorageEnabled(applicationContext)) {
+                            val preview = File(applicationContext.filesDir, "baby_album_previews/$id.jpg")
+                            if (createPhotoPreview(original, preview)) {
+                                storedPath = preview.absolutePath
+                                originalOnDevice = false
+                                original.delete()
+                            } else {
+                                storedPath = original.absolutePath
+                                originalOnDevice = true
+                            }
+                        } else {
+                            storedPath = original.absolutePath
+                            originalOnDevice = true
                         }
                     }
                     dao.upsertPhoto(BabyPhotoEntity(
                         id = id,
                         babyId = payload.optString("babyId"),
-                        localPath = target.absolutePath,
+                        localPath = storedPath,
                         caption = payload.optString("caption").takeIf { it.isNotBlank() && it != "null" },
                         takenAt = payload.optLong("takenAt"),
                         createdAt = payload.optLong("createdAt"),
@@ -724,7 +792,9 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         syncStatus = "SYNCED",
                         remotePath = "/api/photos/$id",
                         deletedAt = null,
-                        serverVersion = version
+                        serverVersion = version,
+                        originalOnDevice = originalOnDevice,
+                        photoMimeType = mime
                     ))
                 }
             }
@@ -736,7 +806,7 @@ private object RoomAccess {
     @Volatile private var instance: BabyLogDatabase? = null
     fun database(context: Context): BabyLogDatabase = instance ?: synchronized(this) {
         instance ?: androidx.room.Room.databaseBuilder(context, BabyLogDatabase::class.java, "babylog.db")
-            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4, BabyLogDatabase.MIGRATION_4_5)
+            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4, BabyLogDatabase.MIGRATION_4_5, BabyLogDatabase.MIGRATION_5_6)
             .enableMultiInstanceInvalidation().build().also { instance = it }
     }
 }
