@@ -42,15 +42,15 @@ class LauncherIconTest {
             )
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && applicationInfo.roundIcon != 0) {
-            val roundIcon = packageManager.getDrawable(
-                context.packageName,
-                applicationInfo.roundIcon,
-                applicationInfo
-            )
-            assertTrue("Round launcher icon resource must decode", roundIcon != null)
-            assertRendersVisiblePixels(roundIcon!!)
-        }
+        val roundIconId = context.resources.getIdentifier(
+            "ic_launcher_round",
+            "mipmap",
+            context.packageName
+        )
+        assertNotEquals("Round launcher icon resource must be packaged", 0, roundIconId)
+        val roundIcon = packageManager.getDrawable(context.packageName, roundIconId, applicationInfo)
+        assertTrue("Round launcher icon resource must decode", roundIcon != null)
+        assertRendersVisiblePixels(roundIcon!!)
     }
 
     private fun assertRendersVisiblePixels(drawable: Drawable) {
