@@ -480,13 +480,13 @@ internal fun syncConflictTitle(operation: SyncOperationEntity): String {
         else -> "同步项目"
     }
     val action = if (operation.operation == "delete") "删除" else "更新"
-    return "\${entity} · \${action}"
+    return "${entity} · ${action}"
 }
 
 internal fun syncConflictSummary(operation: SyncOperationEntity): String {
     val payload = runCatching { JSONObject(operation.payloadJson) }.getOrElse { JSONObject() }
     return when (operation.entityType) {
-        "baby" -> payload.optString("displayName").ifBlank { "宝宝档案 \${operation.entityId.take(8)}" }
+        "baby" -> payload.optString("displayName").ifBlank { "宝宝档案 ${operation.entityId.take(8)}" }
         "event" -> {
             val eventType = payload.optString("eventType")
             val label = when (eventType) {
@@ -505,11 +505,11 @@ internal fun syncConflictSummary(operation: SyncOperationEntity): String {
             val detail = when (eventType) {
                 "FEEDING" -> {
                     val method = eventPayload.optString("method", "配方奶").ifBlank { "配方奶" }
-                    val amount = eventPayload.optInt("amountMl").takeIf { it > 0 }?.let { "\${it} ml" }
-                    val duration = eventPayload.optInt("breastMinutes").takeIf { it > 0 }?.let { "亲喂 \${it} 分钟" }
+                    val amount = eventPayload.optInt("amountMl").takeIf { it > 0 }?.let { "${it} ml" }
+                    val duration = eventPayload.optInt("breastMinutes").takeIf { it > 0 }?.let { "亲喂 ${it} 分钟" }
                     listOfNotNull(method, amount, duration).joinToString(" · ")
                 }
-                "SLEEP" -> eventPayload.optInt("durationMinutes").takeIf { it > 0 }?.let { "\${it} 分钟" }.orEmpty()
+                "SLEEP" -> eventPayload.optInt("durationMinutes").takeIf { it > 0 }?.let { "${it} 分钟" }.orEmpty()
                 "DIAPER" -> buildList {
                     if (eventPayload.optBoolean("urine")) add("小便")
                     if (eventPayload.optBoolean("stool")) add("大便")
@@ -518,8 +518,8 @@ internal fun syncConflictSummary(operation: SyncOperationEntity): String {
             }
             listOf(label, time, detail).filter { it.isNotBlank() }.joinToString(" · ")
         }
-        "photo" -> payload.optString("caption").ifBlank { "照片 \${operation.entityId.take(8)}" }
-        else -> "项目标识：\${operation.entityId.take(12)}"
+        "photo" -> payload.optString("caption").ifBlank { "照片 ${operation.entityId.take(8)}" }
+        else -> "项目标识：${operation.entityId.take(12)}"
     }
 }
 
