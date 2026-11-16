@@ -46,6 +46,19 @@ jobs:
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then VERSION="${{ inputs.version }}"; fi
           VERSION_CODE=$((GITHUB_RUN_NUMBER + 1))
           gradle --no-daemon assembleRelease -PappVersionName="$VERSION" -PappVersionCode="$VERSION_CODE"
+      - name: Verify launcher icon is packaged in the release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -n "$AAPT"
+          BADGING="$("$AAPT" dump badging "$APK")"
+          printf '%s\n' "$BADGING"
+          printf '%s\n' "$BADGING" | grep -Eq "^application:.*icon="
+          printf '%s\n' "$BADGING" | grep -Eq "^application-icon-[0-9]+:"
+          "$AAPT" dump resources "$APK" | grep -q "mipmap/ic_launcher"
+          "$AAPT" dump resources "$APK" | grep -q "mipmap/ic_launcher_round"
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
