@@ -470,7 +470,7 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
         items.put(JSONObject().put("operation_id", java.util.UUID.randomUUID().toString())
             .put("entity_type", "photo").put("entity_id", photo.id)
             .put("operation", operation)
-            .put("payload", photoSyncPayload(photo, mimeTypeForPath(photo.localPath))))
+            .put("payload", photoSyncPayload(photo, photo.photoMimeType ?: mimeTypeForPath(photo.localPath))))
     }
     val result = SyncHttp.request(base, "/api/sync/authoritative-snapshot", "POST", token,
         JSONObject().put("family_id", familyId).put("items", items))
