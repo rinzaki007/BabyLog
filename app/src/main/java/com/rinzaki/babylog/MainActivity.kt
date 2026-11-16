@@ -171,8 +171,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val baby = babies.firstOrNull()
     val eventsFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observeEvents(baby.id) }
     val events by eventsFlow.collectAsState(initial = emptyList())
-    val photosFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observePhotos(baby.id) }
+    val photosFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observePhotoPage(baby.id, 60, 0) }
     val photos by photosFlow.collectAsState(initial = emptyList())
+    val photoCountFlow = remember(baby?.id) { if (baby == null) flowOf(0) else dao.observePhotoCount(baby.id) }
+    val photoCount by photoCountFlow.collectAsState(initial = 0)
     var editingProfile by remember { mutableStateOf(false) }
     var showSyncSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
@@ -383,6 +385,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         BabyAlbumSection(
                             baby = baby,
                             photos = photos,
+                            photoCount = photoCount,
+                            onLoadMore = { offset, limit -> dao.getPhotoPage(baby.id, limit, offset) },
                             onAdd = { uri, takenAt ->
                                 scope.launch {
                                     runCatching {
