@@ -329,22 +329,17 @@ internal fun BabyAlbumSection(
                     val base = SyncPreferences.server(context)
                     val token = SyncPreferences.token(context)
                     val familyId = SyncPreferences.familyId(context)
-                    val extension = activePhoto.photoMimeType?.let {
-                        when (it) {
-                            "image/png" -> "png"
-                            "image/webp" -> "webp"
-                            "image/heic" -> "heic"
-                            "image/heif" -> "heif"
-                            else -> "jpg"
-                        }
-                    } ?: "jpg"
-                    val destination = File(context.cacheDir, "babylog_photo_originals/${activePhoto.id}.$extension")
+                    val destination = photoOriginalCacheFile(context.cacheDir, activePhoto)
+                    if (cachedPath != null) withContext(Dispatchers.IO) {
+                        File(cachedPath).setLastModified(System.currentTimeMillis())
+                    }
                     val sourcePath = cachedPath ?: if (base.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) {
                         withContext(Dispatchers.IO) {
                             runCatching {
                                 if (!destination.isFile || destination.length() <= 0L) {
                                     SyncHttp.downloadPhoto(base, familyId, activePhoto.id, token, destination)
                                 }
+                                destination.setLastModified(System.currentTimeMillis())
                                 trimPhotoOriginalCache(context.cacheDir, destination)
                                 destination.absolutePath
                             }.getOrNull()
@@ -568,6 +563,17 @@ internal fun BabyAlbumSection(
         }
     )
 }
+private fun photoOriginalCacheFile(cacheDir: File, photo: BabyPhotoEntity): File {
+    val extension = when (photo.photoMimeType) {
+        "image/png" -> "png"
+        "image/webp" -> "webp"
+        "image/heic" -> "heic"
+        "image/heif" -> "heif"
+        else -> "jpg"
+    }
+    return File(cacheDir, "babylog_photo_originals/${photo.id}.$extension")
+}
+
 private fun trimPhotoOriginalCache(cacheDir: File, keep: File) {
     val folder = File(cacheDir, "babylog_photo_originals")
     val files = folder.listFiles()?.filter { it.isFile && !it.name.endsWith(".part") }?.sortedBy { it.lastModified() } ?: return
@@ -620,6 +626,8 @@ private fun AlbumPhotoCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val hasCachedOriginal = !photo.originalOnDevice && photoOriginalCacheFile(context.cacheDir, photo).isFile
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
         value = withContext(Dispatchers.IO) {
             runCatching { decodeSampledPhoto(photo.localPath, 360, 360) }.getOrNull()
@@ -631,6 +639,19 @@ private fun AlbumPhotoCard(
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))
     ) {
         Box(Modifier.fillMaxWidth().height(124.dp)) {
+            if (!photo.originalOnDevice) {
+                Box(
+                    Modifier.align(Alignment.TopStart).padding(5.dp)
+                        .background(Color.Black.copy(alpha = 0.62f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        if (hasCachedOriginal) "☁ 已缓存" else "☁ 云端原图",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
             if (bitmap != null) {
                 Image(
                     bitmap!!.asImageBitmap(),
