@@ -1037,22 +1037,22 @@ private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onE
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.weight(1f))
-                    Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1, modifier = Modifier.weight(1f))
+                    Text(time, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
                 Text(
                     detail + if (payload.optString("note").isNotBlank()) " · " + payload.optString("note") else "",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
+                    maxLines = 2
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
-                    Text("编辑", style = MaterialTheme.typography.labelSmall)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)) {
+                    Text("编辑", style = MaterialTheme.typography.labelMedium)
                 }
-                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
-                    Text("删除", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)) {
+                    Text("删除", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
