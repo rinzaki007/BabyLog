@@ -35,6 +35,16 @@ class SyncOwnershipTest {
     }
 
     @Test
+    fun authoritativeSnapshotRequiresEveryBabyToBelongToTheActiveFamily() {
+        assertTrue(canSubmitAuthoritativeSnapshot(listOf("family-a"), "family-a"))
+        assertTrue(canSubmitAuthoritativeSnapshot(listOf("family-a", "family-a"), "family-a"))
+        assertFalse(canSubmitAuthoritativeSnapshot(listOf("family-a", "family-b"), "family-a"))
+        assertFalse(canSubmitAuthoritativeSnapshot(listOf("local-only"), "family-a"))
+        assertFalse(canSubmitAuthoritativeSnapshot(emptyList(), "family-a"))
+        assertFalse(canSubmitAuthoritativeSnapshot(listOf("family-a"), ""))
+    }
+
+    @Test
     fun retriesTransientHttpStatusesButStopsOnPermanentClientErrors() {
         assertTrue(shouldRetrySyncStatus(408))
         assertTrue(shouldRetrySyncStatus(425))
