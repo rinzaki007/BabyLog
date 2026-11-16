@@ -54,9 +54,9 @@ jobs:
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           test -n "$AAPT"
           BADGING="$("$AAPT" dump badging "$APK")"
-          printf '%s\\n' "$BADGING"
-          printf '%s\\n' "$BADGING" | grep -Eq "^application:.*icon="
-          printf '%s\\n' "$BADGING" | grep -Eq "^application-icon-[0-9]+:"
+          printf '%s\n' "$BADGING"
+          printf '%s\n' "$BADGING" | grep -Eq "^application:.*icon="
+          printf '%s\n' "$BADGING" | grep -Eq "^application-icon-[0-9]+:"
           "$AAPT" dump resources "$APK" | grep -q "mipmap/ic_launcher"
           "$AAPT" dump resources "$APK" | grep -q "mipmap/ic_launcher_round"
       - name: Publish GitHub Release
