@@ -13,6 +13,8 @@ import androidx.work.WorkerParameters
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
 import com.rinzaki.babylog.data.BabyLogDatabase
+import com.rinzaki.babylog.data.BabyLogDao
+import com.rinzaki.babylog.data.SyncOperationEntity
 import com.rinzaki.babylog.data.BabyPhotoEntity
 import org.json.JSONArray
 import org.json.JSONObject
@@ -100,6 +102,50 @@ internal const val FAMILY_OWNERSHIP_CONFLICT_REASON =
     "这条数据属于其他家庭空间，已暂停上传。请切回原家庭完成同步，或先核对本机数据归属。"
 
 internal const val UNASSIGNED_FAMILY_ID = "00000000-0000-0000-0000-000000000000"
+
+internal suspend fun enqueueUnassignedFamilyData(
+    dao: BabyLogDao,
+    unassignedBabies: List<BabyEntity>,
+    familyId: String
+): Int {
+    require(familyId.isNotBlank()) { "当前家庭空间标识无效" }
+    if (unassignedBabies.isEmpty()) return 0
+
+    val claimedCount = dao.assignUnassignedBabiesToFamily(familyId, UNASSIGNED_FAMILY_ID)
+    if (claimedCount == 0) return 0
+
+    val claimedBabyIds = unassignedBabies.map { it.id }.toSet()
+    val now = System.currentTimeMillis()
+    unassignedBabies.forEach { original ->
+        val baby = dao.getBaby(original.id) ?: return@forEach
+        if (!dao.hasLocalOperation("baby", baby.id)) {
+            dao.enqueueOperation(SyncOperationEntity(
+                java.util.UUID.randomUUID().toString(), "baby", baby.id, "upsert",
+                babySyncPayload(baby).toString(), baby.serverVersion, now
+            ))
+        }
+    }
+    dao.getAllEvents().filter { it.babyId in claimedBabyIds }.forEach { event ->
+        if (!dao.hasLocalOperation("event", event.id)) {
+            dao.enqueueOperation(SyncOperationEntity(
+                java.util.UUID.randomUUID().toString(), "event", event.id,
+                if (event.deletedAt == null) "upsert" else "delete",
+                eventSyncPayload(event).toString(), event.serverVersion, now
+            ))
+        }
+    }
+    dao.getAllPhotos().filter { it.babyId in claimedBabyIds }.forEach { photo ->
+        if (!dao.hasLocalOperation("photo", photo.id)) {
+            dao.enqueueOperation(SyncOperationEntity(
+                java.util.UUID.randomUUID().toString(), "photo", photo.id,
+                if (photo.deletedAt == null) "upsert" else "delete",
+                photoSyncPayload(photo, mimeTypeForPath(photo.localPath)).toString(),
+                photo.serverVersion, now
+            ))
+        }
+    }
+    return claimedCount
+}
 
 internal fun isFamilyOwnershipConflict(reason: String?): Boolean =
     reason == FAMILY_OWNERSHIP_CONFLICT_REASON
