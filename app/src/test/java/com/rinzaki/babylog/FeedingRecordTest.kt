@@ -8,10 +8,18 @@ import org.junit.Test
 
 class FeedingRecordTest {
     @Test
-    fun breastfeedingCanBeSavedWithoutMeasuredVolume() {
-        val payload = buildFeedingPayload("母乳", "", "")
+    fun breastfeedingCanBeSavedWithDurationOnly() {
+        val payload = buildFeedingPayload("母乳", "", "15")
         assertEquals("母乳", payload.getString("method"))
         assertFalse(payload.has("amountMl"))
+        assertEquals(15, payload.getInt("breastMinutes"))
+    }
+
+    @Test
+    fun breastfeedingCanBeSavedWithBottleVolumeOnly() {
+        val payload = buildFeedingPayload("母乳", "120", "")
+        assertEquals("母乳", payload.getString("method"))
+        assertEquals(120, payload.getInt("amountMl"))
         assertFalse(payload.has("breastMinutes"))
     }
 
@@ -32,9 +40,12 @@ class FeedingRecordTest {
     }
 
     @Test
-    fun rejectsMissingFormulaVolumeAndOutOfRangeValues() {
+    fun rejectsMissingRequiredValuesAndOutOfRangeValues() {
         assertThrows(IllegalArgumentException::class.java) {
             buildFeedingPayload("配方奶", "", "")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            buildFeedingPayload("母乳", "", "")
         }
         assertThrows(IllegalArgumentException::class.java) {
             buildFeedingPayload("母乳", "1001", "")
