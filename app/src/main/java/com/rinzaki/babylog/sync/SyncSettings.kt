@@ -10,6 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -28,10 +30,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.AppUpdateSection
 import com.rinzaki.babylog.data.BabyLogDao
+import com.rinzaki.babylog.data.SyncOperationEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
@@ -48,15 +54,25 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var showAccountForm by remember { mutableStateOf(SyncPreferences.token(context).isBlank()) }
     var pendingCount by remember { mutableStateOf(0) }
     var conflictCount by remember { mutableStateOf(0) }
+    var conflicts by remember { mutableStateOf(emptyList<SyncOperationEntity>()) }
+    var statusLoaded by remember { mutableStateOf(false) }
+    var retryingConflictId by remember { mutableStateOf<String?>(null) }
     var showSecurity by remember { mutableStateOf(false) }
     var editedAccountName by remember { mutableStateOf(accountEmail) }
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
 
-    LaunchedEffect(Unit) {
-        pendingCount = dao.pendingOperationCount()
-        conflictCount = dao.conflictOperationCount()
+    suspend fun refreshSyncStatus() {
+        val snapshot = withContext(Dispatchers.IO) {
+            Triple(dao.pendingOperationCount(), dao.conflictOperations(), dao.conflictOperationCount())
+        }
+        pendingCount = snapshot.first
+        conflicts = snapshot.second
+        conflictCount = snapshot.third
+        statusLoaded = true
     }
+
+    LaunchedEffect(Unit) { refreshSyncStatus() }
 
     fun runAction(action: suspend () -> String) {
         if (busy) return
@@ -77,8 +93,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 editingServer = false
                 password = ""
             }
-            pendingCount = withContext(Dispatchers.IO) { dao.pendingOperationCount() }
-            conflictCount = withContext(Dispatchers.IO) { dao.conflictOperationCount() }
+            refreshSyncStatus()
         }
     }
 
@@ -106,9 +121,18 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             }
             // One account maps to one shared data space. Every device signing in
             // with this account receives the same family ID from /api/me.
-            SyncPreferences.saveFamily(context, linkedFamilies.getJSONObject(0).getString("id"))
+            val familyId = linkedFamilies.getJSONObject(0).getString("id")
+            SyncPreferences.saveFamily(context, familyId)
+            val restoredConflicts = dao.restoreFamilyOwnershipConflicts(
+                familyId,
+                FAMILY_OWNERSHIP_CONFLICT_REASON
+            )
             SyncScheduler.schedule(context)
-            successMessage
+            if (restoredConflicts > 0) {
+                "$successMessage 已恢复 $restoredConflicts 条属于当前家庭的冲突记录，正在重新同步。"
+            } else {
+                successMessage
+            }
         }
     }
 
@@ -130,9 +154,85 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "记录会先保存在本机；联网后自动同步到 NAS。切换服务器或退出账号前，请先处理未完成的同步项目。",
+                    "记录会先保存在本机；联网后自动同步到 NAS。普通待同步项目需先完成同步；若冲突明确属于其他家庭，队列会保留，登录原家庭账号后才会恢复。",
                     style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                 )
+
+                if (conflicts.isNotEmpty()) {
+                    Text("同步冲突详情", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "这些项目仍保留在本机，没有被删除。请根据原因选择重试，或切回原家庭账号恢复。",
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                    )
+                    conflicts.take(20).forEach { operation ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(syncConflictTitle(operation), fontWeight = FontWeight.SemiBold)
+                                Text(syncConflictSummary(operation), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                                Text(
+                                    operation.error ?: "同步冲突，尚未上传。",
+                                    color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    "产生时间：${formatSyncOperationTime(operation.createdAt)}",
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (isFamilyOwnershipConflict(operation.error)) {
+                                    Text(
+                                        "此项目属于其他家庭空间。可安全退出当前账号并登录原家庭账号；匹配后系统会自动恢复该项目，不会把它上传到当前家庭。",
+                                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                                    )
+                                } else {
+                                    Text(
+                                        "重试会保留本机内容；若只是服务器版本冲突，系统会重新核对版本后提交。",
+                                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            if (retryingConflictId == null && canRetrySyncConflict(operation.error)) {
+                                                retryingConflictId = operation.operationId
+                                                scope.launch {
+                                                    message = try {
+                                                        withContext(Dispatchers.IO) {
+                                                            dao.retryConflict(operation.operationId)
+                                                        }
+                                                        SyncScheduler.enqueue(context)
+                                                        "已将这条本机记录重新加入同步队列，正在重试。"
+                                                    } catch (error: Exception) {
+                                                        error.message ?: "重试失败，请稍后再试。"
+                                                    } finally {
+                                                        retryingConflictId = null
+                                                        refreshSyncStatus()
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled = !busy && retryingConflictId == null && canRetrySyncConflict(operation.error)
+                                    ) {
+                                        Text(if (retryingConflictId == operation.operationId) "正在重试…" else "保留本机版本并重试")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (conflicts.size > 20) {
+                        Text(
+                            "还有 ${conflicts.size - 20} 条冲突未展开，以上显示最近 20 条。",
+                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
 
                 Text("NAS 同步服务器", fontWeight = FontWeight.SemiBold)
                 if (server.isNotBlank() && !editingServer) {
@@ -161,8 +261,12 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 message = "请填写 HTTPS 地址；局域网测试可使用内网 HTTP 地址。"
                             } else {
                                 val serverChanged = SyncPreferences.server(context).trimEnd('/') != normalized
-                                if (serverChanged && (pendingCount > 0 || conflictCount > 0)) {
-                                    message = "本机还有未完成的同步变更。请先联网完成同步，再更换服务器。"
+                                if (serverChanged && !canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
+                                    message = if (pendingCount > 0) {
+                                        "本机还有待同步项目，请先联网完成同步，再更换服务器。"
+                                    } else {
+                                        "还有非家庭归属类冲突，请先查看详情并处理后再更换服务器。"
+                                    }
                                 } else {
                                     SyncPreferences.saveServer(context, normalized)
                                     server = normalized
@@ -181,7 +285,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !busy
+                        enabled = !busy && statusLoaded
                     ) { Text("保存服务器地址") }
                     if (SyncPreferences.server(context).isNotBlank()) {
                         TextButton(onClick = {
@@ -296,19 +400,27 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     }
                     OutlinedButton(
                         onClick = {
-                            if (pendingCount > 0 || conflictCount > 0) {
-                                message = "本机还有未完成的同步变更，请联网完成同步后再退出登录。"
+                            if (!canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
+                                message = if (pendingCount > 0) {
+                                    "本机还有待同步项目，请联网完成同步后再退出登录。"
+                                } else {
+                                    "还有非家庭归属类冲突，请先查看详情并处理后再切换账号。"
+                                }
                             } else {
                                 SyncScheduler.cancel(context)
                                 SyncPreferences.clearSession(context)
                                 token = ""
                                 accountEmail = ""
                                 showAccountForm = true
-                                message = "已退出账号。本机数据不会删除。"
+                                message = if (conflicts.isNotEmpty()) {
+                                    "已退出账号。本机数据和冲突队列均已保留；登录原家庭账号后，匹配的项目会自动恢复。"
+                                } else {
+                                    "已退出账号。本机数据不会删除。"
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !busy
+                        enabled = !busy && statusLoaded
                     ) { Text("退出登录 / 切换账号") }
                 }
 
@@ -320,3 +432,52 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
         confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } }
     )
 }
+
+
+internal fun syncConflictTitle(operation: SyncOperationEntity): String {
+    val entity = when (operation.entityType) {
+        "baby" -> "宝宝档案"
+        "event" -> "日常记录"
+        "photo" -> "成长相册"
+        else -> "同步项目"
+    }
+    val action = if (operation.operation == "delete") "删除" else "更新"
+    return "$entity · $action"
+}
+
+internal fun syncConflictSummary(operation: SyncOperationEntity): String {
+    val payload = runCatching { JSONObject(operation.payloadJson) }.getOrElse { JSONObject() }
+    return when (operation.entityType) {
+        "baby" -> payload.optString("displayName").ifBlank { "宝宝档案 ${operation.entityId.take(8)}" }
+        "event" -> {
+            val eventType = payload.optString("eventType")
+            val label = when (eventType) {
+                "FEEDING" -> "配方奶喂养"
+                "DIAPER" -> "大小便护理"
+                "SLEEP" -> "睡眠"
+                "GROWTH" -> "成长测量"
+                else -> "其他记录"
+            }
+            val timestamp = payload.optLong("occurredAt")
+            val time = if (timestamp > 0L) formatSyncOperationTime(timestamp) else ""
+            val eventPayload = runCatching {
+                JSONObject(payload.optString("payloadJson", "{}"))
+            }.getOrElse { JSONObject() }
+            val detail = when (eventType) {
+                "FEEDING" -> eventPayload.optInt("amountMl").takeIf { it > 0 }?.let { "$it ml 配方奶" }.orEmpty()
+                "SLEEP" -> eventPayload.optInt("durationMinutes").takeIf { it > 0 }?.let { "$it 分钟" }.orEmpty()
+                "DIAPER" -> buildList {
+                    if (eventPayload.optBoolean("urine")) add("小便")
+                    if (eventPayload.optBoolean("stool")) add("大便")
+                }.joinToString("、")
+                else -> ""
+            }
+            listOf(label, time, detail).filter { it.isNotBlank() }.joinToString(" · ")
+        }
+        "photo" -> payload.optString("caption").ifBlank { "照片 ${operation.entityId.take(8)}" }
+        else -> "项目标识：${operation.entityId.take(12)}"
+    }
+}
+
+private fun formatSyncOperationTime(timestamp: Long): String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp))
