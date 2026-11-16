@@ -38,6 +38,27 @@ interface BabyLogDao {
     @Query("DELETE FROM sync_operations")
     suspend fun clearAllSyncOperations()
 
+    @Query(
+        """
+        DELETE FROM sync_operations
+        WHERE
+            (entityType = 'baby' AND entityId IN (
+                SELECT id FROM babies WHERE familyId = :familyId
+            ))
+            OR (entityType = 'event' AND entityId IN (
+                SELECT e.id FROM baby_events e
+                INNER JOIN babies b ON b.id = e.babyId
+                WHERE b.familyId = :familyId
+            ))
+            OR (entityType = 'photo' AND entityId IN (
+                SELECT p.id FROM baby_photos p
+                INNER JOIN babies b ON b.id = p.babyId
+                WHERE b.familyId = :familyId
+            ))
+        """
+    )
+    suspend fun clearSyncOperationsForFamily(familyId: String): Int
+
     @Query("DELETE FROM baby_photos")
     suspend fun clearAllPhotos()
 
