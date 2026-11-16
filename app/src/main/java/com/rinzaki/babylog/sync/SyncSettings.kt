@@ -1,7 +1,9 @@
 package com.rinzaki.babylog.sync
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -78,6 +80,11 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var pendingPhotoCount by remember { mutableStateOf(0) }
     var photoCacheBytes by remember { mutableStateOf(0L) }
     var photoCacheFileCount by remember { mutableStateOf(0) }
+    var appSectionExpanded by remember { mutableStateOf(false) }
+    var feedingSectionExpanded by remember { mutableStateOf(false) }
+    var photoSectionExpanded by remember { mutableStateOf(false) }
+    var syncSectionExpanded by remember { mutableStateOf(false) }
+    var serverAccountExpanded by remember { mutableStateOf(SyncPreferences.token(context).isBlank()) }
 
     fun updateFeedingMethod(method: String, enabled: Boolean) {
         val enabledCount = listOf(showBreastMilk, showFormula, showMixed).count { it }
@@ -202,8 +209,22 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                SettingsGroup(
+                    title = "应用与版本",
+                    subtitle = "版本更新与应用信息",
+                    expanded = appSectionExpanded,
+                    onToggle = { appSectionExpanded = !appSectionExpanded }
+                ) {
                 AppUpdateSection()
 
+                }
+
+                SettingsGroup(
+                    title = "记录偏好",
+                    subtitle = "设置喂养记录中显示的方式",
+                    expanded = feedingSectionExpanded,
+                    onToggle = { feedingSectionExpanded = !feedingSectionExpanded }
+                ) {
                 Text("喂养方式", fontWeight = FontWeight.SemiBold)
                 Text("关闭不使用的方式后，新增喂养记录时会隐藏对应选项；已有历史记录不会被删除或修改。", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -219,6 +240,14 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     Switch(checked = showMixed, onCheckedChange = { updateFeedingMethod(FeedingPreferences.MIXED, it) })
                 }
 
+                }
+
+                SettingsGroup(
+                    title = "相册与存储",
+                    subtitle = if (cloudPhotoStorage) "已启用 NAS 云端原图 · " + photoCacheFileCount + " 张临时缓存" else "管理照片原图保存位置",
+                    expanded = photoSectionExpanded,
+                    onToggle = { photoSectionExpanded = !photoSectionExpanded }
+                ) {
                 Text("相册原图存储", fontWeight = FontWeight.SemiBold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -310,6 +339,14 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     }
                 }
 
+                }
+
+                SettingsGroup(
+                    title = "同步状态",
+                    subtitle = if (pendingCount == 0 && conflictCount == 0) "同步队列正常" else "待同步 " + pendingCount + " 项 · 冲突 " + conflictCount + " 项",
+                    expanded = syncSectionExpanded,
+                    onToggle = { syncSectionExpanded = !syncSectionExpanded }
+                ) {
                 Text("同步状态", fontWeight = FontWeight.SemiBold)
                 Text(
                     if (pendingCount == 0 && conflictCount == 0) "本机同步队列已清空，没有待处理项目。"
@@ -398,6 +435,14 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     }
                 }
 
+                }
+
+                SettingsGroup(
+                    title = "服务器与账号",
+                    subtitle = if (token.isNotBlank()) accountEmail.ifBlank { "已登录 NAS 家庭账号" } else "连接 NAS 并登录以启用家庭同步",
+                    expanded = serverAccountExpanded,
+                    onToggle = { serverAccountExpanded = !serverAccountExpanded }
+                ) {
                 Text("NAS 同步服务器", fontWeight = FontWeight.SemiBold)
                 if (server.isNotBlank() && !editingServer) {
                     Text(server, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
@@ -537,7 +582,9 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !busy && editedAccountName.trim().length >= 3 && currentPassword.length >= 10
                         ) { Text("保存账号名") }
-                        Spacer(Modifier.height(4.dp))
+                        }
+
+                Spacer(Modifier.height(4.dp))
                         Text("修改密码", fontWeight = FontWeight.SemiBold)
                         OutlinedTextField(
                             value = newPassword,
@@ -601,6 +648,45 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     )
 }
 
+
+@Composable
+private fun SettingsGroup(
+    title: String,
+    subtitle: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
+        )
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 12.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(title, fontWeight = FontWeight.SemiBold)
+                    Text(subtitle, style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(if (expanded) "收起" else "展开",
+                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
+            }
+            if (expanded) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    content = content
+                )
+            }
+        }
+    }
+}
 
 private fun formatPhotoCacheSize(bytes: Long): String = when {
     bytes >= 1024L * 1024L * 1024L -> String.format(Locale.CHINA, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
