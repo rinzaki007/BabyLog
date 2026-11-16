@@ -163,6 +163,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+                    }
 
 @Composable
 private fun BabyLogApp(dao: BabyLogDao) {
