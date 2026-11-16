@@ -112,7 +112,12 @@ jobs:
           profile: pixel_2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -cores 2
           disable-animations: true
-          script: gradle --no-daemon --max-workers=2 connectedDebugAndroidTest --info
+          script: |
+            # Disable Play Protect package verification in the disposable CI emulator.
+            # It can otherwise time out while adb installs the instrumentation APK.
+            adb shell settings put global package_verifier_enable 0 || true
+            adb shell settings put global verifier_verify_adb_installs 0 || true
+            gradle --no-daemon --max-workers=2 connectedDebugAndroidTest --info
       - name: Explain skipped database instrumentation tests
         if: steps.migration-scope.outputs.required != 'true'
         run: echo "Skipped emulator-based database tests because this change does not touch database code, migrations, instrumentation tests, or Android build dependencies."
