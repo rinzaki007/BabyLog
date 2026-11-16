@@ -106,7 +106,9 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
 @Composable
 private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
     var metric by remember { mutableStateOf("喂养奶量") }
-    val days = when (range) { "近30天" -> 30; "近90天" -> 90; else -> 7 }
+    val days = if (range == "全部") {
+        calendarDaysCovered(events, LocalDate.now(), ZoneId.systemDefault()).coerceAtMost(366)
+    } else when (range) { "近30天" -> 30; "近90天" -> 90; else -> 7 }
     val unit = when (metric) {
         "喂养奶量" -> "ml"
         "睡眠小时" -> "小时"
@@ -124,7 +126,11 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
                 }
                 Text("${"%.1f".format(Locale.CHINA, total)} $unit", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
-            Text("与上方统计使用同一周期", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                if (range == "全部") "统计范围为全部记录；趋势图最多展示最近 366 天" else "与上方统计使用同一周期",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             SelectionRow(listOf("喂养奶量", "喂养次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
             Canvas(Modifier.fillMaxWidth().height(150.dp)) {
                 val horizontalPadding = 4.dp.toPx()
