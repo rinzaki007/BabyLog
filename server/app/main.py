@@ -6,6 +6,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, Request, 
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field
 
@@ -14,6 +15,7 @@ JWT_SECRET=os.getenv("BABYLOG_JWT_SECRET",""); JWT_ISSUER="babylog-sync"
 TOKEN_TTL=int(os.getenv("BABYLOG_TOKEN_TTL_SECONDS","2592000")); MAX_PHOTO_BYTES=int(os.getenv("BABYLOG_MAX_PHOTO_BYTES",str(20*1024*1024)))
 password_hash=PasswordHash.recommended(); bearer=HTTPBearer(auto_error=False)
 app=FastAPI(title="BabyLog Sync Server",docs_url=None,redoc_url=None,openapi_url=None)
+app.mount("/static",StaticFiles(directory=Path(__file__).parent/"static"),name="static")
 
 UPDATE_DIR=DATA_DIR/"updates"
 UPDATE_META=UPDATE_DIR/"latest.json"
