@@ -78,4 +78,19 @@ class BabyLogDaoPaginationTest {
         assertEquals(listOf("note"), page.map { it.id })
         assertEquals(1, dao.countTimelineEvents("baby", null, null, "OTHER"))
     }
+    @Test
+    fun supplementCategoryIsSeparateFromOtherRecords() = runBlocking {
+        dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
+        dao.upsertEvent(BabyEventEntity("supplement", "baby", "SUPPLEMENT", 200L, """{"supplementName":"维生素AD"}""", null, 200L))
+        dao.upsertEvent(BabyEventEntity("note", "baby", "NOTE", 180L, "{}", null, 180L))
+        dao.upsertEvent(BabyEventEntity("vaccine", "baby", "VACCINE", 170L, "{}", null, 170L))
+
+        val supplements = dao.getTimelinePage("baby", null, null, "SUPPLEMENT", 100, 0)
+        val others = dao.getTimelinePage("baby", null, null, "OTHER", 100, 0)
+
+        assertEquals(listOf("supplement"), supplements.map { it.id })
+        assertEquals(listOf("note"), others.map { it.id })
+        assertEquals(1, dao.countTimelineEvents("baby", null, null, "SUPPLEMENT"))
+    }
+
 }
