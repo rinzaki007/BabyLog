@@ -81,7 +81,7 @@ internal fun BabyAlbumSection(
     var albumFilter by remember { mutableStateOf("全部") }
     var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
     var showPhotoDatePicker by remember { mutableStateOf(false) }
-    var extraPhotos by remember(baby.id) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
+    var extraPhotos by remember(baby.id, photoCount) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
     var loadingMorePhotos by remember { mutableStateOf(false) }
     val loadedPhotos = remember(photos, extraPhotos) {
         (photos + extraPhotos).distinctBy { it.id }.sortedWith(compareByDescending<BabyPhotoEntity> { it.takenAt }.thenByDescending { it.id })
@@ -410,6 +410,7 @@ internal fun BabyAlbumSection(
             confirmButton = {
                 TextButton(onClick = {
                     onCaption(photo, caption.trim())
+                    extraPhotos = extraPhotos.map { if (it.id == photo.id) it.copy(caption = caption.trim()) else it }
                     editingCaption = null
                 }) { Text("保存") }
             },
@@ -427,6 +428,7 @@ internal fun BabyAlbumSection(
             confirmButton = {
                 TextButton(onClick = {
                     onDelete(photo)
+                    extraPhotos = extraPhotos.filterNot { it.id == photo.id }
                     deletingPhoto = null
                 }) { Text("删除") }
             },
