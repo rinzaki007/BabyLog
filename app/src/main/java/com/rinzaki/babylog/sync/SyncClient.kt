@@ -33,7 +33,7 @@ object SyncPreferences {
     private const val FILE = "babylog_sync"
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     fun server(context: Context) = prefs(context).getString("server", "") ?: ""
-    fun token(context: Context): String {
+    fun token(context: Context, encryptLegacy: (String) -> String = SecureTokenStore::encrypt): String {
         val preferences = prefs(context)
         val encrypted = preferences.getString("token_encrypted", null)
         if (!encrypted.isNullOrBlank()) {
@@ -49,7 +49,7 @@ object SyncPreferences {
         if (legacy.isBlank()) return ""
         // One-time, lossless migration from the previous plaintext preference.
         runCatching {
-            val migrated = SecureTokenStore.encrypt(legacy)
+            val migrated = encryptLegacy(legacy)
             check(preferences.edit().putString("token_encrypted", migrated).remove("token").commit())
         }
         return legacy
