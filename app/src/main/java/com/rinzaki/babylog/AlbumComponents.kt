@@ -362,7 +362,12 @@ internal fun BabyAlbumSection(
                     showPhotoDatePicker = false
                 }) { Text("确定") }
             },
-            dismissButton = { TextButton(onClick = { showPhotoDatePicker = false }) { Text("取消") } }
+            dismissButton = {
+            TextButton(onClick = {
+                showPhotoDatePicker = false
+                if (selectedPhotoDate == null) albumFilter = "全部"
+            }) { Text("取消") }
+        }
         ) { androidx.compose.material3.DatePicker(state = datePickerState) }
     }
     if (showPhotoTimePicker) DateTimeOptionDialog(
