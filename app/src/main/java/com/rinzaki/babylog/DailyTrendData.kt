@@ -46,3 +46,23 @@ fun dailyTrendPoints(
         DailyTrendPoint(date, totals[date] ?: 0f)
     }
 }
+
+
+/**
+ * Counts calendar dates rather than elapsed 24-hour blocks. This keeps averages stable
+ * across daylight-saving changes and local midnight boundaries.
+ */
+fun calendarDaysCovered(
+    events: List<BabyEventEntity>,
+    today: LocalDate = LocalDate.now(),
+    zone: ZoneId = ZoneId.systemDefault()
+): Int {
+    val firstDate = events.asSequence()
+        .filter { it.deletedAt == null }
+        .map { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(zone).toLocalDate() }
+        .filter { !it.isAfter(today) }
+        .minOrNull() ?: return 1
+    return (java.time.temporal.ChronoUnit.DAYS.between(firstDate, today) + 1)
+        .toInt()
+        .coerceAtLeast(1)
+}
