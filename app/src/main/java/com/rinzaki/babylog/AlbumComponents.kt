@@ -325,7 +325,7 @@ internal fun BabyAlbumSection(
             // original in the background for full-resolution viewing when online.
             LaunchedEffect(activePhoto.id, activePhoto.originalOnDevice) {
                 if (!activePhoto.originalOnDevice) {
-                    val cachedPath = photoOriginalCache[activePhoto.id]
+                    val cachedPath = photoOriginalCache[activePhoto.id]?.takeIf { File(it).isFile }
                     val base = SyncPreferences.server(context)
                     val token = SyncPreferences.token(context)
                     val familyId = SyncPreferences.familyId(context)
