@@ -110,4 +110,17 @@ class DailyTrendDataTest {
         assertEquals(1f, dailyTrendPoints(events, "喂养次数", 1, today, zone).single().value)
     }
 
+    @Test
+    fun countsSolidFoodSeparatelyFromFeedingAndSupplements() {
+        val events = listOf(
+            event("sf1", "SOLID_FOOD", today, """{"foodName":"米粉","amount":10,"unit":"g"}"""),
+            event("sf2", "SOLID_FOOD", today, """{"foodName":"苹果泥","eatingStatus":"少量尝试"}"""),
+            event("a1", "SUPPLEMENT", today, """{"supplementName":"维生素AD"}"""),
+            event("f1", "FEEDING", today, """{"amountMl":120}""")
+        )
+        assertEquals(2f, dailyTrendPoints(events, "辅食次数", 1, today, zone).single().value)
+        assertEquals(1f, dailyTrendPoints(events, "补充次数", 1, today, zone).single().value)
+        assertEquals(1f, dailyTrendPoints(events, "喂养次数", 1, today, zone).single().value)
+    }
+
 }

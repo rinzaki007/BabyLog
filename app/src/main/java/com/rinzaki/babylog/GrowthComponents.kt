@@ -45,6 +45,7 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
             "护理" -> event.eventType == "DIAPER"
             "睡眠" -> event.eventType == "SLEEP"
             "补充" -> event.eventType == "SUPPLEMENT"
+            "辅食" -> event.eventType == "SOLID_FOOD"
             "成长" -> event.eventType == "GROWTH"
             else -> true
         }
@@ -62,6 +63,7 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
     val stoolCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
     val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0) }
     val supplementEvents = recent.filter { it.eventType == "SUPPLEMENT" }
+    val solidFoodEvents = recent.filter { it.eventType == "SOLID_FOOD" }
     val waterMl = supplementEvents.filter {
         runCatching {
             val payload = JSONObject(it.payloadJson)
@@ -81,7 +83,7 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
             Text("统计周期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("近7天", "近30天", "近90天", "全部"), range) { range = it }
             Text("记录类型", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-            SelectionRow(listOf("全部", "喂养", "补充", "护理", "睡眠", "成长"), category) { category = it }
+            SelectionRow(listOf("全部", "喂养", "辅食", "补充", "护理", "睡眠", "成长"), category) { category = it }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
@@ -105,6 +107,7 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
                 SummaryPill("🧴", "补充次数", "${supplementEvents.size} 次", Modifier.weight(1f))
                 SummaryPill("🚰", "饮水量", "${waterMl} ml", Modifier.weight(1f))
             }
+            if (category == "全部" || category == "辅食") SummaryPill("🥣", "辅食次数", "${solidFoodEvents.size} 次", Modifier.fillMaxWidth())
             if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
                 SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
@@ -146,7 +149,7 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            SelectionRow(listOf("喂养奶量", "喂养次数", "补充次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
+            SelectionRow(listOf("喂养奶量", "喂养次数", "辅食次数", "补充次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
             Canvas(
                 Modifier.fillMaxWidth().height(150.dp).pointerInput(points) {
                     detectTapGestures { tap ->
