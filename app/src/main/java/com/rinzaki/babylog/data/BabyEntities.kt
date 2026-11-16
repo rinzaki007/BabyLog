@@ -1,5 +1,6 @@
 package com.rinzaki.babylog.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -53,7 +54,7 @@ data class BabyPhotoEntity(
     val remotePath: String? = null,
     val deletedAt: Long? = null,
     val serverVersion: Long? = null,
-    val originalOnDevice: Boolean = true,
+    @ColumnInfo(defaultValue = "1") val originalOnDevice: Boolean = true,
     val photoMimeType: String? = null
 )
 
