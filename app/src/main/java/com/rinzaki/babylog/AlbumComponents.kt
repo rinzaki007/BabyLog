@@ -19,6 +19,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cached
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -688,33 +691,37 @@ private fun AlbumPhotoCard(
                     Text("📷", style = MaterialTheme.typography.titleLarge)
                 }
             }
-            // Draw the status badge after the image so it stays visible on top of the thumbnail.
-            Box(
-                Modifier.align(Alignment.TopStart).padding(5.dp)
-                    .background(Color.Black.copy(alpha = 0.56f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 7.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    when {
-                        photo.originalOnDevice -> "本地原图"
-                        hasCachedOriginal -> "已缓存"
-                        else -> "云端原图"
-                    },
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
+            // Keep one compact storage badge in the lower-right corner; the date
+            // remains available in the timeline and full-screen viewer.
+            val storageLabel = when {
+                photo.originalOnDevice -> "本地"
+                hasCachedOriginal -> "缓存"
+                else -> "云端"
             }
-            Box(
-                Modifier.align(Alignment.BottomEnd)
+            val storageIcon = when {
+                photo.originalOnDevice -> Icons.Filled.PhoneAndroid
+                hasCachedOriginal -> Icons.Filled.Cached
+                else -> Icons.Filled.Cloud
+            }
+            Row(
+                modifier = Modifier.align(Alignment.BottomEnd)
                     .padding(5.dp)
                     .background(Color.Black.copy(alpha = 0.58f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(
+                    imageVector = storageIcon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(12.dp)
+                )
                 Text(
-                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(photo.takenAt)),
+                    storageLabel,
                     color = Color.White,
-                    style = MaterialTheme.typography.labelSmall
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
