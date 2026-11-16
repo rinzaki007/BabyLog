@@ -148,10 +148,21 @@ internal fun BabyAlbumSection(
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("照片角标说明：本地原图 · 已缓存 · 云端原图", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(Icons.Filled.PhoneAndroid, contentDescription = null, modifier = Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("本地原图", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(Icons.Filled.Cached, contentDescription = null, modifier = Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("已缓存", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(Icons.Filled.Cloud, contentDescription = null, modifier = Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("云端原图", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         if (albumFilter == "指定日期" && selectedPhotoDate != null) {
             Text("已筛选：${selectedPhotoDate!!.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
@@ -293,6 +304,7 @@ internal fun BabyAlbumSection(
         ) {
             var showViewerChrome by remember(photo.id) { mutableStateOf(true) }
             var zoom by remember(photo.id) { mutableStateOf(1f) }
+            val zoomAnimation = remember(photo.id) { Animatable(1f) }
             var panX by remember(photo.id) { mutableStateOf(0f) }
             var panY by remember(photo.id) { mutableStateOf(0f) }
             var viewportSize by remember(photo.id) { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
@@ -404,6 +416,7 @@ internal fun BabyAlbumSection(
                         enter = fadeIn(animationSpec = tween(180)),
                         exit = fadeOut(animationSpec = tween(160))
                     ) {
+                    Box(Modifier.fillMaxWidth().height(58.dp)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             AnimatedContent(
@@ -425,6 +438,7 @@ internal fun BabyAlbumSection(
                         TextButton(onClick = closeViewer) { Text("关闭", color = Color.White) }
                     }
                     }
+                    }
                     Box(Modifier.fillMaxWidth().weight(1f)) {
                         HorizontalPager(
                         state = pagerState,
@@ -444,15 +458,22 @@ internal fun BabyAlbumSection(
                                                 detectTapGestures(
                                                     onTap = { showViewerChrome = !showViewerChrome },
                                                     onDoubleTap = {
-                                                        if (zoom > 1f) {
-                                                            zoom = 1f
-                                                            panX = 0f
-                                                            panY = 0f
-                                                        } else {
-                                                            zoom = 2.5f
-                                                            val bounded = clampPhotoPan(zoom, panX, panY)
-                                                            panX = bounded.first
-                                                            panY = bounded.second
+                                                        val targetZoom = if (zoom > 1.01f) 1f else 2.5f
+                                                        viewerScope.launch {
+                                                            zoomAnimation.stop()
+                                                            zoomAnimation.snapTo(zoom)
+                                                            zoomAnimation.animateTo(
+                                                                targetZoom,
+                                                                animationSpec = spring(
+                                                                    dampingRatio = 0.82f,
+                                                                    stiffness = 280f
+                                                                )
+                                                            ) {
+                                                                zoom = value
+                                                                val bounded = clampPhotoPan(value, panX, panY)
+                                                                panX = bounded.first
+                                                                panY = if (value <= 1.01f) 0f else bounded.second
+                                                            }
                                                         }
                                                     }
                                                 )
@@ -495,6 +516,7 @@ internal fun BabyAlbumSection(
                             )
                         }
                     }
+                    Box(Modifier.fillMaxWidth().height(116.dp)) {
                     AnimatedVisibility(
                         visible = showViewerChrome,
                         enter = fadeIn(animationSpec = tween(180)),
@@ -518,6 +540,7 @@ internal fun BabyAlbumSection(
                                 TextButton(onClick = { deletingPhoto = activePhoto; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
                             }
                         }
+                    }
                     }
                 }
             }
@@ -693,35 +716,27 @@ private fun AlbumPhotoCard(
             }
             // Keep one compact storage badge in the lower-right corner; the date
             // remains available in the timeline and full-screen viewer.
-            val storageLabel = when {
-                photo.originalOnDevice -> "本地"
-                hasCachedOriginal -> "缓存"
-                else -> "云端"
-            }
             val storageIcon = when {
                 photo.originalOnDevice -> Icons.Filled.PhoneAndroid
                 hasCachedOriginal -> Icons.Filled.Cached
                 else -> Icons.Filled.Cloud
             }
-            Row(
+            Box(
                 modifier = Modifier.align(Alignment.BottomEnd)
-                    .padding(5.dp)
-                    .background(Color.Black.copy(alpha = 0.58f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 3.dp),
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(4.dp)
+                    .size(19.dp)
+                    .background(Color.Black.copy(alpha = 0.52f), CircleShape),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = storageIcon,
-                    contentDescription = null,
+                    contentDescription = when {
+                        photo.originalOnDevice -> "本地原图"
+                        hasCachedOriginal -> "已缓存原图"
+                        else -> "云端原图"
+                    },
                     tint = Color.White,
-                    modifier = Modifier.size(12.dp)
-                )
-                Text(
-                    storageLabel,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Medium
+                    modifier = Modifier.size(11.dp)
                 )
             }
         }
