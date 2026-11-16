@@ -190,26 +190,32 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var selectedEndDate by remember { mutableStateOf<LocalDate?>(null) }
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
+    var timelineEvents by remember { mutableStateOf<List<BabyEventEntity>>(emptyList()) }
+    var timelineTotal by remember { mutableStateOf(0) }
+    var timelineLoading by remember { mutableStateOf(false) }
+    val timelineEventType = when (selectedEventFilter) {
+        "喂养" -> "FEEDING"
+        "大小便" -> "DIAPER"
+        "睡眠" -> "SLEEP"
+        "成长测量" -> "GROWTH"
+        "其他" -> "OTHER"
+        else -> null
+    }
+    val timelineStartAt = selectedStartDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+    val timelineEndAt = selectedEndDate?.plusDays(1)?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
     val vaccineEvents = events.filter { it.eventType == "VACCINE" }
     val normalEvents = events.filter { it.eventType != "VACCINE" }
-    var timelineLimit by remember { mutableStateOf(100) }
-    LaunchedEffect(selectedEventFilter, selectedStartDate, selectedEndDate, baby?.id) { timelineLimit = 100 }
-    val filteredEvents = normalEvents.filter { event ->
-        val eventDate = java.time.Instant.ofEpochMilli(event.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate()
-        val startDate = selectedStartDate
-        val endDate = selectedEndDate
-        val inDateRange = (startDate == null || !eventDate.isBefore(startDate)) &&
-            (endDate == null || !eventDate.isAfter(endDate))
-        inDateRange && when (selectedEventFilter) {
-            "喂养" -> event.eventType == "FEEDING"
-            "大小便" -> event.eventType == "DIAPER"
-            "睡眠" -> event.eventType == "SLEEP"
-            "成长测量" -> event.eventType == "GROWTH"
-            "其他" -> event.eventType !in setOf("FEEDING", "DIAPER", "SLEEP", "GROWTH")
-            else -> true
+    LaunchedEffect(baby?.id, selectedEventFilter, selectedStartDate, selectedEndDate, events) {
+        if (baby == null) {
+            timelineEvents = emptyList()
+            timelineTotal = 0
+        } else {
+            timelineLoading = true
+            timelineEvents = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, 0)
+            timelineTotal = dao.countTimelineEvents(baby.id, timelineStartAt, timelineEndAt, timelineEventType)
+            timelineLoading = false
         }
     }
-    val visibleEvents = filteredEvents.take(timelineLimit)
     LaunchedEffect(Unit) {
         if (SyncPreferences.familyId(appContext).isNotBlank()) SyncScheduler.schedule(appContext)
         var lastForegroundSync = 0L
@@ -427,7 +433,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     if (selectedNav == 1) item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("成长足迹", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Text("共 ${normalEvents.size} 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("共 ${timelineTotal} 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     if (selectedNav == 1) item {
@@ -451,7 +457,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     }
-                    if (selectedNav == 1 && filteredEvents.isEmpty()) {
+                    if (selectedNav == 1 && timelineEvents.isEmpty() && !timelineLoading) {
                         item {
                             Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -467,16 +473,24 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                         }
-                    } else if (selectedNav == 1) items(visibleEvents, key = { it.id }) { event ->
+                    } else if (selectedNav == 1) items(timelineEvents, key = { it.id }) { event ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                             EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
                         }
                     }
-                    if (selectedNav == 1 && filteredEvents.size > timelineLimit) item {
+                    if (selectedNav == 1 && timelineEvents.size < timelineTotal) item {
                         OutlinedButton(
-                            onClick = { timelineLimit = (timelineLimit + 100).coerceAtMost(filteredEvents.size) },
+                            enabled = !timelineLoading,
+                            onClick = {
+                                scope.launch {
+                                    timelineLoading = true
+                                    val nextPage = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, timelineEvents.size)
+                                    timelineEvents = timelineEvents + nextPage
+                                    timelineLoading = false
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("加载更多记录（已显示 ${visibleEvents.size} / ${filteredEvents.size}）") }
+                        ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
                     if (selectedNav == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
