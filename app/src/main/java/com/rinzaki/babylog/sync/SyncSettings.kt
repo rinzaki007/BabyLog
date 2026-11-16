@@ -59,6 +59,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var showAccountForm by remember { mutableStateOf(SyncPreferences.token(context).isBlank()) }
     var pendingCount by remember { mutableStateOf(0) }
     var conflictCount by remember { mutableStateOf(0) }
+    var cloudOnlyPhotoCount by remember { mutableStateOf(0) }
     var conflicts by remember { mutableStateOf(emptyList<SyncOperationEntity>()) }
     var statusLoaded by remember { mutableStateOf(false) }
     var retryingConflictId by remember { mutableStateOf<String?>(null) }
@@ -88,11 +89,16 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
 
     suspend fun refreshSyncStatus() {
         val snapshot = withContext(Dispatchers.IO) {
-            Triple(dao.pendingOperationCount(), dao.conflictOperations(), dao.conflictOperationCount())
+            val pending = dao.pendingOperationCount()
+            val conflictRows = dao.conflictOperations()
+            val conflictTotal = dao.conflictOperationCount()
+            val cloudOnlyPhotos = dao.getAllPhotos().count { it.deletedAt == null && !it.originalOnDevice }
+            Pair(Triple(pending, conflictRows, conflictTotal), cloudOnlyPhotos)
         }
-        pendingCount = snapshot.first
-        conflicts = snapshot.second
-        conflictCount = snapshot.third
+        pendingCount = snapshot.first.first
+        conflicts = snapshot.first.second
+        conflictCount = snapshot.first.third
+        cloudOnlyPhotoCount = snapshot.second
         statusLoaded = true
     }
 
@@ -339,7 +345,9 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 message = "请填写 HTTPS 地址；局域网测试可使用内网 HTTP 地址。"
                             } else {
                                 val serverChanged = SyncPreferences.server(context).trimEnd('/') != normalized
-                                if (serverChanged && !canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
+                                if (serverChanged && cloudOnlyPhotoCount > 0) {
+                                    message = "本机还有 $cloudOnlyPhotoCount 张照片只保留预览。请先连接原 NAS、关闭云端原图存储并等待原图恢复，再更换服务器。"
+                                } else if (serverChanged && !canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
                                     message = if (pendingCount > 0) {
                                         "本机还有待同步项目，请先联网完成同步，再更换服务器。"
                                     } else {
@@ -478,7 +486,9 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     }
                     OutlinedButton(
                         onClick = {
-                            if (!canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
+                            if (cloudOnlyPhotoCount > 0) {
+                                message = "本机还有 $cloudOnlyPhotoCount 张照片只保留预览。请先连接原 NAS、关闭云端原图存储并等待原图恢复，再退出或切换账号，避免离线后无法读取原图。"
+                            } else if (!canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
                                 message = if (pendingCount > 0) {
                                     "本机还有待同步项目，请联网完成同步后再退出登录。"
                                 } else {
