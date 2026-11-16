@@ -1,6 +1,8 @@
 package com.rinzaki.babylog
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -25,6 +27,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 
 @Composable
 internal fun TrendsSummary(events: List<BabyEventEntity>) {
@@ -34,12 +37,15 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
     var category by remember { mutableStateOf("全部") }
     val days = when (range) { "近7天" -> 7L; "近30天" -> 30L; "近90天" -> 90L; else -> Long.MAX_VALUE }
     val start = if (days == Long.MAX_VALUE) 0L else LocalDate.now().minusDays(days - 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val ranged = events.filter { it.occurredAt >= start }
+    val now = System.currentTimeMillis()
+    val ranged = events.filter { it.deletedAt == null && it.occurredAt >= start && it.occurredAt <= now }
     val recent = ranged.filter { event ->
         when (category) {
             "喂养" -> event.eventType == "FEEDING"
             "护理" -> event.eventType == "DIAPER"
             "睡眠" -> event.eventType == "SLEEP"
+            "补充" -> event.eventType == "SUPPLEMENT"
+            "辅食" -> event.eventType == "SOLID_FOOD"
             "成长" -> event.eventType == "GROWTH"
             else -> true
         }
@@ -56,8 +62,16 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
     val peeCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("urine") }.getOrDefault(false) }
     val stoolCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
     val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0) }
+    val supplementEvents = recent.filter { it.eventType == "SUPPLEMENT" }
+    val solidFoodEvents = recent.filter { it.eventType == "SOLID_FOOD" }
+    val waterMl = supplementEvents.filter {
+        runCatching {
+            val payload = JSONObject(it.payloadJson)
+            payload.optString("supplementName") == "水" && payload.optString("unit") == "ml"
+        }.getOrDefault(false)
+    }.sumOf { runCatching { JSONObject(it.payloadJson).optDouble("amount").toInt() }.getOrDefault(0) }
     val daysCovered = if (days == Long.MAX_VALUE) {
-        if (recent.isEmpty()) 1 else (((System.currentTimeMillis() - (recent.minOf { it.occurredAt })) / 86400000L) + 1).coerceAtLeast(1)
+        calendarDaysCovered(recent, LocalDate.now(), ZoneId.systemDefault())
     } else days
     val average = recent.size.toDouble() / daysCovered.toDouble()
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -69,7 +83,7 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
             Text("统计周期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("近7天", "近30天", "近90天", "全部"), range) { range = it }
             Text("记录类型", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-            SelectionRow(listOf("全部", "喂养", "护理", "睡眠", "成长"), category) { category = it }
+            SelectionRow(listOf("全部", "喂养", "辅食", "补充", "护理", "睡眠", "成长"), category) { category = it }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
@@ -89,6 +103,11 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
                     }
                 }
             }
+            if (category == "全部" || category == "补充") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryPill("🧴", "补充次数", "${supplementEvents.size} 次", Modifier.weight(1f))
+                SummaryPill("🚰", "饮水量", "${waterMl} ml", Modifier.weight(1f))
+            }
+            if (category == "全部" || category == "辅食") SummaryPill("🥣", "辅食次数", "${solidFoodEvents.size} 次", Modifier.fillMaxWidth())
             if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
                 SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
@@ -97,20 +116,23 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
             if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
-    DailyTrendChart(events)
+    DailyTrendChart(events, range)
 }
 
 @Composable
-private fun DailyTrendChart(events: List<BabyEventEntity>) {
-    var range by remember { mutableStateOf("近7天") }
+private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
     var metric by remember { mutableStateOf("喂养奶量") }
-    val days = when (range) { "近30天" -> 30; "近90天" -> 90; else -> 7 }
+    val days = if (range == "全部") {
+        calendarDaysCovered(events, LocalDate.now(), ZoneId.systemDefault()).coerceAtMost(366)
+    } else when (range) { "近30天" -> 30; "近90天" -> 90; else -> 7 }
     val unit = when (metric) {
         "喂养奶量" -> "ml"
         "睡眠小时" -> "小时"
         else -> "次"
     }
-    val points = dailyTrendPoints(events, metric, days)
+    val points = remember(events, metric, days) { dailyTrendPoints(events, metric, days) }
+    var selectedDayIndex by remember(points) { mutableStateOf(points.lastIndex) }
+    val selectedDay = points.getOrNull(selectedDayIndex)
     val maximum = points.maxOfOrNull { it.value }?.coerceAtLeast(1f) ?: 1f
     val total = points.sumOf { it.value.toDouble() }.toFloat()
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -122,9 +144,21 @@ private fun DailyTrendChart(events: List<BabyEventEntity>) {
                 }
                 Text("${"%.1f".format(Locale.CHINA, total)} $unit", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
-            SelectionRow(listOf("近7天", "近30天", "近90天"), range) { range = it }
-            SelectionRow(listOf("喂养奶量", "喂养次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
-            Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+            Text(
+                if (range == "全部") "统计范围为全部记录；趋势图最多展示最近 366 天" else "与上方统计使用同一周期",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            SelectionRow(listOf("喂养奶量", "喂养次数", "辅食次数", "补充次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
+            Canvas(
+                Modifier.fillMaxWidth().height(150.dp).pointerInput(points) {
+                    detectTapGestures { tap ->
+                        val horizontalPadding = 4.dp.toPx()
+                        val slotWidth = (size.width - horizontalPadding * 2) / points.size.coerceAtLeast(1)
+                        selectedDayIndex = ((tap.x - horizontalPadding) / slotWidth).toInt().coerceIn(points.indices)
+                    }
+                }
+            ) {
                 val horizontalPadding = 4.dp.toPx()
                 val topPadding = 8.dp.toPx()
                 val bottomPadding = 8.dp.toPx()
@@ -135,7 +169,11 @@ private fun DailyTrendChart(events: List<BabyEventEntity>) {
                     val barHeight = chartHeight * (point.value / maximum)
                     val left = horizontalPadding + index * slotWidth + (slotWidth - barWidth) / 2f
                     drawRoundRect(
-                        color = Color(0xFF8874B8).copy(alpha = if (point.value == 0f) 0.16f else 0.85f),
+                        color = when {
+                            index == selectedDayIndex -> Color(0xFFB77969)
+                            point.value == 0f -> Color(0xFF8874B8).copy(alpha = 0.16f)
+                            else -> Color(0xFF8874B8).copy(alpha = 0.85f)
+                        },
                         topLeft = Offset(left, topPadding + chartHeight - barHeight),
                         size = androidx.compose.ui.geometry.Size(barWidth, barHeight.coerceAtLeast(2.dp.toPx())),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx(), 3.dp.toPx())
@@ -146,6 +184,15 @@ private fun DailyTrendChart(events: List<BabyEventEntity>) {
                 Text(points.first().date.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("最高 ${"%.1f".format(Locale.CHINA, maximum)} $unit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(points.last().date.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            selectedDay?.let { point ->
+                Text(
+                    point.date.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA)) + " · " +
+                        String.format(Locale.CHINA, "%.1f", point.value) + " " + unit,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
             Text("每日无记录时按 0 统计；睡眠按记录的时长合计。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -158,10 +205,12 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     var range by remember { mutableStateOf("全部") }
     val key = when (metric) { "身长" -> "lengthCm"; "头围" -> "headCircumferenceCm"; else -> "weightGrams" }
     val unit = if (metric == "体重") "kg" else "cm"
-    val allPoints = growthMetricPoints(baby, events, key)
-    val now = System.currentTimeMillis()
+    val allPoints = remember(baby, events, key) { growthMetricPoints(baby, events, key) }
+    val now = remember { System.currentTimeMillis() }
     val days = when (range) { "近 30 天" -> 30L; "近 90 天" -> 90L; "近半年" -> 182L; "近一年" -> 365L; else -> Long.MAX_VALUE }
-    val points = if (days == Long.MAX_VALUE) allPoints else allPoints.filter { it.first >= now - days * 86400000L }
+    val points = remember(allPoints, days, now) {
+        if (days == Long.MAX_VALUE) allPoints else allPoints.filter { it.first >= now - days * 86400000L }
+    }
     val latest = points.lastOrNull()
     val previous = points.dropLast(1).lastOrNull()
     val delta = if (latest != null && previous != null) latest.second - previous.second else null
@@ -170,6 +219,8 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val min = ((minValue ?: 0f) - if (metric == "体重") 0.25f else 1f).coerceAtLeast(0f)
     val max = (maxValue ?: 1f) + if (metric == "体重") 0.25f else 1f
     val dateFormat = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)
+    var selectedPointIndex by remember(points) { mutableStateOf(points.lastIndex) }
+    val selectedPoint = points.getOrNull(selectedPointIndex)
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -198,7 +249,22 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         Spacer(Modifier.height(110.dp))
                         Text("${"%.1f".format(Locale.getDefault(), min)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Canvas(Modifier.weight(1f).height(150.dp)) {
+                    Canvas(
+                        Modifier.weight(1f).height(150.dp).pointerInput(points) {
+                            detectTapGestures { tap ->
+                                if (points.isNotEmpty()) {
+                                    val start = points.first().first
+                                    val span = (points.last().first - start).coerceAtLeast(1L)
+                                    val left = 8f
+                                    val right = size.width - 8f
+                                    selectedPointIndex = points.indices.minByOrNull { index ->
+                                        val x = left + (right - left) * ((points[index].first - start).toFloat() / span.toFloat())
+                                        abs(x - tap.x)
+                                    } ?: points.lastIndex
+                                }
+                            }
+                        }
+                    ) {
                         val left = 8f
                         val right = size.width - 8f
                         val top = 10f
@@ -238,13 +304,24 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         }
                         coords.forEachIndexed { index, point ->
                             val isLatest = index == coords.lastIndex
-                            drawCircle(if (isLatest) Color(0xFFB77969) else Color(0xFF8874B8), radius = if (isLatest) 5.dp.toPx() else 3.5.dp.toPx(), center = point)
+                            val isSelected = index == selectedPointIndex
+                            if (isSelected) drawCircle(Color(0xFFB77969).copy(alpha = 0.18f), radius = 11.dp.toPx(), center = point)
+                            drawCircle(if (isLatest || isSelected) Color(0xFFB77969) else Color(0xFF8874B8), radius = if (isLatest || isSelected) 5.dp.toPx() else 3.5.dp.toPx(), center = point)
                         }
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(points.first().first.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(dateFormat) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(points.last().first.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(dateFormat) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                selectedPoint?.let { point ->
+                    Text(
+                        SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(point.first)) + " · " +
+                            String.format(Locale.CHINA, "%.2f", point.second) + " " + unit,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
                 Text("${points.size} 次测量 · 最新记录 ${SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 points.takeLast(5).asReversed().forEach { point ->

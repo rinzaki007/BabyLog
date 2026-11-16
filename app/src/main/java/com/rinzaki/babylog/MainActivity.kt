@@ -206,6 +206,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
         "喂养" -> "FEEDING"
         "大小便" -> "DIAPER"
         "睡眠" -> "SLEEP"
+        "补充记录" -> "SUPPLEMENT"
+        "辅食记录" -> "SOLID_FOOD"
         "成长测量" -> "GROWTH"
         "其他" -> "OTHER"
         else -> null
@@ -388,6 +390,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         Text("快捷记录", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             ActionCard("🍼", "喂养", "多种喂养方式", Modifier.weight(1f)) { addingEvent = "FEEDING" }
+                            ActionCard("🥣", "辅食", "食物与进食情况", Modifier.weight(1f)) { addingEvent = "SOLID_FOOD" }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ActionCard("🧴", "补充记录", "AD、D3、饮水等", Modifier.weight(1f)) { addingEvent = "SUPPLEMENT" }
                             ActionCard("🌿", "大小便", "护理情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -472,7 +478,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 if (selectedStartDate != null || selectedEndDate != null) TextButton(onClick = { selectedStartDate = null; selectedEndDate = null }) { Text("清除") }
                             }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(listOf("全部", "喂养", "大小便", "睡眠", "成长测量", "其他")) { category ->
+                            items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "成长测量", "其他")) { category ->
                                 if (selectedEventFilter == category) {
                                     FilledTonalButton(onClick = { selectedEventFilter = category }) { Text(category) }
                                 } else {
@@ -801,14 +807,25 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", "糊状")) }
     var stoolColor by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolColor", "黄色")) }
     var stoolAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolAmount", "中量")) }
-    var sleepMinutes by remember(existing?.id) { mutableStateOf(initialPayload.optInt("durationMinutes", 60).toFloat().coerceIn(10f, 720f)) }
+    var sleepMinutesText by remember(existing?.id) { mutableStateOf(initialPayload.optInt("durationMinutes", 60).coerceIn(10, 720).toString()) }
     var weightKg by remember(existing?.id) { mutableStateOf(initialPayload.optInt("weightGrams").takeIf { it > 0 }?.div(1000.0)?.toString().orEmpty()) }
     var lengthCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("lengthCm").takeIf { it > 0 }?.toString().orEmpty()) }
     var headCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.toString().orEmpty()) }
+    val savedSupplementName = initialPayload.optString("supplementName", "维生素AD")
+    var supplementName by remember(existing?.id) { mutableStateOf(if (savedSupplementName in supplementPresets) savedSupplementName else "其他") }
+    var customSupplementName by remember(existing?.id) { mutableStateOf(savedSupplementName.takeIf { it !in supplementPresets } ?: "") }
+    var supplementAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("amount")) }
+    var supplementUnit by remember(existing?.id) { mutableStateOf(initialPayload.optString("unit", "滴")) }
+    val savedFoodName = initialPayload.optString("foodName", "米粉")
+    var foodName by remember(existing?.id) { mutableStateOf(if (savedFoodName in solidFoodPresets) savedFoodName else "其他") }
+    var customFoodName by remember(existing?.id) { mutableStateOf(savedFoodName.takeIf { it !in solidFoodPresets } ?: "") }
+    var foodAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("amount")) }
+    var foodUnit by remember(existing?.id) { mutableStateOf(initialPayload.optString("unit", "g")) }
+    var foodStatus by remember(existing?.id) { mutableStateOf(initialPayload.optString("eatingStatus", "正常")) }
     var note by remember(existing?.id) { mutableStateOf(initialPayload.optString("note")) }
     var error by remember { mutableStateOf<String?>(null) }
     var showEventTimePicker by remember { mutableStateOf(false) }
-    val title = when (eventType) { "FEEDING" -> "喂养记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; else -> "成长记录" }
+    val title = when (eventType) { "FEEDING" -> "喂养记录"; "SOLID_FOOD" -> "辅食记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; "SUPPLEMENT" -> "补充记录"; else -> "成长记录" }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -856,9 +873,73 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                         }
                     }
                     "SLEEP" -> {
-                        Text("睡眠时长  ${sleepMinutes.toInt()} 分钟", fontWeight = FontWeight.SemiBold)
-                        SelectionRow(listOf("30", "60", "90", "120", "180"), sleepMinutes.toInt().toString()) { sleepMinutes = it.toFloat() }
-                        Slider(sleepMinutes, { sleepMinutes = it }, valueRange = 10f..720f, steps = 70)
+                        Text("睡眠时长", fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(
+                            value = sleepMinutesText,
+                            onValueChange = { raw -> sleepMinutesText = raw.filter(Char::isDigit).take(3) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("时长（分钟）") },
+                            supportingText = { Text("可直接输入 10–720 分钟") },
+                            singleLine = true
+                        )
+                        SelectionRow(listOf("30", "60", "90", "120", "180", "240"), sleepMinutesText) { sleepMinutesText = it }
+                    }
+                    "SOLID_FOOD" -> {
+                        Text("食物名称", fontWeight = FontWeight.SemiBold)
+                        SelectionRow(solidFoodPresets, foodName) {
+                            foodName = it
+                            if (it != "其他") customFoodName = ""
+                        }
+                        if (foodName == "其他") {
+                            OutlinedTextField(
+                                value = customFoodName,
+                                onValueChange = { customFoodName = it.take(40) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("食物名称") },
+                                singleLine = true
+                            )
+                        }
+                        Text("食用量（可选）", fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(
+                            value = foodAmount,
+                            onValueChange = { raw -> foodAmount = raw.filter { it.isDigit() || it == '.' }.take(8) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("数量") },
+                            singleLine = true
+                        )
+                        Text("单位", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SelectionRow(solidFoodUnits, foodUnit) { foodUnit = it }
+                        Text("进食情况", fontWeight = FontWeight.SemiBold)
+                        SelectionRow(solidFoodStatuses, foodStatus) { foodStatus = it }
+                        Text("这里只记录实际尝试和进食情况；添加种类、时间及份量请按宝宝情况和专业建议安排。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    "SUPPLEMENT" -> {
+                        Text("补充项目", fontWeight = FontWeight.SemiBold)
+                        SelectionRow(supplementPresets, supplementName) {
+                            supplementName = it
+                            supplementUnit = supplementDefaultUnit(it)
+                            if (it != "其他") customSupplementName = ""
+                        }
+                        if (supplementName == "其他") {
+                            OutlinedTextField(
+                                value = customSupplementName,
+                                onValueChange = { customSupplementName = it.take(30) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("项目名称") },
+                                singleLine = true
+                            )
+                        }
+                        Text("补充数量（可选）", fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(
+                            value = supplementAmount,
+                            onValueChange = { raw -> supplementAmount = raw.filter { it.isDigit() || it == '.' }.take(8) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("数量") },
+                            singleLine = true
+                        )
+                        Text("单位", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SelectionRow(supplementUnits, supplementUnit) { supplementUnit = it }
+                        Text("这里只记录实际补充情况，不提供剂量建议；具体用量请遵照医生或产品说明。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     "GROWTH" -> {
                         OutlinedTextField(
@@ -902,7 +983,37 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                         payload.put("urine", urine).put("stool", stool)
                         if (stool) payload.put("stoolShape", stoolShape).put("stoolColor", stoolColor).put("stoolAmount", stoolAmount)
                     }
-                    "SLEEP" -> payload.put("durationMinutes", sleepMinutes.toInt())
+                    "SLEEP" -> {
+                        val duration = sleepMinutesText.toIntOrNull()
+                        if (duration == null || duration !in 10..720) {
+                            error = "睡眠时长请输入 10–720 分钟"
+                            return@Button
+                        }
+                        payload.put("durationMinutes", duration)
+                    }
+                    "SOLID_FOOD" -> {
+                        val name = if (foodName == "其他") customFoodName.trim() else foodName
+                        if (name.isBlank()) { error = "请输入食物名称"; return@Button }
+                        val amount = foodAmount.toDoubleOrNull()
+                        if (foodAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 10000.0)) {
+                            error = "请检查辅食数量"
+                            return@Button
+                        }
+                        payload.put("foodName", name).put("eatingStatus", foodStatus)
+                        if (amount != null) payload.put("amount", amount).put("unit", foodUnit)
+                    }
+                    "SUPPLEMENT" -> {
+                        val name = if (supplementName == "其他") customSupplementName.trim() else supplementName
+                        if (name.isBlank()) { error = "请输入补充项目名称"; return@Button }
+                        val amount = supplementAmount.toDoubleOrNull()
+                        if (supplementAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 100000.0)) {
+                            error = "请检查补充数量"
+                            return@Button
+                        }
+                        payload.put("supplementName", name)
+                        if (amount != null) payload.put("amount", amount)
+                        if (supplementAmount.isNotBlank()) payload.put("unit", supplementUnit)
+                    }
                     "GROWTH" -> {
                         val weight = weightKg.toDoubleOrNull()
                         val length = lengthCm.toDoubleOrNull()
@@ -999,6 +1110,8 @@ private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onE
             val mins = payload.optInt("durationMinutes")
             Triple("🌙", "睡眠", if (mins >= 60) "${mins / 60} 小时 ${mins % 60} 分钟" else "$mins 分钟")
         }
+        "SUPPLEMENT" -> Triple("🧴", "补充记录", supplementDescription(event.payloadJson))
+        "SOLID_FOOD" -> Triple("🥣", "辅食记录", solidFoodDescription(event.payloadJson))
         "GROWTH" -> Triple("📏", "成长测量", listOfNotNull(
             payload.optInt("weightGrams").takeIf { it > 0 }?.let { "${"%.2f".format(Locale.getDefault(), it / 1000.0)} kg" },
             payload.optDouble("lengthCm").takeIf { it > 0 }?.let { "${"%.1f".format(Locale.getDefault(), it)} cm 身长" },
@@ -1023,22 +1136,22 @@ private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onE
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.weight(1f))
-                    Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1, modifier = Modifier.weight(1f))
+                    Text(time, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
                 Text(
                     detail + if (payload.optString("note").isNotBlank()) " · " + payload.optString("note") else "",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
+                    maxLines = 2
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
-                    Text("编辑", style = MaterialTheme.typography.labelSmall)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)) {
+                    Text("编辑", style = MaterialTheme.typography.labelMedium)
                 }
-                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
-                    Text("删除", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)) {
+                    Text("删除", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }

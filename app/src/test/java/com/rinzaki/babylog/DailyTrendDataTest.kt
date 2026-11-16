@@ -83,4 +83,44 @@ class DailyTrendDataTest {
     fun rejectsInvalidRange() {
         dailyTrendPoints(emptyList(), "记录总数", 0, today, zone)
     }
+    @Test
+    fun countsAllTimeAverageByLocalCalendarDays() {
+        val first = event("f1", "FEEDING", today.minusDays(2), """{"amountMl":100}""", 23)
+        val latest = event("f2", "FEEDING", today, """{"amountMl":120}""", 0)
+        assertEquals(3, calendarDaysCovered(listOf(first, latest), today, zone))
+    }
+
+    @Test
+    fun calendarDayCoverageIgnoresDeletedAndFutureEvents() {
+        val deleted = event("f1", "FEEDING", today.minusDays(8), """{"amountMl":100}""", deletedAt = 1L)
+        val future = event("f2", "FEEDING", today.plusDays(3), """{"amountMl":120}""")
+        val current = event("f3", "FEEDING", today, """{"amountMl":80}""")
+        assertEquals(1, calendarDaysCovered(listOf(deleted, future, current), today, zone))
+        assertEquals(1, calendarDaysCovered(emptyList(), today, zone))
+    }
+
+    @Test
+    fun countsSupplementRecordsSeparatelyFromFeeding() {
+        val events = listOf(
+            event("a1", "SUPPLEMENT", today, """{"supplementName":"维生素AD","amount":1,"unit":"滴"}"""),
+            event("a2", "SUPPLEMENT", today, """{"supplementName":"水","amount":30,"unit":"ml"}"""),
+            event("f1", "FEEDING", today, """{"amountMl":120}""")
+        )
+        assertEquals(2f, dailyTrendPoints(events, "补充次数", 1, today, zone).single().value)
+        assertEquals(1f, dailyTrendPoints(events, "喂养次数", 1, today, zone).single().value)
+    }
+
+    @Test
+    fun countsSolidFoodSeparatelyFromFeedingAndSupplements() {
+        val events = listOf(
+            event("sf1", "SOLID_FOOD", today, """{"foodName":"米粉","amount":10,"unit":"g"}"""),
+            event("sf2", "SOLID_FOOD", today, """{"foodName":"苹果泥","eatingStatus":"少量尝试"}"""),
+            event("a1", "SUPPLEMENT", today, """{"supplementName":"维生素AD"}"""),
+            event("f1", "FEEDING", today, """{"amountMl":120}""")
+        )
+        assertEquals(2f, dailyTrendPoints(events, "辅食次数", 1, today, zone).single().value)
+        assertEquals(1f, dailyTrendPoints(events, "补充次数", 1, today, zone).single().value)
+        assertEquals(1f, dailyTrendPoints(events, "喂养次数", 1, today, zone).single().value)
+    }
+
 }

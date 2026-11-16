@@ -32,6 +32,8 @@ fun dailyTrendPoints(
             val value = when (metric) {
                 "喂养奶量" -> if (event.eventType == "FEEDING") payload.optInt("amountMl").coerceAtLeast(0).toFloat() else 0f
                 "喂养次数" -> if (event.eventType == "FEEDING") 1f else 0f
+                "补充次数" -> if (event.eventType == "SUPPLEMENT") 1f else 0f
+                "辅食次数" -> if (event.eventType == "SOLID_FOOD") 1f else 0f
                 "小便次数" -> if (event.eventType == "DIAPER" && payload.optBoolean("urine")) 1f else 0f
                 "大便次数" -> if (event.eventType == "DIAPER" && payload.optBoolean("stool")) 1f else 0f
                 "睡眠小时" -> if (event.eventType == "SLEEP") payload.optInt("durationMinutes").coerceAtLeast(0) / 60f else 0f
@@ -45,4 +47,24 @@ fun dailyTrendPoints(
         val date = firstDay.plusDays(offset.toLong())
         DailyTrendPoint(date, totals[date] ?: 0f)
     }
+}
+
+
+/**
+ * Counts calendar dates rather than elapsed 24-hour blocks. This keeps averages stable
+ * across daylight-saving changes and local midnight boundaries.
+ */
+fun calendarDaysCovered(
+    events: List<BabyEventEntity>,
+    today: LocalDate = LocalDate.now(),
+    zone: ZoneId = ZoneId.systemDefault()
+): Int {
+    val firstDate = events.asSequence()
+        .filter { it.deletedAt == null }
+        .map { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(zone).toLocalDate() }
+        .filter { !it.isAfter(today) }
+        .minOrNull() ?: return 1
+    return (java.time.temporal.ChronoUnit.DAYS.between(firstDate, today) + 1)
+        .toInt()
+        .coerceAtLeast(1)
 }
