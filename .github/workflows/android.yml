@@ -18,8 +18,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Decide whether database instrumentation tests are needed
-        id: migration-scope
+      - name: Decide which Android instrumentation tests are needed
+        id: test-scope
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -30,8 +30,9 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-            echo "Manual run: execute the full database instrumentation suite."
+            echo "full=true" >> "$GITHUB_OUTPUT"
+            echo "icon=false" >> "$GITHUB_OUTPUT"
+            echo "Manual run: execute the full instrumentation suite."
             exit 0
           fi
 
@@ -44,7 +45,8 @@ jobs:
           fi
 
           if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
+            echo "full=true" >> "$GITHUB_OUTPUT"
+            echo "icon=false" >> "$GITHUB_OUTPUT"
             echo "No usable base commit; run instrumentation tests conservatively."
             exit 0
           fi
@@ -52,12 +54,20 @@ jobs:
           changed="$(git diff --name-only "$BASE...$HEAD")"
           echo "Changed files:"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '(^app/src/androidTest/|^app/src/main/java/.*/data/|(^|/)(BabyLogDatabase|BabyLogDao|.*Migration.*)\.kt$|^app/src/main/res/(mipmap|drawable|values)/.*ic_launcher|^app/build\.gradle\.kts$|^gradle/libs\.versions\.toml$|^build\.gradle\.kts$)'; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-            echo "Database or launcher-icon resources changed; Android instrumentation tests are required."
+
+          full_files="$(printf '%s\n' "$changed" | grep -E '^app/src/androidTest/' | grep -v '/LauncherIconTest\.kt$' || true)"
+          if [[ -n "$full_files" ]] || printf '%s\n' "$changed" | grep -Eq '(^app/src/main/java/.*/data/|(^|/)(BabyLogDatabase|BabyLogDao|.*Migration.*)\.kt$|^app/build\.gradle\.kts$|^gradle/libs\.versions\.toml$|^build\.gradle\.kts$)'; then
+            echo "full=true" >> "$GITHUB_OUTPUT"
+            echo "icon=false" >> "$GITHUB_OUTPUT"
+            echo "Database or non-icon instrumentation files changed; run the full suite."
+          elif printf '%s\n' "$changed" | grep -Eq '(^app/src/androidTest/.*/LauncherIconTest\.kt$|^app/src/main/res/(mipmap|drawable|values)/.*ic_launcher|^app/src/main/AndroidManifest\.xml$)'; then
+            echo "full=false" >> "$GITHUB_OUTPUT"
+            echo "icon=true" >> "$GITHUB_OUTPUT"
+            echo "Only launcher icon files/tests changed; run the icon-only emulator test."
           else
-            echo "required=false" >> "$GITHUB_OUTPUT"
-            echo "No database or launcher-icon files changed; emulator startup is skipped."
+            echo "full=false" >> "$GITHUB_OUTPUT"
+            echo "icon=false" >> "$GITHUB_OUTPUT"
+            echo "No instrumentation-sensitive files changed; skip emulator startup."
           fi
       - uses: actions/setup-java@v4
         with:
@@ -94,8 +104,8 @@ jobs:
           printf '%s\n' "$BADGING" | grep -Eq "^application-icon-[0-9]+:"
           "$AAPT" dump resources "$APK" | grep -q "mipmap/ic_launcher"
           "$AAPT" dump resources "$APK" | grep -q "mipmap/ic_launcher_round"
-      - name: Run Android database migration tests
-        if: steps.migration-scope.outputs.required == 'true'
+      - name: Run full Android instrumentation suite
+        if: steps.test-scope.outputs.full == 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -105,9 +115,20 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -cores 2
           disable-animations: true
           script: gradle --no-daemon --max-workers=2 connectedDebugAndroidTest --info
-      - name: Explain skipped database instrumentation tests
-        if: steps.migration-scope.outputs.required != 'true'
-        run: echo "Skipped emulator-based database tests because this change does not touch database code, migrations, instrumentation tests, or Android build dependencies."
+      - name: Run launcher icon instrumentation test only
+        if: steps.test-scope.outputs.icon == 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -cores 2
+          disable-animations: true
+          script: gradle --no-daemon --max-workers=2 connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.rinzaki.babylog.LauncherIconTest --info
+      - name: Explain skipped instrumentation tests
+        if: steps.test-scope.outputs.full != 'true' && steps.test-scope.outputs.icon != 'true'
+        run: echo "Skipped emulator tests because this change does not affect database code, instrumentation tests, launcher icons, or Android build dependencies."
       - uses: actions/upload-artifact@v4
         with:
           name: BabyLog-debug
