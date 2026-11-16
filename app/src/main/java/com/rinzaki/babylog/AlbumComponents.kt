@@ -412,7 +412,7 @@ internal fun BabyAlbumSection(
             ) {
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxWidth().height(58.dp)) {
-                    AnimatedVisibility(
+                    this@Column.AnimatedVisibility(
                         visible = showViewerChrome,
                         enter = fadeIn(animationSpec = tween(180)),
                         exit = fadeOut(animationSpec = tween(160))
@@ -517,7 +517,7 @@ internal fun BabyAlbumSection(
                         }
                     }
                     Box(Modifier.fillMaxWidth().height(116.dp)) {
-                    AnimatedVisibility(
+                    this@Column.AnimatedVisibility(
                         visible = showViewerChrome,
                         enter = fadeIn(animationSpec = tween(180)),
                         exit = fadeOut(animationSpec = tween(160))
