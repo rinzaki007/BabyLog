@@ -118,10 +118,15 @@ internal suspend fun enqueueUnassignedFamilyData(
     val now = System.currentTimeMillis()
     unassignedBabies.forEach { original ->
         val baby = dao.getBaby(original.id) ?: return@forEach
-        if (!dao.hasLocalOperation("baby", baby.id)) {
+        val babyPayload = babySyncPayload(baby).toString()
+        if (dao.hasLocalOperation("baby", baby.id)) {
+            // A pre-login queued payload may still carry the unassigned placeholder ID.
+            // Refresh it before the worker uploads this profile to the newly linked family.
+            dao.updateBabyOperationPayload(baby.id, babyPayload)
+        } else {
             dao.enqueueOperation(SyncOperationEntity(
                 java.util.UUID.randomUUID().toString(), "baby", baby.id, "upsert",
-                babySyncPayload(baby).toString(), baby.serverVersion, now
+                babyPayload, baby.serverVersion, now
             ))
         }
     }
