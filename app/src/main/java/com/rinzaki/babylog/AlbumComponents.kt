@@ -74,7 +74,6 @@ internal fun BabyAlbumSection(
     var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
     var showPhotoDatePicker by remember { mutableStateOf(false) }
     LaunchedEffect(albumFilter, selectedPhotoDate) { visiblePhotoLimit = 60 }
-    val sortedPhotos = remember(photos) { photos.sortedByDescending { it.takenAt } }
     val filteredPhotos = photos.filter { photo ->
         val date = java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
         when (albumFilter) {
@@ -85,6 +84,7 @@ internal fun BabyAlbumSection(
             else -> true
         }
     }
+    val sortedFilteredPhotos = remember(filteredPhotos) { filteredPhotos.sortedByDescending { it.takenAt } }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(20)
     ) { uris ->
@@ -140,7 +140,6 @@ internal fun BabyAlbumSection(
                 }
             }
         } else {
-            val sortedFilteredPhotos = filteredPhotos.sortedByDescending { it.takenAt }
             val visiblePhotos = sortedFilteredPhotos.take(visiblePhotoLimit)
             val grouped = visiblePhotos.groupBy {
                 SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(it.takenAt))
@@ -212,9 +211,10 @@ internal fun BabyAlbumSection(
     }
 
     viewingPhoto?.let { photo ->
-        val currentPhotoIndex = sortedPhotos.indexOfFirst { it.id == photo.id }
-        val previousPhoto = sortedPhotos.getOrNull(currentPhotoIndex + 1)
-        val nextPhoto = sortedPhotos.getOrNull(currentPhotoIndex - 1)
+        // Photo navigation follows the active album filter, matching the visible timeline.
+        val currentPhotoIndex = sortedFilteredPhotos.indexOfFirst { it.id == photo.id }
+        val previousPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex + 1)
+        val nextPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex - 1)
         Dialog(
             onDismissRequest = { viewingPhoto = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -352,7 +352,10 @@ internal fun BabyAlbumSection(
             initialSelectedDateMillis = selectedPhotoDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
         )
         androidx.compose.material3.DatePickerDialog(
-            onDismissRequest = { showPhotoDatePicker = false },
+            onDismissRequest = {
+                showPhotoDatePicker = false
+                if (selectedPhotoDate == null) albumFilter = "全部"
+            },
             confirmButton = {
                 TextButton(onClick = {
                     selectedPhotoDate = datePickerState.selectedDateMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() }
