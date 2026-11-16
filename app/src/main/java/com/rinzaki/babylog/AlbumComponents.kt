@@ -496,7 +496,6 @@ internal fun BabyAlbumSection(
                             )
                         }
                     }
-                    }
                     AnimatedVisibility(
                         visible = showViewerChrome,
                         enter = fadeIn(animationSpec = tween(180)),
