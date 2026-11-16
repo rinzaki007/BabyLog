@@ -264,11 +264,12 @@ internal fun BabyAlbumSection(
             onDismissRequest = closeViewer,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
+            val bitmapResult by produceState<Result<android.graphics.Bitmap>?>(initialValue = null, photo.localPath) {
                 value = withContext(Dispatchers.IO) {
-                    runCatching { decodeSampledPhoto(photo.localPath, 1600, 2000) }.getOrNull()
+                    runCatching { decodeSampledPhoto(photo.localPath, 1600, 2000) }
                 }
             }
+            val bitmap = bitmapResult?.getOrNull()
             var zoom by remember(photo.id) { mutableStateOf(1f) }
             var panX by remember(photo.id) { mutableStateOf(0f) }
             var panY by remember(photo.id) { mutableStateOf(0f) }
@@ -359,7 +360,7 @@ internal fun BabyAlbumSection(
                                 },
                                 contentScale = ContentScale.Fit
                             )
-                        } else Text("照片暂时无法读取", color = Color.White)
+                        } else Text(if (bitmapResult == null) "正在加载照片…" else "照片暂时无法读取", color = Color.White)
                         Text(
                             if (zoom > 1.01f) "双指缩放 · 拖动查看 · 双击还原" else "左右滑动切换 · 双指缩放 · 双击放大",
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
