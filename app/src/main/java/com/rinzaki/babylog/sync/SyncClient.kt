@@ -660,9 +660,11 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
             }
             // Apply the per-device storage policy to already-synced photos too.
             // Never convert a photo while a local write is still queued.
-            val storageCandidates = dao.getAllPhotos().filter {
-                it.deletedAt == null && it.serverVersion != null && it.syncStatus == "SYNCED" &&
-                    !dao.hasLocalOperation("photo", it.id)
+            val storageCandidates = mutableListOf<BabyPhotoEntity>()
+            for (photo in dao.getAllPhotos()) {
+                if (photo.deletedAt == null && photo.serverVersion != null && photo.syncStatus == "SYNCED" &&
+                    !dao.hasLocalOperation("photo", photo.id)
+                ) storageCandidates += photo
             }
             if (SyncPreferences.cloudPhotoStorageEnabled(applicationContext)) {
                 storageCandidates.filter { it.originalOnDevice }.take(10).forEach {
