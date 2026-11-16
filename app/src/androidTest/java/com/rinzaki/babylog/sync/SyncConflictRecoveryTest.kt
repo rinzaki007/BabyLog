@@ -99,4 +99,32 @@ class SyncConflictRecoveryTest {
         }
     }
 
+    @Test
+    fun firstFamilyLinkQueuesUnassignedBabyEventsAndPhotosForSync() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, BabyLogDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val dao = database.babyLogDao()
+            dao.upsertBaby(BabyEntity("local-baby", UNASSIGNED_FAMILY_ID, "离线宝宝", 1_000L, 1_000L, 1_000L))
+            dao.upsertEvent(BabyEventEntity("local-event", "local-baby", "FEEDING", 2_000L, "{\"amountMl\":120}", null, 2_000L))
+            dao.upsertPhoto(BabyPhotoEntity("local-photo", "local-baby", "/tmp/local-photo.jpg", null, 3_000L, 3_000L, 3_000L))
+            dao.upsertBaby(BabyEntity("foreign-baby", "family-b", "其他家庭宝宝", 1_000L, 1_000L, 1_000L))
+
+            val unassigned = dao.getUnassignedBabies(UNASSIGNED_FAMILY_ID)
+            assertEquals(1, enqueueUnassignedFamilyData(dao, unassigned, "family-a"))
+            assertEquals("family-a", dao.getBaby("local-baby")?.familyId)
+            assertEquals("family-b", dao.getBaby("foreign-baby")?.familyId)
+            assertEquals(3, dao.pendingOperationCount())
+            assertEquals(
+                setOf("baby", "event", "photo"),
+                dao.pendingOperations().map { it.entityType }.toSet()
+            )
+        } finally {
+            database.close()
+        }
+    }
+
 }
