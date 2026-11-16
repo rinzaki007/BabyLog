@@ -550,6 +550,105 @@ def _web_family(uid:str):
     if not profile["families"]: raise HTTPException(404,"尚未创建数据空间")
     return profile,profile["families"][0]
 
+def _web_event_details(payload):
+    try:
+        value=json.loads(payload.get("payloadJson") or "{}")
+        return value if isinstance(value,dict) else {}
+    except (TypeError,ValueError):
+        return {}
+
+
+def _web_statistics_for_events(events, days):
+    from datetime import datetime, timedelta
+    today=datetime.fromtimestamp(time.time()).date()
+    start=today-timedelta(days=days-1)
+    daily={}
+    for offset in range(days):
+        day=start+timedelta(days=offset)
+        daily[day.strftime("%Y-%m-%d")]={"date":day.strftime("%Y-%m-%d"),"feeding_count":0,
+            "milk_ml":0,"sleep_minutes":0,"solid_food_count":0,"supplement_count":0,
+            "diaper_count":0,"vaccine_count":0,"growth_count":0}
+    type_counts={}
+    growth=[]
+    totals={"feeding_count":0,"milk_ml":0,"sleep_minutes":0,"solid_food_count":0,
+            "supplement_count":0,"diaper_count":0,"vaccine_count":0,"growth_count":0}
+    for event in events:
+        payload=event.get("payload") or {}
+        event_type=str(payload.get("eventType") or "UNKNOWN").upper()
+        details=event.get("details")
+        if not isinstance(details,dict):
+            details=_web_event_details(payload)
+        try:
+            stamp=int(payload.get("occurredAt") or 0)
+            day_key=datetime.fromtimestamp(stamp/1000).strftime("%Y-%m-%d") if stamp>0 else ""
+        except (TypeError,ValueError,OSError,OverflowError):
+            day_key=""
+        bucket=daily.get(day_key)
+        if bucket is None:
+            continue
+        type_counts[event_type]=type_counts.get(event_type,0)+1
+        if event_type=="FEEDING":
+            totals["feeding_count"]+=1
+            if bucket: bucket["feeding_count"]+=1
+            try: amount=max(0,int(float(details.get("amountMl") or 0)))
+            except (TypeError,ValueError,OverflowError): amount=0
+            totals["milk_ml"]+=amount
+            if bucket: bucket["milk_ml"]+=amount
+        elif event_type=="SLEEP":
+            try: minutes=max(0,int(float(details.get("durationMinutes") or 0)))
+            except (TypeError,ValueError,OverflowError): minutes=0
+            totals["sleep_minutes"]+=minutes
+            if bucket: bucket["sleep_minutes"]+=minutes
+        elif event_type=="SOLID_FOOD":
+            totals["solid_food_count"]+=1
+            if bucket: bucket["solid_food_count"]+=1
+        elif event_type=="SUPPLEMENT":
+            totals["supplement_count"]+=1
+            if bucket: bucket["supplement_count"]+=1
+        elif event_type=="DIAPER":
+            totals["diaper_count"]+=1
+            if bucket: bucket["diaper_count"]+=1
+        elif event_type=="VACCINE":
+            totals["vaccine_count"]+=1
+            if bucket: bucket["vaccine_count"]+=1
+        elif event_type=="GROWTH":
+            totals["growth_count"]+=1
+            if bucket: bucket["growth_count"]+=1
+            point={"occurred_at":stamp}
+            for key in ("weightGrams","lengthCm","headCircumferenceCm"):
+                try:
+                    value=float(details.get(key) or 0)
+                    if value>0:
+                        target={"weightGrams":"weight_kg","lengthCm":"length_cm","headCircumferenceCm":"head_circumference_cm"}[key]
+                        point[target]=round(value/1000 if key=="weightGrams" else value,2)
+                except (TypeError,ValueError,OverflowError):
+                    pass
+            if len(point)>1:
+                growth.append(point)
+    return {"days":days,"from":start.strftime("%Y-%m-%d"),"to":today.strftime("%Y-%m-%d"),
+        "totals":totals,"type_counts":type_counts,"daily":list(daily.values()),
+        "growth":sorted(growth,key=lambda item:item["occurred_at"])[-30:]}
+
+
+@app.get("/api/web/statistics")
+def web_statistics(response:Response,days:int=30,uid:str=Depends(current_user)):
+    response.headers["Cache-Control"]="no-store"
+    if days not in (7,30,90):
+        raise HTTPException(422,"统计范围仅支持 7、30 或 90 天")
+    _profile,family=_web_family(uid)
+    with connect() as db:
+        rows=db.execute("SELECT payload FROM records WHERE family_id=? AND deleted=0 AND entity_type='event'",(family["id"],)).fetchall()
+    events=[]
+    for row in rows:
+        try:
+            payload=json.loads(row["payload"])
+            if not isinstance(payload,dict): continue
+        except (TypeError,ValueError):
+            continue
+        events.append({"payload":payload,"details":_web_event_details(payload)})
+    return _web_statistics_for_events(events,days)
+
+
 @app.get("/api/web/overview")
 def web_overview(response:Response,uid:str=Depends(current_user),
     event_limit:int=50,event_offset:int=0,photo_limit:int=60,photo_offset:int=0,
@@ -572,8 +671,7 @@ def web_overview(response:Response,uid:str=Depends(current_user),
             item["avatar_url"]=f"/api/babies/{row['entity_id']}/avatar?family_id={fid}" if payload.get("hasAvatar") else None
             babies.append(item)
         elif row["entity_type"]=="event":
-            try: item["details"]=json.loads(payload.get("payloadJson") or "{}")
-            except (TypeError,ValueError): item["details"]={}
+            item["details"]=_web_event_details(payload)
             events.append(item)
         elif row["entity_type"]=="photo":
             item["photo_url"]=f"/api/photos/{row['entity_id']}?family_id={fid}"
