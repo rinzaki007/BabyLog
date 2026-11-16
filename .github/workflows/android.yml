@@ -25,6 +25,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_ACTION: ${{ github.event.action }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
         run: |
@@ -38,6 +39,13 @@ jobs:
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             BASE="$PR_BASE_SHA"
             HEAD="$PR_HEAD_SHA"
+            # The opened/reopened PR validates the complete change set. On later
+            # synchronize events, validate the newest commit only: earlier commits
+            # have already been checked, and UI-only follow-ups should not boot an emulator.
+            if [[ "$PR_ACTION" == "synchronize" ]] && git rev-parse "$HEAD^" >/dev/null 2>&1; then
+              BASE="$(git rev-parse "$HEAD^")"
+              echo "PR synchronize event: checking database scope of the newest commit."
+            fi
           else
             BASE="$PUSH_BEFORE_SHA"
             HEAD="$CURRENT_SHA"
