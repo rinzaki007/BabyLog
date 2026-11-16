@@ -206,6 +206,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
         "喂养" -> "FEEDING"
         "大小便" -> "DIAPER"
         "睡眠" -> "SLEEP"
+        "补充记录" -> "SUPPLEMENT"
         "成长测量" -> "GROWTH"
         "其他" -> "OTHER"
         else -> null
@@ -472,7 +473,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 if (selectedStartDate != null || selectedEndDate != null) TextButton(onClick = { selectedStartDate = null; selectedEndDate = null }) { Text("清除") }
                             }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(listOf("全部", "喂养", "大小便", "睡眠", "成长测量", "其他")) { category ->
+                            items(listOf("全部", "喂养", "补充记录", "大小便", "睡眠", "成长测量", "其他")) { category ->
                                 if (selectedEventFilter == category) {
                                     FilledTonalButton(onClick = { selectedEventFilter = category }) { Text(category) }
                                 } else {
@@ -805,10 +806,14 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var weightKg by remember(existing?.id) { mutableStateOf(initialPayload.optInt("weightGrams").takeIf { it > 0 }?.div(1000.0)?.toString().orEmpty()) }
     var lengthCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("lengthCm").takeIf { it > 0 }?.toString().orEmpty()) }
     var headCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.toString().orEmpty()) }
+    var supplementName by remember(existing?.id) { mutableStateOf(initialPayload.optString("supplementName", "维生素AD")) }
+    var customSupplementName by remember(existing?.id) { mutableStateOf(initialPayload.optString("supplementName").takeIf { it !in supplementPresets } ?: "") }
+    var supplementAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("amount")) }
+    var supplementUnit by remember(existing?.id) { mutableStateOf(initialPayload.optString("unit", "滴")) }
     var note by remember(existing?.id) { mutableStateOf(initialPayload.optString("note")) }
     var error by remember { mutableStateOf<String?>(null) }
     var showEventTimePicker by remember { mutableStateOf(false) }
-    val title = when (eventType) { "FEEDING" -> "喂养记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; else -> "成长记录" }
+    val title = when (eventType) { "FEEDING" -> "喂养记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; "SUPPLEMENT" -> "补充记录"; else -> "成长记录" }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -867,6 +872,38 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                         )
                         SelectionRow(listOf("30", "60", "90", "120", "180", "240"), sleepMinutesText) { sleepMinutesText = it }
                     }
+                    "SUPPLEMENT" -> {
+                        Text("补充项目", fontWeight = FontWeight.SemiBold)
+                        SelectionRow(supplementPresets, supplementName) {
+                            supplementName = it
+                            supplementUnit = supplementDefaultUnit(it)
+                            if (it != "其他") customSupplementName = ""
+                        }
+                        if (supplementName == "其他") {
+                            OutlinedTextField(
+                                value = customSupplementName,
+                                onValueChange = { customSupplementName = it.take(30) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("项目名称") },
+                                singleLine = true
+                            )
+                        }
+                        Text("补充数量（可选）", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = supplementAmount,
+                                onValueChange = { raw -> supplementAmount = raw.filter { it.isDigit() || it == '.' }.take(8) },
+                                modifier = Modifier.weight(1f),
+                                label = { Text("数量") },
+                                singleLine = true
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text("单位", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                SelectionRow(supplementUnits, supplementUnit) { supplementUnit = it }
+                            }
+                        }
+                        Text("这里只记录实际补充情况，不提供剂量建议；具体用量请遵照医生或产品说明。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     "GROWTH" -> {
                         OutlinedTextField(
                             value = weightKg,
@@ -916,6 +953,18 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                             return@Button
                         }
                         payload.put("durationMinutes", duration)
+                    }
+                    "SUPPLEMENT" -> {
+                        val name = if (supplementName == "其他") customSupplementName.trim() else supplementName
+                        if (name.isBlank()) { error = "请输入补充项目名称"; return@Button }
+                        val amount = supplementAmount.toDoubleOrNull()
+                        if (supplementAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 100000.0)) {
+                            error = "请检查补充数量"
+                            return@Button
+                        }
+                        payload.put("supplementName", name)
+                        if (amount != null) payload.put("amount", amount)
+                        if (supplementAmount.isNotBlank()) payload.put("unit", supplementUnit)
                     }
                     "GROWTH" -> {
                         val weight = weightKg.toDoubleOrNull()
@@ -1013,6 +1062,7 @@ private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onE
             val mins = payload.optInt("durationMinutes")
             Triple("🌙", "睡眠", if (mins >= 60) "${mins / 60} 小时 ${mins % 60} 分钟" else "$mins 分钟")
         }
+        "SUPPLEMENT" -> Triple("🧴", "补充记录", supplementDescription(event.payloadJson))
         "GROWTH" -> Triple("📏", "成长测量", listOfNotNull(
             payload.optInt("weightGrams").takeIf { it > 0 }?.let { "${"%.2f".format(Locale.getDefault(), it / 1000.0)} kg" },
             payload.optDouble("lengthCm").takeIf { it > 0 }?.let { "${"%.1f".format(Locale.getDefault(), it)} cm 身长" },
