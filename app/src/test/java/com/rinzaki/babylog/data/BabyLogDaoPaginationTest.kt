@@ -2,6 +2,7 @@ package com.rinzaki.babylog.data
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -46,6 +47,24 @@ class BabyLogDaoPaginationTest {
         assertEquals(listOf("feed-2"), firstPage.map { it.id })
         assertEquals(listOf("feed-1"), secondPage.map { it.id })
         assertEquals(2, dao.countTimelineEvents("baby", 100L, 201L, "FEEDING"))
+    }
+
+    @Test
+    fun photoPagesUseStableNewestFirstOrderAndExcludeDeletedPhotos() = runBlocking {
+        dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
+        dao.upsertPhoto(BabyPhotoEntity("photo-1", "baby", "/tmp/1.jpg", null, 100L, 100L, 100L))
+        dao.upsertPhoto(BabyPhotoEntity("photo-2", "baby", "/tmp/2.jpg", null, 300L, 300L, 300L))
+        dao.upsertPhoto(BabyPhotoEntity("photo-3", "baby", "/tmp/3.jpg", null, 200L, 200L, 200L))
+
+        val firstPage = dao.getPhotoPage("baby", 2, 0)
+        val secondPage = dao.getPhotoPage("baby", 2, 2)
+        assertEquals(listOf("photo-2", "photo-3"), firstPage.map { it.id })
+        assertEquals(listOf("photo-1"), secondPage.map { it.id })
+        assertEquals(3, dao.observePhotoCount("baby").first())
+
+        dao.softDeletePhoto("photo-3", 400L)
+        assertEquals(2, dao.observePhotoCount("baby").first())
+        assertEquals(listOf("photo-2", "photo-1"), dao.getPhotoPage("baby", 10, 0).map { it.id })
     }
 
     @Test
