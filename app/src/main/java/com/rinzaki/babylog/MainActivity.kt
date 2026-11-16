@@ -779,18 +779,15 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                     "FEEDING" -> {
                         Text("喂养方式", fontWeight = FontWeight.SemiBold)
                         SelectionRow(listOf("母乳", "配方奶", "混合喂养"), feedingMethod) { feedingMethod = it }
-                        if (feedingMethod != "母乳") OutlinedTextField(
+                        OutlinedTextField(
                             value = amountText,
                             onValueChange = { raw -> amountText = raw.filter(Char::isDigit).take(4) },
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text(if (feedingMethod == "混合喂养") "配方奶量（ml）" else "本次奶量（ml）") },
+                            label = { Text(if (feedingMethod == "母乳") "母乳量（ml，可选）" else "配方奶量（ml）") },
                             singleLine = true
                         )
-                        if (feedingMethod != "母乳") {
-                            Text("单位：毫升（ml）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("常用奶量 · 也可以直接输入其他数值", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            SelectionRow(listOf("60", "90", "120", "150", "180", "210"), amountText) { amountText = it }
-                        }
+                        Text(if (feedingMethod == "母乳") "亲喂可只记录时长；瓶喂母乳可填写奶量。" else "单位：毫升（ml），也可以直接输入其他数值。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SelectionRow(listOf("60", "90", "120", "150", "180", "210"), amountText) { amountText = it }
                         if (feedingMethod != "配方奶") {
                             OutlinedTextField(
                                 value = breastMinutes,
@@ -850,7 +847,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                 when (eventType) {
                     "FEEDING" -> {
                         payload.put("method", feedingMethod)
-                        if (feedingMethod != "母乳") {
+                        if (feedingMethod != "母乳" || amountText.isNotBlank()) {
                             val amountMl = amountText.toIntOrNull()
                             if (amountMl == null || amountMl !in 1..1000) {
                                 error = "请输入 1–1000 ml 的奶量"
