@@ -96,6 +96,20 @@ object SyncPreferences {
 
 class SyncHttpException(val statusCode: Int, message: String) : IllegalStateException(message)
 
+internal const val FAMILY_OWNERSHIP_CONFLICT_REASON =
+    "这条数据属于其他家庭空间，已暂停上传。请切回原家庭完成同步，或先核对本机数据归属。"
+
+internal fun isFamilyOwnershipConflict(reason: String?): Boolean =
+    reason == FAMILY_OWNERSHIP_CONFLICT_REASON
+
+internal fun canRetrySyncConflict(reason: String?): Boolean =
+    !isFamilyOwnershipConflict(reason)
+
+internal fun canSwitchAccountWithConflicts(
+    pendingCount: Int,
+    conflictReasons: List<String?>
+): Boolean = pendingCount == 0 && conflictReasons.all(::isFamilyOwnershipConflict)
+
 internal fun shouldRetrySyncStatus(statusCode: Int): Boolean =
     statusCode !in 400..499 || statusCode in setOf(408, 425, 429)
 
@@ -369,7 +383,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         else -> familyId
                     }
                     if (!syncOperationBelongsToFamily(ownerFamilyId, familyId)) {
-                        dao.markOperationConflict(operation.operationId, "这条数据属于其他家庭空间，已暂停上传。请切回原家庭完成同步，或先核对本机数据归属。")
+                        dao.markOperationConflict(operation.operationId, FAMILY_OWNERSHIP_CONFLICT_REASON)
                         return@forEach
                     }
                     if (operation.entityType == "baby" && operation.operation == "upsert") {
