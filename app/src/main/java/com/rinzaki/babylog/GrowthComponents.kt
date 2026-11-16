@@ -44,6 +44,7 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
             "喂养" -> event.eventType == "FEEDING"
             "护理" -> event.eventType == "DIAPER"
             "睡眠" -> event.eventType == "SLEEP"
+            "补充" -> event.eventType == "SUPPLEMENT"
             "成长" -> event.eventType == "GROWTH"
             else -> true
         }
@@ -60,6 +61,13 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
     val peeCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("urine") }.getOrDefault(false) }
     val stoolCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
     val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0) }
+    val supplementEvents = recent.filter { it.eventType == "SUPPLEMENT" }
+    val waterMl = supplementEvents.filter {
+        runCatching {
+            val payload = JSONObject(it.payloadJson)
+            payload.optString("supplementName") == "水" && payload.optString("unit") == "ml"
+        }.getOrDefault(false)
+    }.sumOf { runCatching { JSONObject(it.payloadJson).optDouble("amount").toInt() }.getOrDefault(0) }
     val daysCovered = if (days == Long.MAX_VALUE) {
         calendarDaysCovered(recent, LocalDate.now(), ZoneId.systemDefault())
     } else days
@@ -73,7 +81,7 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
             Text("统计周期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("近7天", "近30天", "近90天", "全部"), range) { range = it }
             Text("记录类型", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-            SelectionRow(listOf("全部", "喂养", "护理", "睡眠", "成长"), category) { category = it }
+            SelectionRow(listOf("全部", "喂养", "补充", "护理", "睡眠", "成长"), category) { category = it }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
@@ -92,6 +100,10 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
                         SummaryPill(icon, method, "${feedingMethods[method] ?: 0} 次", Modifier.weight(1f))
                     }
                 }
+            }
+            if (category == "全部" || category == "补充") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryPill("🧴", "补充次数", "${supplementEvents.size} 次", Modifier.weight(1f))
+                SummaryPill("🚰", "饮水量", "${waterMl} ml", Modifier.weight(1f))
             }
             if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
