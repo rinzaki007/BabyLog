@@ -2,6 +2,7 @@ package com.rinzaki.babylog.sync
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,6 +15,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,12 +23,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.AppUpdateSection
+import com.rinzaki.babylog.FeedingPreferences
 import com.rinzaki.babylog.data.BabyLogDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,6 +56,24 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var editedAccountName by remember { mutableStateOf(accountEmail) }
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
+    var showBreastMilk by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.BREAST_MILK)) }
+    var showFormula by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.FORMULA)) }
+    var showMixed by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.MIXED)) }
+
+    fun updateFeedingMethod(method: String, enabled: Boolean) {
+        val enabledCount = listOf(showBreastMilk, showFormula, showMixed).count { it }
+        if (!enabled && enabledCount <= 1) {
+            message = "至少保留一种喂养方式，才能继续记录喂养。"
+            return
+        }
+        when (method) {
+            FeedingPreferences.BREAST_MILK -> showBreastMilk = enabled
+            FeedingPreferences.FORMULA -> showFormula = enabled
+            FeedingPreferences.MIXED -> showMixed = enabled
+        }
+        FeedingPreferences.setEnabled(context, method, enabled)
+        message = if (enabled) "已显示${method}选项。" else "已隐藏${method}选项；历史记录不会受影响。"
+    }
 
     LaunchedEffect(Unit) {
         pendingCount = dao.pendingOperationCount()
@@ -121,6 +143,21 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 AppUpdateSection()
+
+                Text("喂养方式", fontWeight = FontWeight.SemiBold)
+                Text("关闭不使用的方式后，新增喂养记录时会隐藏对应选项；已有历史记录不会被删除或修改。", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("母乳", modifier = Modifier.weight(1f))
+                    Switch(checked = showBreastMilk, onCheckedChange = { updateFeedingMethod(FeedingPreferences.BREAST_MILK, it) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("配方奶", modifier = Modifier.weight(1f))
+                    Switch(checked = showFormula, onCheckedChange = { updateFeedingMethod(FeedingPreferences.FORMULA, it) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("混合喂养", modifier = Modifier.weight(1f))
+                    Switch(checked = showMixed, onCheckedChange = { updateFeedingMethod(FeedingPreferences.MIXED, it) })
+                }
 
                 Text("同步状态", fontWeight = FontWeight.SemiBold)
                 Text(

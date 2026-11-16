@@ -186,16 +186,34 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
     var syncConsistency by remember { mutableStateOf(SyncPreferences.lastConsistency(appContext)) }
     var selectedEventFilter by remember { mutableStateOf("全部") }
+    var selectedStartDate by remember { mutableStateOf<LocalDate?>(null) }
+    var selectedEndDate by remember { mutableStateOf<LocalDate?>(null) }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+    var timelineEvents by remember { mutableStateOf<List<BabyEventEntity>>(emptyList()) }
+    var timelineTotal by remember { mutableStateOf(0) }
+    var timelineLoading by remember { mutableStateOf(false) }
+    val timelineEventType = when (selectedEventFilter) {
+        "喂养" -> "FEEDING"
+        "大小便" -> "DIAPER"
+        "睡眠" -> "SLEEP"
+        "成长测量" -> "GROWTH"
+        "其他" -> "OTHER"
+        else -> null
+    }
+    val timelineStartAt = selectedStartDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+    val timelineEndAt = selectedEndDate?.plusDays(1)?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
     val vaccineEvents = events.filter { it.eventType == "VACCINE" }
     val normalEvents = events.filter { it.eventType != "VACCINE" }
-    val filteredEvents = normalEvents.filter { event ->
-        when (selectedEventFilter) {
-            "喂养" -> event.eventType == "FEEDING"
-            "大小便" -> event.eventType == "DIAPER"
-            "睡眠" -> event.eventType == "SLEEP"
-            "成长测量" -> event.eventType == "GROWTH"
-            "其他" -> event.eventType !in setOf("FEEDING", "DIAPER", "SLEEP", "GROWTH")
-            else -> true
+    LaunchedEffect(baby?.id, selectedEventFilter, selectedStartDate, selectedEndDate, events) {
+        if (baby == null) {
+            timelineEvents = emptyList()
+            timelineTotal = 0
+        } else {
+            timelineLoading = true
+            timelineEvents = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, 0)
+            timelineTotal = dao.countTimelineEvents(baby.id, timelineStartAt, timelineEndAt, timelineEventType)
+            timelineLoading = false
         }
     }
     LaunchedEffect(Unit) {
@@ -347,7 +365,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("快捷记录", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ActionCard("🍼", "喂养", "配方奶 · ml", Modifier.weight(1f)) { addingEvent = "FEEDING" }
+                            ActionCard("🍼", "喂养", "多种喂养方式", Modifier.weight(1f)) { addingEvent = "FEEDING" }
                             ActionCard("🌿", "大小便", "护理情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -415,11 +433,21 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     if (selectedNav == 1) item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("成长足迹", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Text("共 ${normalEvents.size} 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("共 ${timelineTotal} 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     if (selectedNav == 1) item {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedButton(onClick = { showStartDatePicker = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
+                                    Text(selectedStartDate?.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))?.let { "从 $it" } ?: "开始日期", maxLines = 1)
+                                }
+                                OutlinedButton(onClick = { showEndDatePicker = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
+                                    Text(selectedEndDate?.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))?.let { "至 $it" } ?: "结束日期", maxLines = 1)
+                                }
+                                if (selectedStartDate != null || selectedEndDate != null) TextButton(onClick = { selectedStartDate = null; selectedEndDate = null }) { Text("清除") }
+                            }
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(listOf("全部", "喂养", "大小便", "睡眠", "成长测量", "其他")) { category ->
                                 if (selectedEventFilter == category) {
                                     FilledTonalButton(onClick = { selectedEventFilter = category }) { Text(category) }
@@ -429,26 +457,41 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     }
-                    if (selectedNav == 1 && filteredEvents.isEmpty()) {
+                    }
+                    if (selectedNav == 1 && timelineEvents.isEmpty() && !timelineLoading) {
                         item {
                             Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("🌱", style = MaterialTheme.typography.headlineLarge)
                                     Text(
-                                        if (selectedEventFilter == "全部") "第一条记录，等你来写" else "还没有${selectedEventFilter}记录",
+                                        if (selectedStartDate != null || selectedEndDate != null) "这个日期范围内暂无记录" else if (selectedEventFilter == "全部") "第一条记录，等你来写" else "还没有${selectedEventFilter}记录",
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        if (selectedEventFilter == "全部") "从一次喂养、一段好觉或一次成长测量开始。" else "试试切换其他分类，查看宝宝的成长足迹。",
+                                        if (selectedStartDate != null || selectedEndDate != null) "可以调整日期范围，或清除日期筛选查看全部记录。" else if (selectedEventFilter == "全部") "从一次喂养、一段好觉或一次成长测量开始。" else "试试切换其他分类，查看宝宝的成长足迹。",
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
                         }
-                    } else if (selectedNav == 1) items(filteredEvents, key = { it.id }) { event ->
+                    } else if (selectedNav == 1) items(timelineEvents, key = { it.id }) { event ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                             EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
                         }
+                    }
+                    if (selectedNav == 1 && timelineEvents.size < timelineTotal) item {
+                        OutlinedButton(
+                            enabled = !timelineLoading,
+                            onClick = {
+                                scope.launch {
+                                    timelineLoading = true
+                                    val nextPage = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, timelineEvents.size)
+                                    timelineEvents = timelineEvents + nextPage
+                                    timelineLoading = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
                     if (selectedNav == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
@@ -504,6 +547,28 @@ private fun BabyLogApp(dao: BabyLogDao) {
     if (showSyncSettings) {
         SyncSettingsDialog(dao = dao, onDismiss = { showSyncSettings = false })
     }
+    if (showStartDatePicker) DateTimeOptionDialog(
+        initial = (selectedStartDate ?: LocalDate.now().minusDays(7)).atStartOfDay(),
+        includeTime = false,
+        onDismiss = { showStartDatePicker = false },
+        onConfirm = { selected ->
+            val date = selected.toLocalDate()
+            selectedStartDate = date
+            if (selectedEndDate != null && selectedEndDate!!.isBefore(date)) selectedEndDate = date
+            showStartDatePicker = false
+        }
+    )
+    if (showEndDatePicker) DateTimeOptionDialog(
+        initial = (selectedEndDate ?: LocalDate.now()).atStartOfDay(),
+        includeTime = false,
+        onDismiss = { showEndDatePicker = false },
+        onConfirm = { selected ->
+            val date = selected.toLocalDate()
+            selectedEndDate = date
+            if (selectedStartDate != null && selectedStartDate!!.isAfter(date)) selectedStartDate = date
+            showEndDatePicker = false
+        }
+    )
 
     if ((addingEvent != null || editingEvent != null) && baby != null) {
         val currentEvent = editingEvent
@@ -526,9 +591,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
         }
     }
 }
-
-
-
 
 @Composable
 private fun BabyProfileEditor(
@@ -692,7 +754,14 @@ private fun ProfileMetric(label: String, value: String, modifier: Modifier = Mod
 
 @Composable
 private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, onDismiss: () -> Unit, onSave: (String, JSONObject, Long) -> Unit) {
+    val context = LocalContext.current.applicationContext
     val initialPayload = remember(existing?.id) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
+    val existingFeedingMethod = initialPayload.optString("method", "配方奶").ifBlank { "配方奶" }
+    val enabledFeedingMethods = remember { FeedingPreferences.enabledMethods(context) }
+    val feedingOptions = remember(existing?.id, enabledFeedingMethods) {
+        (enabledFeedingMethods + if (existing != null && existingFeedingMethod in listOf("母乳", "配方奶", "混合喂养")) listOf(existingFeedingMethod) else emptyList())
+            .distinct().ifEmpty { listOf("配方奶") }
+    }
     val initialTime = remember(existing?.id) {
         existing?.occurredAt?.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime() } ?: LocalDateTime.now()
     }
@@ -700,6 +769,8 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var hour by remember(existing?.id) { mutableStateOf(initialTime.hour) }
     var minute by remember(existing?.id) { mutableStateOf(initialTime.minute) }
     var amountText by remember(existing?.id) { mutableStateOf(if (existing == null) "" else initialPayload.optInt("amountMl").takeIf { it > 0 }?.toString().orEmpty()) }
+    var feedingMethod by remember(existing?.id) { mutableStateOf(if (existingFeedingMethod in feedingOptions) existingFeedingMethod else feedingOptions.first()) }
+    var breastMinutes by remember(existing?.id) { mutableStateOf(initialPayload.optInt("breastMinutes").takeIf { it > 0 }?.toString().orEmpty()) }
     var urine by remember(existing?.id) { mutableStateOf(if (existing == null) true else initialPayload.optBoolean("urine")) }
     var stool by remember(existing?.id) { mutableStateOf(initialPayload.optBoolean("stool")) }
     var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", "糊状")) }
@@ -725,16 +796,27 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                 }
                 when (eventType) {
                     "FEEDING" -> {
+                        Text("喂养方式", fontWeight = FontWeight.SemiBold)
+                        SelectionRow(feedingOptions, feedingMethod) { feedingMethod = it }
                         OutlinedTextField(
                             value = amountText,
                             onValueChange = { raw -> amountText = raw.filter(Char::isDigit).take(4) },
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("本次奶量（ml）") },
+                            label = { Text(if (feedingMethod == "母乳") "母乳量（ml，可选）" else "配方奶量（ml）") },
                             singleLine = true
                         )
-                        Text("单位：毫升（ml）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("常用奶量 · 也可以直接输入其他数值", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        SelectionRow(listOf("90", "120", "150", "180", "210"), amountText) { amountText = it }
+                        Text(if (feedingMethod == "母乳") "亲喂可只记录时长；瓶喂母乳可填写奶量。" else "单位：毫升（ml），也可以直接输入其他数值。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SelectionRow(listOf("60", "90", "120", "150", "180", "210"), amountText) { amountText = it }
+                        if (feedingMethod != "配方奶") {
+                            OutlinedTextField(
+                                value = breastMinutes,
+                                onValueChange = { breastMinutes = it.filter(Char::isDigit).take(3) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("亲喂时长（分钟，可选）") },
+                                singleLine = true
+                            )
+                            SelectionRow(listOf("5", "10", "15", "20", "30"), breastMinutes) { breastMinutes = it }
+                        }
                     }
                     "DIAPER" -> {
                         Text("护理情况", fontWeight = FontWeight.SemiBold)
@@ -780,15 +862,15 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
         confirmButton = {
             Button(onClick = {
                 val timestamp = date.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                val payload = JSONObject()
+                var payload = JSONObject()
                 when (eventType) {
                     "FEEDING" -> {
-                        val amountMl = amountText.toIntOrNull()
-                        if (amountMl == null || amountMl !in 1..1000) {
-                            error = "请输入 1–1000 ml 的奶量"
+                        payload = try {
+                            buildFeedingPayload(feedingMethod, amountText, breastMinutes)
+                        } catch (validation: IllegalArgumentException) {
+                            error = validation.message
                             return@Button
                         }
-                        payload.put("method", "配方奶").put("amountMl", amountMl)
                     }
                     "DIAPER" -> {
                         if (!urine && !stool) { error = "请至少选择一项护理情况"; return@Button }
@@ -881,7 +963,7 @@ internal fun SelectionRow(options: List<String>, selected: String, onSelect: (St
 private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onEdit: () -> Unit, onDelete: () -> Unit) {
     val payload = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
     val (emoji, title, detail) = when (event.eventType) {
-        "FEEDING" -> Triple("🍼", "喂养", "${payload.optInt("amountMl")} ml 配方奶")
+        "FEEDING" -> Triple("🍼", "喂养", feedingDescription(event.payloadJson))
         "DIAPER" -> {
             val details = mutableListOf<String>()
             if (payload.optBoolean("urine")) details.add("小便")

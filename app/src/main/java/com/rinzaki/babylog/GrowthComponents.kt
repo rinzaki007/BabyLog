@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
@@ -27,6 +28,8 @@ import java.util.Locale
 
 @Composable
 internal fun TrendsSummary(events: List<BabyEventEntity>) {
+    val context = LocalContext.current.applicationContext
+    val visibleFeedingMethods = FeedingPreferences.enabledMethods(context)
     var range by remember { mutableStateOf("近7天") }
     var category by remember { mutableStateOf("全部") }
     val days = when (range) { "近7天" -> 7L; "近30天" -> 30L; "近90天" -> 90L; else -> Long.MAX_VALUE }
@@ -41,8 +44,15 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
             else -> true
         }
     }
-    val milk = recent.filter { it.eventType == "FEEDING" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0) }
-    val feedCount = recent.count { it.eventType == "FEEDING" }
+    val feedingEvents = recent.filter { it.eventType == "FEEDING" }
+    val milk = feedingEvents.sumOf { runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0) }
+    val feedCount = feedingEvents.size
+    val feedingMethods = feedingEvents.groupingBy {
+        runCatching { JSONObject(it.payloadJson).optString("method", "配方奶").ifBlank { "配方奶" } }.getOrDefault("配方奶")
+    }.eachCount()
+    val breastMinutes = feedingEvents.sumOf {
+        runCatching { JSONObject(it.payloadJson).optInt("breastMinutes") }.getOrDefault(0)
+    }
     val peeCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("urine") }.getOrDefault(false) }
     val stoolCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
     val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0) }
@@ -64,9 +74,20 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
             }
-            if (category == "全部" || category == "喂养") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryPill("🍼", "配方奶总量", "${milk} ml", Modifier.weight(1f))
-                SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
+            if (category == "全部" || category == "喂养") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryPill("🍼", "记录奶量", "${milk} ml", Modifier.weight(1f))
+                    SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
+                    if (visibleFeedingMethods.any { it == "母乳" || it == "混合喂养" }) {
+                        SummaryPill("🤱", "亲喂时长", if (breastMinutes > 0) "${breastMinutes} 分钟" else "未记录", Modifier.weight(1f))
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    visibleFeedingMethods.forEach { method ->
+                        val icon = when (method) { "母乳" -> "🤱"; "配方奶" -> "🍼"; else -> "🥛" }
+                        SummaryPill(icon, method, "${feedingMethods[method] ?: 0} 次", Modifier.weight(1f))
+                    }
+                }
             }
             if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
