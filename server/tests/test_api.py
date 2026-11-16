@@ -838,7 +838,6 @@ def test_web_cookie_auth_rejects_cross_origin_mutations(client):
 
 def test_web_statistics_and_all_event_categories_are_visible(client):
     import time
-    from app import main
 
     token = register(client, "web-statistics@example.test")
     family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
@@ -853,8 +852,9 @@ def test_web_statistics_and_all_event_categories_are_visible(client):
         ("VACCINE", {"vaccineName": "乙肝疫苗", "dose": "第 1 剂", "clinic": "社区门诊"}),
     ]
     changes = []
-    for event_type, details in samples:
+    for event_type, details in samples + [("FEEDING", {"amountMl": 200})]:
         event_id = str(uuid.uuid4())
+        occurred_at = now if details.get("amountMl") != 200 else now - 100 * 86400000
         changes.append({
             "operation_id": str(uuid.uuid4()),
             "entity_type": "event",
@@ -863,7 +863,7 @@ def test_web_statistics_and_all_event_categories_are_visible(client):
             "payload": {
                 "id": event_id,
                 "eventType": event_type,
-                "occurredAt": now,
+                "occurredAt": occurred_at,
                 "payloadJson": json.dumps(details, ensure_ascii=False),
             },
             "base_version": 0,
@@ -878,7 +878,7 @@ def test_web_statistics_and_all_event_categories_are_visible(client):
 
     overview = client.get("/api/web/overview?event_limit=20", headers=auth(token))
     assert overview.status_code == 200
-    assert overview.json()["counts"]["events"] == len(samples)
+    assert overview.json()["counts"]["events"] == len(samples) + 1
     assert {item["payload"]["eventType"] for item in overview.json()["events"]} == {
         event_type for event_type, _details in samples
     }
@@ -900,6 +900,7 @@ def test_web_statistics_and_all_event_categories_are_visible(client):
     assert body["type_counts"]["SOLID_FOOD"] == 1
     assert body["type_counts"]["SUPPLEMENT"] == 1
     assert len(body["daily"]) == 7
+    assert "no-store" in stats.headers["Cache-Control"]
     assert sum(day["milk_ml"] for day in body["daily"]) == 120
     assert body["growth"][-1]["weight_kg"] == 6.5
     assert body["growth"][-1]["length_cm"] == 62.5
