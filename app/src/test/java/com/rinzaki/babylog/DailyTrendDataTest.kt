@@ -83,4 +83,20 @@ class DailyTrendDataTest {
     fun rejectsInvalidRange() {
         dailyTrendPoints(emptyList(), "记录总数", 0, today, zone)
     }
+    @Test
+    fun countsAllTimeAverageByLocalCalendarDays() {
+        val first = event("f1", "FEEDING", today.minusDays(2), """{"amountMl":100}""", 23)
+        val latest = event("f2", "FEEDING", today, """{"amountMl":120}""", 0)
+        assertEquals(3, calendarDaysCovered(listOf(first, latest), today, zone))
+    }
+
+    @Test
+    fun calendarDayCoverageIgnoresDeletedAndFutureEvents() {
+        val deleted = event("f1", "FEEDING", today.minusDays(8), """{"amountMl":100}""", deletedAt = 1L)
+        val future = event("f2", "FEEDING", today.plusDays(3), """{"amountMl":120}""")
+        val current = event("f3", "FEEDING", today, """{"amountMl":80}""")
+        assertEquals(1, calendarDaysCovered(listOf(deleted, future, current), today, zone))
+        assertEquals(1, calendarDaysCovered(emptyList(), today, zone))
+    }
+
 }
