@@ -461,11 +461,11 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
     }
     for (photo in photos) {
         val operation = if (photo.deletedAt == null) "upsert" else "delete"
-        if (operation == "upsert") {
+        if (operation == "upsert" && photo.originalOnDevice) {
             val file = File(photo.localPath)
             if (!file.isFile) SyncHttp.downloadPhoto(base, familyId, photo.id, token, file)
             require(file.isFile && file.length() > 0L) { "照片文件不可用，已停止覆盖：" + photo.id }
-            if (photo.originalOnDevice) SyncHttp.uploadPhoto(base, familyId, photo.id, token, file, photo.photoMimeType ?: mimeTypeForPath(photo.localPath))
+            SyncHttp.uploadPhoto(base, familyId, photo.id, token, file, photo.photoMimeType ?: mimeTypeForPath(photo.localPath))
         }
         items.put(JSONObject().put("operation_id", java.util.UUID.randomUUID().toString())
             .put("entity_type", "photo").put("entity_id", photo.id)
@@ -781,6 +781,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                     val extension = extensionForMime(mime)
                     val unchanged = existing != null && existing.serverVersion == version
                     var storedPath = if (unchanged) existing!!.localPath else ""
+                    var downloadedOriginalToDelete: File? = null
                     var originalOnDevice = unchanged && existing!!.originalOnDevice
                     if (!unchanged) {
                         val original = File(applicationContext.filesDir, "baby_album_originals/$id$extension")
@@ -799,7 +800,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                             if (createPhotoPreview(original, preview)) {
                                 storedPath = preview.absolutePath
                                 originalOnDevice = false
-                                original.delete()
+                                downloadedOriginalToDelete = original
                             } else {
                                 storedPath = original.absolutePath
                                 originalOnDevice = true
@@ -824,6 +825,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         originalOnDevice = originalOnDevice,
                         photoMimeType = mime
                     ))
+                    downloadedOriginalToDelete?.delete()
                 }
             }
         }
