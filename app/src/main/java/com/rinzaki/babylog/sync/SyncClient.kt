@@ -110,6 +110,12 @@ internal fun canSwitchAccountWithConflicts(
     conflictReasons: List<String?>
 ): Boolean = pendingCount == 0 && conflictReasons.all(::isFamilyOwnershipConflict)
 
+internal fun canSubmitAuthoritativeSnapshot(
+    babyFamilyIds: List<String>,
+    activeFamilyId: String
+): Boolean = activeFamilyId.isNotBlank() && babyFamilyIds.isNotEmpty() &&
+    babyFamilyIds.all { it == activeFamilyId }
+
 internal fun shouldRetrySyncStatus(statusCode: Int): Boolean =
     statusCode !in 400..499 || statusCode in setOf(408, 425, 429)
 
@@ -302,8 +308,12 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
     val familyId = SyncPreferences.familyId(context)
     require(base.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) { "请先登录并加入家庭空间" }
     val babies = dao.getAllBabies()
-    val events = dao.getAllEvents()
-    val photos = dao.getAllPhotos()
+    require(canSubmitAuthoritativeSnapshot(babies.map { it.familyId }, familyId)) {
+        "本机宝宝档案包含其他家庭或尚未归属的本地数据，已停止全量覆盖；请切回对应家庭账号并核对数据归属。"
+    }
+    val babyIds = babies.map { it.id }.toSet()
+    val events = dao.getAllEvents().filter { it.babyId in babyIds }
+    val photos = dao.getAllPhotos().filter { it.babyId in babyIds }
     val items = JSONArray()
 
     for (baby in babies) {
@@ -349,7 +359,7 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
             "photo" -> dao.setPhotoServerVersion(id, version, "SYNCED")
         }
     }
-    dao.clearAllSyncOperations()
+    dao.clearSyncOperationsForFamily(familyId)
     SyncPreferences.saveCursor(context, result.optLong("cursor", 0L))
     SyncPreferences.markSyncSuccess(context)
     return "覆盖完成：已将本机 " + babies.size + " 份档案、" + events.size + " 条记录、" +
