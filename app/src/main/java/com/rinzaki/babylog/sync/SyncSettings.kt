@@ -59,6 +59,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var showAccountForm by remember { mutableStateOf(SyncPreferences.token(context).isBlank()) }
     var pendingCount by remember { mutableStateOf(0) }
     var conflictCount by remember { mutableStateOf(0) }
+    var cloudOnlyPhotoCount by remember { mutableStateOf(0) }
     var conflicts by remember { mutableStateOf(emptyList<SyncOperationEntity>()) }
     var statusLoaded by remember { mutableStateOf(false) }
     var retryingConflictId by remember { mutableStateOf<String?>(null) }
@@ -69,6 +70,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var showBreastMilk by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.BREAST_MILK)) }
     var showFormula by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.FORMULA)) }
     var showMixed by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.MIXED)) }
+    var cloudPhotoStorage by remember { mutableStateOf(SyncPreferences.cloudPhotoStorageEnabled(context)) }
 
     fun updateFeedingMethod(method: String, enabled: Boolean) {
         val enabledCount = listOf(showBreastMilk, showFormula, showMixed).count { it }
@@ -87,11 +89,16 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
 
     suspend fun refreshSyncStatus() {
         val snapshot = withContext(Dispatchers.IO) {
-            Triple(dao.pendingOperationCount(), dao.conflictOperations(), dao.conflictOperationCount())
+            val pending = dao.pendingOperationCount()
+            val conflictRows = dao.conflictOperations()
+            val conflictTotal = dao.conflictOperationCount()
+            val cloudOnlyPhotos = dao.getAllPhotos().count { it.deletedAt == null && !it.originalOnDevice }
+            Pair(Triple(pending, conflictRows, conflictTotal), cloudOnlyPhotos)
         }
-        pendingCount = snapshot.first
-        conflicts = snapshot.second
-        conflictCount = snapshot.third
+        pendingCount = snapshot.first.first
+        conflicts = snapshot.first.second
+        conflictCount = snapshot.first.third
+        cloudOnlyPhotoCount = snapshot.second
         statusLoaded = true
     }
 
@@ -192,6 +199,35 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("混合喂养", modifier = Modifier.weight(1f))
                     Switch(checked = showMixed, onCheckedChange = { updateFeedingMethod(FeedingPreferences.MIXED, it) })
+                }
+
+                Text("相册原图存储", fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("NAS 云端保存原图")
+                        Text(
+                            "开启后，本机同步成功的照片仅保留轻量预览；打开照片时再从 NAS 按需读取原图。仅影响这台手机，NAS 原图不会删除。",
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = cloudPhotoStorage,
+                        onCheckedChange = { enabled ->
+                            if (enabled && (token.isBlank() || server.isBlank() || SyncPreferences.familyId(context).isBlank())) {
+                                message = "请先连接 NAS 并登录账号，再开启云端原图存储。"
+                            } else {
+                                cloudPhotoStorage = enabled
+                                SyncPreferences.setCloudPhotoStorageEnabled(context, enabled)
+                                SyncScheduler.enqueue(context)
+                                message = if (enabled) {
+                                    "已开启。后续成功同步的照片会保留轻量预览；已在本机的原图会在确认上传成功后逐步释放。"
+                                } else {
+                                    "已关闭。之后同步的照片会优先保留原图；已释放的原图仍可在查看时从 NAS 下载。"
+                                }
+                            }
+                        },
+                        enabled = token.isNotBlank() && server.isNotBlank() && !busy
+                    )
                 }
 
                 Text("同步状态", fontWeight = FontWeight.SemiBold)
@@ -309,7 +345,9 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 message = "请填写 HTTPS 地址；局域网测试可使用内网 HTTP 地址。"
                             } else {
                                 val serverChanged = SyncPreferences.server(context).trimEnd('/') != normalized
-                                if (serverChanged && !canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
+                                if (serverChanged && cloudOnlyPhotoCount > 0) {
+                                    message = "本机还有 $cloudOnlyPhotoCount 张照片只保留预览。请先连接原 NAS、关闭云端原图存储并等待原图恢复，再更换服务器。"
+                                } else if (serverChanged && !canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
                                     message = if (pendingCount > 0) {
                                         "本机还有待同步项目，请先联网完成同步，再更换服务器。"
                                     } else {
@@ -448,7 +486,9 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     }
                     OutlinedButton(
                         onClick = {
-                            if (!canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
+                            if (cloudOnlyPhotoCount > 0) {
+                                message = "本机还有 $cloudOnlyPhotoCount 张照片只保留预览。请先连接原 NAS、关闭云端原图存储并等待原图恢复，再退出或切换账号，避免离线后无法读取原图。"
+                            } else if (!canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
                                 message = if (pendingCount > 0) {
                                     "本机还有待同步项目，请联网完成同步后再退出登录。"
                                 } else {

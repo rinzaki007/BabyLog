@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [BabyEntity::class, BabyEventEntity::class, BabyPhotoEntity::class, SyncOperationEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class BabyLogDatabase : RoomDatabase() {
@@ -30,6 +30,13 @@ abstract class BabyLogDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_photos_babyId ON baby_photos(babyId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_photos_takenAt ON baby_photos(takenAt)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_photos_syncStatus ON baby_photos(syncStatus)")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE baby_photos ADD COLUMN originalOnDevice INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE baby_photos ADD COLUMN photoMimeType TEXT")
             }
         }
 

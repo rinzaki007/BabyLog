@@ -1,5 +1,6 @@
 package com.rinzaki.babylog.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -52,7 +53,9 @@ data class BabyPhotoEntity(
     val syncStatus: String = "PENDING",
     val remotePath: String? = null,
     val deletedAt: Long? = null,
-    val serverVersion: Long? = null
+    val serverVersion: Long? = null,
+    @ColumnInfo(defaultValue = "1") val originalOnDevice: Boolean = true,
+    val photoMimeType: String? = null
 )
 
 @Entity(tableName = "sync_operations", indices = [Index("createdAt"), Index("status")])
