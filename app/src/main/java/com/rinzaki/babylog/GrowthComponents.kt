@@ -1,6 +1,8 @@
 package com.rinzaki.babylog
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -25,6 +27,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 
 @Composable
 internal fun TrendsSummary(events: List<BabyEventEntity>) {
@@ -169,6 +172,8 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val min = ((minValue ?: 0f) - if (metric == "体重") 0.25f else 1f).coerceAtLeast(0f)
     val max = (maxValue ?: 1f) + if (metric == "体重") 0.25f else 1f
     val dateFormat = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)
+    var selectedPointIndex by remember(points) { mutableStateOf(points.lastIndex) }
+    val selectedPoint = points.getOrNull(selectedPointIndex)
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -197,7 +202,22 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         Spacer(Modifier.height(110.dp))
                         Text("${"%.1f".format(Locale.getDefault(), min)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Canvas(Modifier.weight(1f).height(150.dp)) {
+                    Canvas(
+                        Modifier.weight(1f).height(150.dp).pointerInput(points) {
+                            detectTapGestures { tap ->
+                                if (points.isNotEmpty()) {
+                                    val start = points.first().first
+                                    val span = (points.last().first - start).coerceAtLeast(1L)
+                                    val left = 8f
+                                    val right = size.width - 8f
+                                    selectedPointIndex = points.indices.minByOrNull { index ->
+                                        val x = left + (right - left) * ((points[index].first - start).toFloat() / span.toFloat())
+                                        abs(x - tap.x)
+                                    } ?: points.lastIndex
+                                }
+                            }
+                        }
+                    ) {
                         val left = 8f
                         val right = size.width - 8f
                         val top = 10f
@@ -237,7 +257,9 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         }
                         coords.forEachIndexed { index, point ->
                             val isLatest = index == coords.lastIndex
-                            drawCircle(if (isLatest) Color(0xFFB77969) else Color(0xFF8874B8), radius = if (isLatest) 5.dp.toPx() else 3.5.dp.toPx(), center = point)
+                            val isSelected = index == selectedPointIndex
+                            if (isSelected) drawCircle(Color(0xFFB77969).copy(alpha = 0.18f), radius = 11.dp.toPx(), center = point)
+                            drawCircle(if (isLatest || isSelected) Color(0xFFB77969) else Color(0xFF8874B8), radius = if (isLatest || isSelected) 5.dp.toPx() else 3.5.dp.toPx(), center = point)
                         }
                     }
                 }
