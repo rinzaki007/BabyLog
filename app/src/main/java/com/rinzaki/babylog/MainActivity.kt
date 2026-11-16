@@ -365,7 +365,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("快捷记录", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ActionCard("🍼", "喂养", "母乳 · 配方奶", Modifier.weight(1f)) { addingEvent = "FEEDING" }
+                            ActionCard("🍼", "喂养", "多种喂养方式", Modifier.weight(1f)) { addingEvent = "FEEDING" }
                             ActionCard("🌿", "大小便", "护理情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
