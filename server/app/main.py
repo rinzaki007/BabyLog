@@ -631,7 +631,8 @@ def _web_statistics_for_events(events, days):
 
 
 @app.get("/api/web/statistics")
-def web_statistics(days:int=30,uid:str=Depends(current_user)):
+def web_statistics(response:Response,days:int=30,uid:str=Depends(current_user)):
+    response.headers["Cache-Control"]="no-store"
     if days not in (7,30,90):
         raise HTTPException(422,"统计范围仅支持 7、30 或 90 天")
     _profile,family=_web_family(uid)
