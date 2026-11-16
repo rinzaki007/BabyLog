@@ -81,8 +81,33 @@ interface BabyLogDao {
     @Query("SELECT COUNT(*) FROM sync_operations WHERE status = 'CONFLICT'")
     suspend fun conflictOperationCount(): Int
 
-    @Query("SELECT * FROM sync_operations WHERE status = 'CONFLICT' ORDER BY createdAt DESC LIMIT 20")
+    @Query("SELECT * FROM sync_operations WHERE status = 'CONFLICT' ORDER BY createdAt DESC")
     suspend fun conflictOperations(): List<SyncOperationEntity>
+
+    @Query(
+        """
+        UPDATE sync_operations
+        SET status = 'PENDING', error = NULL
+        WHERE status = 'CONFLICT'
+          AND error = :ownershipReason
+          AND (
+              (entityType = 'baby' AND entityId IN (
+                  SELECT id FROM babies WHERE familyId = :familyId
+              ))
+              OR (entityType = 'event' AND entityId IN (
+                  SELECT e.id FROM baby_events e
+                  INNER JOIN babies b ON b.id = e.babyId
+                  WHERE b.familyId = :familyId
+              ))
+              OR (entityType = 'photo' AND entityId IN (
+                  SELECT p.id FROM baby_photos p
+                  INNER JOIN babies b ON b.id = p.babyId
+                  WHERE b.familyId = :familyId
+              ))
+          )
+        """
+    )
+    suspend fun restoreFamilyOwnershipConflicts(familyId: String, ownershipReason: String): Int
 
     @Query("UPDATE baby_photos SET serverVersion = :version, syncStatus = :status WHERE id = :photoId")
     suspend fun setPhotoServerVersion(photoId: String, version: Long, status: String)
