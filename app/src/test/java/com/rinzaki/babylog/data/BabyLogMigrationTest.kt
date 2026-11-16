@@ -85,8 +85,15 @@ class BabyLogMigrationTest {
                 assertEquals("{\"amountMl\":120}", cursor.getString(0))
                 assertEquals(7L, cursor.getLong(1))
             }
-            sqlDb.query("SELECT serverVersion, originalOnDevice, photoMimeType FROM baby_photos LIMIT 0").use { cursor ->
-                assertEquals(0, cursor.count)
+            sqlDb.execSQL(
+                """INSERT INTO baby_photos
+                    (id, babyId, localPath, caption, takenAt, createdAt, updatedAt, syncStatus, remotePath, deletedAt, serverVersion)
+                    VALUES ('photo-1', 'baby-1', '/local/photo.jpg', NULL, 3000, 3000, 3000, 'SYNCED', NULL, NULL, 2)"""
+            )
+            sqlDb.query("SELECT originalOnDevice, photoMimeType FROM baby_photos WHERE id = 'photo-1'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(1, cursor.getInt(0))
+                assertTrue(cursor.isNull(1))
             }
             assertEquals(6, sqlDb.version)
         } finally {
