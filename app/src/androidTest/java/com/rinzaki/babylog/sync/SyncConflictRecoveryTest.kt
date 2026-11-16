@@ -65,6 +65,13 @@ class SyncConflictRecoveryTest {
                 setOf("baby-b-op", "event-a-version-op"),
                 dao.conflictOperations().map { it.operationId }.toSet()
             )
+
+            assertEquals(4, dao.clearSyncOperationsForFamily("family-a"))
+            assertEquals(
+                setOf("baby-b-op"),
+                dao.conflictOperations().map { it.operationId }.toSet()
+            )
+            assertEquals(0, dao.pendingOperationCount())
         } finally {
             database.close()
         }
