@@ -236,7 +236,8 @@ internal fun vaccineDoseNeedsClinicReview(
         if (matches.isEmpty()) return false
         if (item.dose.contains("加强")) {
             return matches.any { (_, dose) ->
-                dose.contains("加强", ignoreCase = true) || dose.contains("boost", ignoreCase = true)
+                dose.isBlank() || dose.contains("加强", ignoreCase = true) ||
+                    dose.contains("boost", ignoreCase = true)
             }
         }
         if (expectedDose == null) return false
