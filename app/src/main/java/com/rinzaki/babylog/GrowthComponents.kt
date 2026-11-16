@@ -75,7 +75,7 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SummaryPill("🍼", "记录奶量", "${milk} ml", Modifier.weight(1f))
                     SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
-                    SummaryPill("🤱", "亲喂时长", "${breastMinutes} 分钟", Modifier.weight(1f))
+                    SummaryPill("🤱", "亲喂时长", if (breastMinutes > 0) "${breastMinutes} 分钟" else "未记录", Modifier.weight(1f))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SummaryPill("🤱", "母乳", "${feedingMethods["母乳"] ?: 0} 次", Modifier.weight(1f))
