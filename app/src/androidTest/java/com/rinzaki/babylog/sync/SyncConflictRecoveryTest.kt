@@ -77,4 +77,26 @@ class SyncConflictRecoveryTest {
             database.close()
         }
     }
+    @Test
+    fun firstAccountLinkClaimsOnlyUnassignedOfflineProfiles() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, BabyLogDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val dao = database.babyLogDao()
+            dao.upsertBaby(BabyEntity("offline-placeholder", UNASSIGNED_FAMILY_ID, "离线宝宝", 1_000L, 1_000L, 1_000L))
+            dao.upsertBaby(BabyEntity("offline-empty", "", "未归属宝宝", 1_000L, 1_000L, 1_000L))
+            dao.upsertBaby(BabyEntity("other-family", "family-b", "其他家庭宝宝", 1_000L, 1_000L, 1_000L))
+
+            assertEquals(2, dao.assignUnassignedBabiesToFamily("family-a", UNASSIGNED_FAMILY_ID))
+            assertEquals("family-a", dao.getBaby("offline-placeholder")?.familyId)
+            assertEquals("family-a", dao.getBaby("offline-empty")?.familyId)
+            assertEquals("family-b", dao.getBaby("other-family")?.familyId)
+        } finally {
+            database.close()
+        }
+    }
+
 }
