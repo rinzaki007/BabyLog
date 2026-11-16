@@ -6,12 +6,11 @@ BabyLog Android 客户端、NAS 同步服务和网页管理面板属于同一个
 
 向 `main` 推送或创建 PR 时，CI 并行执行：
 
-1. **Android 单元测试与构建**：运行 JVM 单元测试并构建 debug APK。
-2. **Android 仪器测试**：在 Android Emulator 中执行 Room 数据库迁移与 Keystore Token 加密 / 迁移测试。
-3. **Sync API**：运行 FastAPI 接口测试，覆盖认证、家庭数据访问、增量同步、幂等、照片上传下载、网页面板、备份导出与安全导入。
-4. **Docker**：构建 NAS 同步服务镜像，并校验 Compose 配置及容器启动。
+1. **Android 单元测试与构建**：运行 JVM / Robolectric 测试并构建 debug APK，覆盖可在 JVM 环境验证的 Room、统计逻辑、同步队列及加密相关逻辑。
+2. **Sync API**：运行 FastAPI 接口测试，覆盖认证、家庭数据访问、增量同步、幂等、照片上传下载、网页面板、备份导出与安全导入。
+3. **Docker**：构建 NAS 同步服务镜像，执行容器健康检查并校验 Compose 配置。
 
-Android 单元测试、模拟器仪器测试、NAS API 与 Docker 检查全部通过，才视为该提交通过 CI。Android APK 作为 Actions artifact 上传；Docker 镜像由 CI 构建验证，不代表 NAS 已自动更新。除非专门配置发布流程，合并代码后仍需由部署者在 NAS / Dockge 更新容器。
+以上 Android、NAS API 与 Docker 检查全部通过，才视为该提交通过 CI。当前 CI 不要求启动 Android Emulator；Android Keystore 等依赖真实 Android 系统的行为仍需在目标设备上验证。Android APK 作为 Actions artifact 上传；Docker 镜像由 CI 构建验证，不代表 NAS 已自动更新。除非专门配置发布流程，合并代码后仍需由部署者在 NAS / Dockge 更新容器。
 
 ## API 与数据兼容原则
 
