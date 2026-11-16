@@ -578,13 +578,15 @@ def _web_statistics_for_events(events, days):
         details=event.get("details")
         if not isinstance(details,dict):
             details=_web_event_details(payload)
-        type_counts[event_type]=type_counts.get(event_type,0)+1
         try:
             stamp=int(payload.get("occurredAt") or 0)
             day_key=datetime.fromtimestamp(stamp/1000).strftime("%Y-%m-%d") if stamp>0 else ""
         except (TypeError,ValueError,OSError,OverflowError):
             day_key=""
         bucket=daily.get(day_key)
+        if bucket is None:
+            continue
+        type_counts[event_type]=type_counts.get(event_type,0)+1
         if event_type=="FEEDING":
             totals["feeding_count"]+=1
             if bucket: bucket["feeding_count"]+=1
