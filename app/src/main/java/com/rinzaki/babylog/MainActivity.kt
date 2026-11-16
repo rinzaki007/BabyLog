@@ -755,7 +755,14 @@ private fun ProfileMetric(label: String, value: String, modifier: Modifier = Mod
 
 @Composable
 private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, onDismiss: () -> Unit, onSave: (String, JSONObject, Long) -> Unit) {
+    val context = LocalContext.current.applicationContext
     val initialPayload = remember(existing?.id) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
+    val existingFeedingMethod = initialPayload.optString("method", "配方奶").ifBlank { "配方奶" }
+    val enabledFeedingMethods = remember { FeedingPreferences.enabledMethods(context) }
+    val feedingOptions = remember(existing?.id, enabledFeedingMethods) {
+        (enabledFeedingMethods + if (existing != null && existingFeedingMethod in listOf("母乳", "配方奶", "混合喂养")) listOf(existingFeedingMethod) else emptyList())
+            .distinct().ifEmpty { listOf("配方奶") }
+    }
     val initialTime = remember(existing?.id) {
         existing?.occurredAt?.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime() } ?: LocalDateTime.now()
     }
@@ -763,7 +770,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var hour by remember(existing?.id) { mutableStateOf(initialTime.hour) }
     var minute by remember(existing?.id) { mutableStateOf(initialTime.minute) }
     var amountText by remember(existing?.id) { mutableStateOf(if (existing == null) "" else initialPayload.optInt("amountMl").takeIf { it > 0 }?.toString().orEmpty()) }
-    var feedingMethod by remember(existing?.id) { mutableStateOf(initialPayload.optString("method", "配方奶").ifBlank { "配方奶" }) }
+    var feedingMethod by remember(existing?.id) { mutableStateOf(if (existingFeedingMethod in feedingOptions) existingFeedingMethod else feedingOptions.first()) }
     var breastMinutes by remember(existing?.id) { mutableStateOf(initialPayload.optInt("breastMinutes").takeIf { it > 0 }?.toString().orEmpty()) }
     var urine by remember(existing?.id) { mutableStateOf(if (existing == null) true else initialPayload.optBoolean("urine")) }
     var stool by remember(existing?.id) { mutableStateOf(initialPayload.optBoolean("stool")) }
@@ -791,7 +798,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                 when (eventType) {
                     "FEEDING" -> {
                         Text("喂养方式", fontWeight = FontWeight.SemiBold)
-                        SelectionRow(listOf("母乳", "配方奶", "混合喂养"), feedingMethod) { feedingMethod = it }
+                        SelectionRow(feedingOptions, feedingMethod) { feedingMethod = it }
                         OutlinedTextField(
                             value = amountText,
                             onValueChange = { raw -> amountText = raw.filter(Char::isDigit).take(4) },
