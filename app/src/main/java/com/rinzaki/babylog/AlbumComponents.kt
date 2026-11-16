@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -395,7 +396,11 @@ internal fun BabyAlbumSection(
                 }
             ) {
                 Column(Modifier.fillMaxSize()) {
-                    if (showViewerChrome) {
+                    AnimatedVisibility(
+                        visible = showViewerChrome,
+                        enter = fadeIn(animationSpec = tween(180)),
+                        exit = fadeOut(animationSpec = tween(160))
+                    ) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             AnimatedContent(
@@ -415,6 +420,7 @@ internal fun BabyAlbumSection(
                         Text("${pagerState.currentPage + 1} / ${sortedFilteredPhotos.size}", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                         TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("适应屏幕", color = Color.White) }
                         TextButton(onClick = closeViewer) { Text("关闭", color = Color.White) }
+                    }
                     }
                     Box(Modifier.fillMaxWidth().weight(1f)) {
                         HorizontalPager(
@@ -476,32 +482,43 @@ internal fun BabyAlbumSection(
                             }
                         }
                     }
-                        if (showViewerChrome) {
+                        AnimatedVisibility(
+                            visible = showViewerChrome,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                            enter = fadeIn(animationSpec = tween(180)),
+                            exit = fadeOut(animationSpec = tween(160))
+                        ) {
                             Text(
-                                if (zoom > 1.01f) "双指缩放 · 拖动查看 · 双击还原" else "左右滑动切换 · 双指缩放 · 双击放大",
-                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                                if (zoom > 1.01f) "轻触照片隐藏工具栏 · 双指缩放 · 拖动查看 · 双击还原"
+                                else "轻触照片隐藏工具栏 · 左右滑动切换 · 双指缩放 · 双击放大",
                                 color = Color.LightGray,
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }
                     }
                     }
-                    if (showViewerChrome) {
-                        Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                            galleryMessage?.let { Text(it, color = Color(0xFFD7C9F4), style = MaterialTheme.typography.bodySmall) }
-                        }
-                        Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
-                            TextButton(onClick = {
-                                albumScope.launch {
-                                    galleryMessage = runCatching {
-                                        withContext(Dispatchers.IO) { savePhotoToGallery(context, photoOriginalCache[activePhoto.id] ?: activePhoto.localPath) }
-                                        "已保存到手机相册"
-                                    }.getOrElse { "保存失败：${it.message}" }
-                                }
-                            }) { Text("保存到手机", color = Color.White) }
-                            TextButton(onClick = { deletingPhoto = activePhoto; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
+                    AnimatedVisibility(
+                        visible = showViewerChrome,
+                        enter = fadeIn(animationSpec = tween(180)),
+                        exit = fadeOut(animationSpec = tween(160))
+                    ) {
+                        Column {
+                            Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                                galleryMessage?.let { Text(it, color = Color(0xFFD7C9F4), style = MaterialTheme.typography.bodySmall) }
+                            }
+                            Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
+                                TextButton(onClick = {
+                                    albumScope.launch {
+                                        galleryMessage = runCatching {
+                                            withContext(Dispatchers.IO) { savePhotoToGallery(context, photoOriginalCache[activePhoto.id] ?: activePhoto.localPath) }
+                                            "已保存到手机相册"
+                                        }.getOrElse { "保存失败：" + (it.message ?: "未知错误") }
+                                    }
+                                }) { Text("保存到手机", color = Color.White) }
+                                TextButton(onClick = { deletingPhoto = activePhoto; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
+                            }
                         }
                     }
                 }
