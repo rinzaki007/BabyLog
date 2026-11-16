@@ -40,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -71,6 +72,12 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var showFormula by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.FORMULA)) }
     var showMixed by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.MIXED)) }
     var cloudPhotoStorage by remember { mutableStateOf(SyncPreferences.cloudPhotoStorageEnabled(context)) }
+    var photoStorageExpanded by remember { mutableStateOf(false) }
+    var photoTotalCount by remember { mutableStateOf(0) }
+    var localOriginalPhotoCount by remember { mutableStateOf(0) }
+    var pendingPhotoCount by remember { mutableStateOf(0) }
+    var photoCacheBytes by remember { mutableStateOf(0L) }
+    var photoCacheFileCount by remember { mutableStateOf(0) }
 
     fun updateFeedingMethod(method: String, enabled: Boolean) {
         val enabledCount = listOf(showBreastMilk, showFormula, showMixed).count { it }
@@ -92,13 +99,24 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             val pending = dao.pendingOperationCount()
             val conflictRows = dao.conflictOperations()
             val conflictTotal = dao.conflictOperationCount()
-            val cloudOnlyPhotos = dao.getAllPhotos().count { it.deletedAt == null && !it.originalOnDevice }
-            Pair(Triple(pending, conflictRows, conflictTotal), cloudOnlyPhotos)
+            val photos = dao.getAllPhotos().filter { it.deletedAt == null }
+            val cloudOnlyPhotos = photos.count { !it.originalOnDevice && it.syncStatus == "SYNCED" }
+            val localOriginals = photos.count { it.originalOnDevice }
+            val pendingPhotos = photos.count { it.syncStatus != "SYNCED" }
+            val cacheFiles = File(context.cacheDir, "babylog_photo_originals")
+                .listFiles()?.filter { it.isFile && !it.name.endsWith(".part") }.orEmpty()
+            val cacheBytes = cacheFiles.sumOf { it.length() }
+            Triple(Triple(pending, conflictRows, conflictTotal), Triple(photos.size, localOriginals, pendingPhotos), Triple(cloudOnlyPhotos, cacheBytes, cacheFiles.size))
         }
         pendingCount = snapshot.first.first
         conflicts = snapshot.first.second
         conflictCount = snapshot.first.third
-        cloudOnlyPhotoCount = snapshot.second
+        photoTotalCount = snapshot.second.first
+        localOriginalPhotoCount = snapshot.second.second
+        pendingPhotoCount = snapshot.second.third
+        cloudOnlyPhotoCount = snapshot.third.first
+        photoCacheBytes = snapshot.third.second
+        photoCacheFileCount = snapshot.third.third
         statusLoaded = true
     }
 
@@ -228,6 +246,68 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                         },
                         enabled = token.isNotBlank() && server.isNotBlank() && !busy
                     )
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("照片存储详情", fontWeight = FontWeight.SemiBold)
+                                Text("查看本机与 NAS 原图状态、临时缓存占用", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                            }
+                            TextButton(onClick = { photoStorageExpanded = !photoStorageExpanded }) {
+                                Text(if (photoStorageExpanded) "收起" else "展开")
+                            }
+                        }
+                        if (photoStorageExpanded) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("照片总数", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                                    Text("$photoTotalCount 张", fontWeight = FontWeight.Bold)
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("云端原图", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                                    Text("$cloudOnlyPhotoCount 张", fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("本地原图", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                                    Text("$localOriginalPhotoCount 张", fontWeight = FontWeight.Bold)
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("待同步照片", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                                    Text("$pendingPhotoCount 张", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            androidx.compose.material3.HorizontalDivider()
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("临时原图缓存", fontWeight = FontWeight.Medium)
+                                    Text(formatPhotoCacheSize(photoCacheBytes) + " · $photoCacheFileCount 张", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                                }
+                                TextButton(
+                                    onClick = {
+                                        scope.launch {
+                                            val removed = withContext(Dispatchers.IO) {
+                                                val folder = File(context.cacheDir, "babylog_photo_originals")
+                                                folder.listFiles()?.filter { it.isFile && !it.name.endsWith(".part") }
+                                                    ?.count { it.delete() } ?: 0
+                                            }
+                                            refreshSyncStatus()
+                                            message = "已释放 $removed 个临时原图缓存文件。NAS 原图、本地原图和照片预览均未删除。"
+                                        }
+                                    },
+                                    enabled = photoCacheFileCount > 0 && !busy
+                                ) { Text("释放缓存") }
+                            }
+                            Text("缓存上限 300 MB，空间不足时优先清理最久未查看的原图。释放缓存后，照片仍可浏览预览；再次查看原图时会从 NAS 重新下载。", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = { scope.launch { refreshSyncStatus() } }, modifier = Modifier.align(Alignment.End)) { Text("刷新统计") }
+                        }
+                    }
                 }
 
                 Text("同步状态", fontWeight = FontWeight.SemiBold)
@@ -521,6 +601,13 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     )
 }
 
+
+private fun formatPhotoCacheSize(bytes: Long): String = when {
+    bytes >= 1024L * 1024L * 1024L -> String.format(Locale.CHINA, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+    bytes >= 1024L * 1024L -> String.format(Locale.CHINA, "%.1f MB", bytes / (1024.0 * 1024.0))
+    bytes >= 1024L -> String.format(Locale.CHINA, "%.0f KB", bytes / 1024.0)
+    else -> "$bytes B"
+}
 
 internal fun syncConflictTitle(operation: SyncOperationEntity): String {
     val entity = when (operation.entityType) {
