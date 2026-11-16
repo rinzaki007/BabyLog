@@ -57,7 +57,7 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
     val stoolCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
     val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0) }
     val daysCovered = if (days == Long.MAX_VALUE) {
-        if (recent.isEmpty()) 1 else (((System.currentTimeMillis() - (recent.minOf { it.occurredAt })) / 86400000L) + 1).coerceAtLeast(1)
+        calendarDaysCovered(recent, LocalDate.now(), ZoneId.systemDefault())
     } else days
     val average = recent.size.toDouble() / daysCovered.toDouble()
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -97,12 +97,11 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
             if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
-    DailyTrendChart(events)
+    DailyTrendChart(events, range)
 }
 
 @Composable
-private fun DailyTrendChart(events: List<BabyEventEntity>) {
-    var range by remember { mutableStateOf("近7天") }
+private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
     var metric by remember { mutableStateOf("喂养奶量") }
     val days = when (range) { "近30天" -> 30; "近90天" -> 90; else -> 7 }
     val unit = when (metric) {
@@ -122,7 +121,7 @@ private fun DailyTrendChart(events: List<BabyEventEntity>) {
                 }
                 Text("${"%.1f".format(Locale.CHINA, total)} $unit", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
-            SelectionRow(listOf("近7天", "近30天", "近90天"), range) { range = it }
+            Text("与上方统计使用同一周期", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             SelectionRow(listOf("喂养奶量", "喂养次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
             Canvas(Modifier.fillMaxWidth().height(150.dp)) {
                 val horizontalPadding = 4.dp.toPx()
