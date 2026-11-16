@@ -25,6 +25,9 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -265,18 +268,13 @@ internal fun BabyAlbumSection(
             onDismissRequest = closeViewer,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            val bitmapResult by produceState<Result<android.graphics.Bitmap?>?>(initialValue = null, photo.localPath) {
-                value = withContext(Dispatchers.IO) {
-                    runCatching { decodeSampledPhoto(photo.localPath, 1600, 2000) }
-                }
-            }
-            val bitmap = bitmapResult?.getOrNull()
             var zoom by remember(photo.id) { mutableStateOf(1f) }
             var panX by remember(photo.id) { mutableStateOf(0f) }
             var panY by remember(photo.id) { mutableStateOf(0f) }
             var viewportSize by remember(photo.id) { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+            var bitmapForPan by remember(photo.id) { mutableStateOf<android.graphics.Bitmap?>(null) }
             fun clampPhotoPan(nextZoom: Float, x: Float, y: Float): Pair<Float, Float> {
-                val image = bitmap
+                val image = bitmapForPan
                 if (nextZoom <= 1f || image == null || viewportSize.width == 0 || viewportSize.height == 0) return 0f to 0f
                 val fitScale = minOf(viewportSize.width.toFloat() / image.width.toFloat(), viewportSize.height.toFloat() / image.height.toFloat())
                 val fittedWidth = image.width * fitScale
@@ -356,19 +354,54 @@ internal fun BabyAlbumSection(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (bitmap != null) {
-                            Image(
-                                bitmap!!.asImageBitmap(),
-                                contentDescription = "宝宝照片，可双指缩放、拖动查看，双击放大",
-                                modifier = Modifier.fillMaxSize().graphicsLayer {
-                                    scaleX = zoom
-                                    scaleY = zoom
-                                    translationX = panX
-                                    translationY = panY
-                                },
-                                contentScale = ContentScale.Fit
-                            )
-                        } else Text(if (bitmapResult == null) "正在加载照片…" else "照片暂时无法读取", color = Color.White)
+                        AnimatedContent(
+                            targetState = photo.id,
+                            transitionSpec = {
+                                val initialIndex = sortedFilteredPhotos.indexOfFirst { it.id == initialState }
+                                val targetIndex = sortedFilteredPhotos.indexOfFirst { it.id == targetState }
+                                val movingForward = targetIndex > initialIndex
+                                val motion = spring<IntOffset>(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                )
+                                (slideInHorizontally(animationSpec = motion) { width -> if (movingForward) width else -width } +
+                                    fadeIn(tween(130))) togetherWith
+                                    (slideOutHorizontally(animationSpec = motion) { width -> if (movingForward) -width else width } +
+                                        fadeOut(tween(110)))
+                            },
+                            label = "photo-swipe-transition"
+                        ) { targetPhotoId ->
+                            val targetPhoto = sortedFilteredPhotos.firstOrNull { it.id == targetPhotoId } ?: photo
+                            val targetBitmapResult by produceState<Result<android.graphics.Bitmap?>?>(initialValue = null, targetPhoto.localPath) {
+                                value = withContext(Dispatchers.IO) {
+                                    runCatching { decodeSampledPhoto(targetPhoto.localPath, 1600, 2000) }
+                                }
+                            }
+                            val targetBitmap = targetBitmapResult?.getOrNull()
+                            LaunchedEffect(targetPhotoId, targetBitmap) {
+                                if (targetBitmap != null) bitmapForPan = targetBitmap
+                            }
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                if (targetBitmap != null) {
+                                    Image(
+                                        targetBitmap.asImageBitmap(),
+                                        contentDescription = "宝宝照片，可双指缩放、拖动查看，双击放大",
+                                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                                            scaleX = zoom
+                                            scaleY = zoom
+                                            translationX = panX
+                                            translationY = panY
+                                        },
+                                        contentScale = ContentScale.Fit
+                                    )
+                                } else {
+                                    Text(
+                                        if (targetBitmapResult == null) "正在加载照片…" else "照片暂时无法读取",
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                        }
                         Text(
                             if (zoom > 1.01f) "双指缩放 · 拖动查看 · 双击还原" else "左右滑动切换 · 双指缩放 · 双击放大",
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
