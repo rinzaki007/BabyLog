@@ -324,22 +324,23 @@ internal fun BabyAlbumSection(
             // Cloud-only photos show their local preview immediately, then fetch the
             // original in the background for full-resolution viewing when online.
             LaunchedEffect(activePhoto.id, activePhoto.originalOnDevice) {
-                if (!activePhoto.originalOnDevice && activePhoto.id !in photoOriginalCache) {
+                if (!activePhoto.originalOnDevice) {
+                    val cachedPath = photoOriginalCache[activePhoto.id]
                     val base = SyncPreferences.server(context)
                     val token = SyncPreferences.token(context)
                     val familyId = SyncPreferences.familyId(context)
-                    if (base.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) {
-                        val extension = activePhoto.photoMimeType?.let {
-                            when (it) {
-                                "image/png" -> "png"
-                                "image/webp" -> "webp"
-                                "image/heic" -> "heic"
-                                "image/heif" -> "heif"
-                                else -> "jpg"
-                            }
-                        } ?: "jpg"
-                        val destination = File(context.cacheDir, "babylog_photo_originals/${activePhoto.id}.$extension")
-                        val downloaded = withContext(Dispatchers.IO) {
+                    val extension = activePhoto.photoMimeType?.let {
+                        when (it) {
+                            "image/png" -> "png"
+                            "image/webp" -> "webp"
+                            "image/heic" -> "heic"
+                            "image/heif" -> "heif"
+                            else -> "jpg"
+                        }
+                    } ?: "jpg"
+                    val destination = File(context.cacheDir, "babylog_photo_originals/${activePhoto.id}.$extension")
+                    val sourcePath = cachedPath ?: if (base.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) {
+                        withContext(Dispatchers.IO) {
                             runCatching {
                                 if (!destination.isFile || destination.length() <= 0L) {
                                     SyncHttp.downloadPhoto(base, familyId, activePhoto.id, token, destination)
@@ -348,13 +349,13 @@ internal fun BabyAlbumSection(
                                 destination.absolutePath
                             }.getOrNull()
                         }
-                        if (downloaded != null) {
-                            photoOriginalCache[activePhoto.id] = downloaded
-                            val fullBitmap = withContext(Dispatchers.IO) {
-                                runCatching { decodeSampledPhoto(downloaded, 2400, 3000) }.getOrNull()
-                            }
-                            if (fullBitmap != null) photoBitmapCache[activePhoto.id] = fullBitmap
+                    } else null
+                    if (sourcePath != null) {
+                        photoOriginalCache[activePhoto.id] = sourcePath
+                        val fullBitmap = withContext(Dispatchers.IO) {
+                            runCatching { decodeSampledPhoto(sourcePath, 2400, 3000) }.getOrNull()
                         }
+                        if (fullBitmap != null) photoBitmapCache[activePhoto.id] = fullBitmap
                     }
                 }
             }
