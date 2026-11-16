@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -17,8 +18,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +60,8 @@ import java.util.Locale
 internal fun BabyAlbumSection(
     baby: BabyEntity,
     photos: List<BabyPhotoEntity>,
+    photoCount: Int,
+    onLoadMore: suspend (offset: Int, limit: Int) -> List<BabyPhotoEntity>,
     onAdd: (android.net.Uri, Long) -> Unit,
     onCaption: (BabyPhotoEntity, String) -> Unit,
     onDelete: (BabyPhotoEntity) -> Unit
@@ -70,11 +79,15 @@ internal fun BabyAlbumSection(
     var pendingPhotoUris by remember { mutableStateOf<List<android.net.Uri>>(emptyList()) }
     var showPhotoTimePicker by remember { mutableStateOf(false) }
     var albumFilter by remember { mutableStateOf("全部") }
-    var visiblePhotoLimit by remember { mutableStateOf(60) }
     var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
     var showPhotoDatePicker by remember { mutableStateOf(false) }
-    LaunchedEffect(albumFilter, selectedPhotoDate) { visiblePhotoLimit = 60 }
-    val filteredPhotos = photos.filter { photo ->
+    var extraPhotos by remember(baby.id, photoCount) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
+    var loadingMorePhotos by remember { mutableStateOf(false) }
+    val loadedPhotos = remember(photos, extraPhotos) {
+        (photos + extraPhotos).distinctBy { it.id }.sortedWith(compareByDescending<BabyPhotoEntity> { it.takenAt }.thenByDescending { it.id })
+    }
+    LaunchedEffect(photos) { extraPhotos = emptyList() }
+    val filteredPhotos = loadedPhotos.filter { photo ->
         val date = java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
         when (albumFilter) {
             "近7天" -> photo.takenAt >= System.currentTimeMillis() - 7L * 86400000L
@@ -99,7 +112,7 @@ internal fun BabyAlbumSection(
             Column(Modifier.weight(1f)) {
                 Text("成长相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "共 ${photos.size} 张照片 · 按拍摄日期排列",
+                    "共 ${photoCount} 张照片 · 按拍摄日期排列",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -120,7 +133,7 @@ internal fun BabyAlbumSection(
         if (albumFilter == "指定日期" && selectedPhotoDate != null) {
             Text("已筛选：${selectedPhotoDate!!.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         }
-        if (photos.isEmpty()) {
+        if (photoCount == 0) {
             Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F0))
@@ -140,11 +153,15 @@ internal fun BabyAlbumSection(
                 }
             }
         } else {
-            val visiblePhotos = sortedFilteredPhotos.take(visiblePhotoLimit)
+            val visiblePhotos = sortedFilteredPhotos
             val grouped = visiblePhotos.groupBy {
                 SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(it.takenAt))
             }
-            if (filteredPhotos.isEmpty()) Text("这个日期范围内还没有照片。", modifier = Modifier.fillMaxWidth().padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (filteredPhotos.isEmpty()) Text(
+                if (loadedPhotos.size < photoCount) "当前已加载的照片中暂无匹配结果，可以继续加载更早的照片。" else "这个日期范围内还没有照片。",
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             grouped.forEach { (day, dayPhotos) ->
                 val photoRows = dayPhotos.chunked(3)
                 Row(
@@ -201,11 +218,28 @@ internal fun BabyAlbumSection(
                     }
                 }
             }
-            if (visiblePhotos.size < filteredPhotos.size) {
+            if (filteredPhotos.isEmpty() && loadedPhotos.size < photoCount) {
+                Text("当前已加载的照片中暂无匹配结果，可以继续加载更早的照片。", modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            if (loadedPhotos.size < photoCount) {
                 OutlinedButton(
-                    onClick = { visiblePhotoLimit = (visiblePhotoLimit + 60).coerceAtMost(filteredPhotos.size) },
+                    onClick = {
+                        albumScope.launch {
+                            loadingMorePhotos = true
+                            runCatching { onLoadMore(loadedPhotos.size, 60) }
+                                .onSuccess { page -> extraPhotos = (extraPhotos + page).distinctBy { it.id } }
+                                .onFailure { galleryMessage = "加载照片失败：${it.message ?: "请重试"}" }
+                            loadingMorePhotos = false
+                        }
+                    },
+                    enabled = !loadingMorePhotos,
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("加载更多照片（已显示 ${visiblePhotos.size}/${filteredPhotos.size} 张）") }
+                ) {
+                    Text(if (loadingMorePhotos) "正在加载…" else "加载更多照片（已加载 ${loadedPhotos.size}/${photoCount} 张）")
+                }
+            }
+            galleryMessage?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -213,17 +247,30 @@ internal fun BabyAlbumSection(
     viewingPhoto?.let { photo ->
         // Photo navigation follows the active album filter, matching the visible timeline.
         val currentPhotoIndex = sortedFilteredPhotos.indexOfFirst { it.id == photo.id }
-        val previousPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex + 1)
-        val nextPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex - 1)
+        val viewerScope = rememberCoroutineScope()
+        val openingScale = remember(photo.id) { Animatable(0.96f) }
+        val openingAlpha = remember(photo.id) { Animatable(0f) }
+        LaunchedEffect(photo.id) {
+            launch { openingScale.animateTo(1f, animationSpec = tween(260)) }
+            openingAlpha.animateTo(1f, animationSpec = tween(220))
+        }
+        val closeViewer: () -> Unit = {
+            viewerScope.launch {
+                launch { openingScale.animateTo(0.97f, animationSpec = tween(160)) }
+                openingAlpha.animateTo(0f, animationSpec = tween(160))
+                viewingPhoto = null
+            }
+        }
         Dialog(
-            onDismissRequest = { viewingPhoto = null },
+            onDismissRequest = closeViewer,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
+            val bitmapResult by produceState<Result<android.graphics.Bitmap?>?>(initialValue = null, photo.localPath) {
                 value = withContext(Dispatchers.IO) {
-                    runCatching { decodeSampledPhoto(photo.localPath, 1600, 2000) }.getOrNull()
+                    runCatching { decodeSampledPhoto(photo.localPath, 1600, 2000) }
                 }
             }
+            val bitmap = bitmapResult?.getOrNull()
             var zoom by remember(photo.id) { mutableStateOf(1f) }
             var panX by remember(photo.id) { mutableStateOf(0f) }
             var panY by remember(photo.id) { mutableStateOf(0f) }
@@ -245,25 +292,59 @@ internal fun BabyAlbumSection(
                 panX = bounded.first
                 panY = bounded.second
             }
-            Surface(shape = RoundedCornerShape(0.dp), color = Color.Black, modifier = Modifier.fillMaxSize()) {
+            Surface(
+                shape = RoundedCornerShape(0.dp),
+                color = Color.Black,
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    scaleX = openingScale.value
+                    scaleY = openingScale.value
+                    alpha = openingAlpha.value
+                }
+            ) {
                 Column(Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(photo.takenAt)), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text(SimpleDateFormat("HH时mm分", Locale.CHINA).format(Date(photo.takenAt)), style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
+                            AnimatedContent(
+                                targetState = photo.takenAt,
+                                transitionSpec = {
+                                    (slideInHorizontally(animationSpec = tween(180)) { it / 5 } + fadeIn(tween(180))) togetherWith
+                                        (slideOutHorizontally(animationSpec = tween(180)) { -it / 5 } + fadeOut(tween(180)))
+                                },
+                                label = "photo-date-transition"
+                            ) { targetTakenAt ->
+                                Column {
+                                    Text(SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(targetTakenAt)), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text(SimpleDateFormat("HH时mm分", Locale.CHINA).format(Date(targetTakenAt)), style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
+                                }
+                            }
                         }
-                        IconButton(onClick = { previousPhoto?.let { viewingPhoto = it } }, enabled = previousPhoto != null) {
-                            Icon(Icons.Filled.ChevronLeft, contentDescription = "上一张", tint = Color.White)
-                        }
-                        IconButton(onClick = { nextPhoto?.let { viewingPhoto = it } }, enabled = nextPhoto != null) {
-                            Icon(Icons.Filled.ChevronRight, contentDescription = "下一张", tint = Color.White)
-                        }
+                        Text("${currentPhotoIndex + 1} / ${sortedFilteredPhotos.size}", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                         TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("适应屏幕", color = Color.White) }
-                        TextButton(onClick = { viewingPhoto = null }) { Text("关闭", color = Color.White) }
+                        TextButton(onClick = closeViewer) { Text("关闭", color = Color.White) }
                     }
                     Box(
                         Modifier.fillMaxWidth().weight(1f)
                             .onSizeChanged { viewportSize = it }
+                            .pointerInput(photo.id, zoom) {
+                                if (zoom <= 1.01f) {
+                                    var horizontalTravel = 0f
+                                    detectHorizontalDragGestures(
+                                        onHorizontalDrag = { _, dragAmount -> horizontalTravel += dragAmount },
+                                        onDragEnd = {
+                                            photoIndexAfterHorizontalSwipe(
+                                                currentIndex = currentPhotoIndex,
+                                                horizontalDragPx = horizontalTravel,
+                                                thresholdPx = 72.dp.toPx(),
+                                                photoCount = sortedFilteredPhotos.size
+                                            )?.let { targetIndex ->
+                                                viewingPhoto = sortedFilteredPhotos.getOrNull(targetIndex)
+                                            }
+                                            horizontalTravel = 0f
+                                        },
+                                        onDragCancel = { horizontalTravel = 0f }
+                                    )
+                                }
+                            }
                             .pointerInput(photo.id) {
                                 detectTapGestures(onDoubleTap = {
                                     if (zoom > 1f) { zoom = 1f; panX = 0f; panY = 0f } else { zoom = 2.5f; val bounded = clampPhotoPan(zoom, panX, panY); panX = bounded.first; panY = bounded.second }
@@ -284,15 +365,20 @@ internal fun BabyAlbumSection(
                                 },
                                 contentScale = ContentScale.Fit
                             )
-                        } else Text("照片暂时无法读取", color = Color.White)
-                        Text("双指缩放 · 双击放大", modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                        } else Text(if (bitmapResult == null) "正在加载照片…" else "照片暂时无法读取", color = Color.White)
+                        Text(
+                            if (zoom > 1.01f) "双指缩放 · 拖动查看 · 双击还原" else "左右滑动切换 · 双指缩放 · 双击放大",
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                            color = Color.LightGray,
+                            style = MaterialTheme.typography.labelSmall
+                        )
                     }
                     Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(photo.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                         galleryMessage?.let { Text(it, color = Color(0xFFD7C9F4), style = MaterialTheme.typography.bodySmall) }
                     }
                     Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { editingCaption = photo; viewingPhoto = null }) { Text("编辑备注", color = Color.White) }
+                        TextButton(onClick = { editingCaption = photo; closeViewer() }) { Text("编辑备注", color = Color.White) }
                         TextButton(onClick = {
                             albumScope.launch {
                                 galleryMessage = runCatching {
@@ -301,7 +387,7 @@ internal fun BabyAlbumSection(
                                 }.getOrElse { "保存失败：${it.message}" }
                             }
                         }) { Text("保存到手机", color = Color.White) }
-                        TextButton(onClick = { deletingPhoto = photo; viewingPhoto = null }) { Text("删除", color = Color(0xFFFF8A80)) }
+                        TextButton(onClick = { deletingPhoto = photo; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
                     }
                 }
             }
@@ -324,6 +410,7 @@ internal fun BabyAlbumSection(
             confirmButton = {
                 TextButton(onClick = {
                     onCaption(photo, caption.trim())
+                    extraPhotos = extraPhotos.map { if (it.id == photo.id) it.copy(caption = caption.trim()) else it }
                     editingCaption = null
                 }) { Text("保存") }
             },
@@ -341,6 +428,7 @@ internal fun BabyAlbumSection(
             confirmButton = {
                 TextButton(onClick = {
                     onDelete(photo)
+                    extraPhotos = extraPhotos.filterNot { it.id == photo.id }
                     deletingPhoto = null
                 }) { Text("删除") }
             },

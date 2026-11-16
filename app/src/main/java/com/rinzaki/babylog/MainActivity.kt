@@ -9,6 +9,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -171,8 +178,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val baby = babies.firstOrNull()
     val eventsFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observeEvents(baby.id) }
     val events by eventsFlow.collectAsState(initial = emptyList())
-    val photosFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observePhotos(baby.id) }
+    val photosFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observePhotoPage(baby.id, 60, 0) }
     val photos by photosFlow.collectAsState(initial = emptyList())
+    val photoCountFlow = remember(baby?.id) { if (baby == null) flowOf(0) else dao.observePhotoCount(baby.id) }
+    val photoCount by photoCountFlow.collectAsState(initial = 0)
     var editingProfile by remember { mutableStateOf(false) }
     var showSyncSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
@@ -256,16 +265,29 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 }
             },
         ) { scaffoldPadding ->
+            AnimatedContent(
+                targetState = selectedNav,
+                transitionSpec = {
+                    if (targetState > initialState) {
+                        (slideInHorizontally(animationSpec = tween(190)) { it / 8 } + fadeIn(tween(190))) togetherWith
+                            (slideOutHorizontally(animationSpec = tween(150)) { -it / 8 } + fadeOut(tween(150)))
+                    } else {
+                        (slideInHorizontally(animationSpec = tween(190)) { -it / 8 } + fadeIn(tween(190))) togetherWith
+                            (slideOutHorizontally(animationSpec = tween(150)) { it / 8 } + fadeOut(tween(150)))
+                    }
+                },
+                label = "main-page-transition"
+            ) { page ->
             LazyColumn(
-                state = pageListStates[selectedNav],
-                modifier = Modifier.fillMaxSize().padding(scaffoldPadding).pointerInput(selectedNav) {
+                state = pageListStates[page],
+                modifier = Modifier.fillMaxSize().padding(scaffoldPadding).pointerInput(page) {
                     var horizontalTravel = 0f
                     val swipeThreshold = 72.dp.toPx()
                     detectHorizontalDragGestures(
                         onHorizontalDrag = { change, dragAmount -> horizontalTravel += dragAmount },
                         onDragEnd = {
-                            if (horizontalTravel < -swipeThreshold) selectedNav = (selectedNav + 1).coerceAtMost(4)
-                            else if (horizontalTravel > swipeThreshold) selectedNav = (selectedNav - 1).coerceAtLeast(0)
+                            if (horizontalTravel < -swipeThreshold) selectedNav = (page + 1).coerceAtMost(4)
+                            else if (horizontalTravel > swipeThreshold) selectedNav = (page - 1).coerceAtLeast(0)
                             horizontalTravel = 0f
                         },
                         onDragCancel = { horizontalTravel = 0f }
@@ -274,7 +296,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                if (selectedNav == 0) item {
+                if (page == 0) item {
                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -287,7 +309,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                 }
-                if (selectedNav == 0) item {
+                if (page == 0) item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Surface(
                             color = Color.White,
@@ -333,7 +355,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                 }
-                if (selectedNav == 0) item {
+                if (page == 0) item {
                     if (baby == null || editingProfile) {
                         BabyProfileEditor(baby) { name, birthDate, sex, avatar, weight, length, head ->
                             val now = System.currentTimeMillis()
@@ -361,7 +383,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     } else BabyProfileCard(baby) { editingProfile = true }
                 }
-                if (selectedNav == 0 && baby != null) item {
+                if (page == 0 && baby != null) item {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("快捷记录", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -375,14 +397,16 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                 }
                 if (baby != null) {
-                    if (selectedNav == 0) item { TodaySummary(normalEvents) }
+                    if (page == 0) item { TodaySummary(normalEvents) }
 
-                    if (selectedNav == 2) item { TrendsSummary(normalEvents) }
-                    if (selectedNav == 2) item { GrowthSection(baby, normalEvents) }
-                    if (selectedNav == 3) item {
+                    if (page == 2) item { TrendsSummary(normalEvents) }
+                    if (page == 2) item { GrowthSection(baby, normalEvents) }
+                    if (page == 3) item {
                         BabyAlbumSection(
                             baby = baby,
                             photos = photos,
+                            photoCount = photoCount,
+                            onLoadMore = { offset, limit -> dao.getPhotoPage(baby.id, limit, offset) },
                             onAdd = { uri, takenAt ->
                                 scope.launch {
                                     runCatching {
@@ -430,13 +454,13 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         )
                     }
-                    if (selectedNav == 1) item {
+                    if (page == 1) item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("成长足迹", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                             Text("共 ${timelineTotal} 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    if (selectedNav == 1) item {
+                    if (page == 1) item {
                         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 OutlinedButton(onClick = { showStartDatePicker = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
@@ -458,7 +482,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                     }
-                    if (selectedNav == 1 && timelineEvents.isEmpty() && !timelineLoading) {
+                    if (page == 1 && timelineEvents.isEmpty() && !timelineLoading) {
                         item {
                             Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -474,12 +498,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                         }
-                    } else if (selectedNav == 1) items(timelineEvents, key = { it.id }) { event ->
+                    } else if (page == 1) items(timelineEvents, key = { it.id }) { event ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                             EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
                         }
                     }
-                    if (selectedNav == 1 && timelineEvents.size < timelineTotal) item {
+                    if (page == 1 && timelineEvents.size < timelineTotal) item {
                         OutlinedButton(
                             enabled = !timelineLoading,
                             onClick = {
@@ -493,7 +517,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
-                    if (selectedNav == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
+                    if (page == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
                         scope.launch {
                             val vaccine = existing?.copy(occurredAt = timestamp, payloadJson = payload.toString(), updatedAt = now, syncStatus = "PENDING")
@@ -512,7 +536,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             if (deleted != null) { dao.clearPendingOperations("event", deleted.id); dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", deleted.id, "delete", eventSyncPayload(deleted).toString(), deleted.serverVersion, now)); SyncScheduler.enqueue(appContext) }
                         }
                     } }) }
-                } else if (selectedNav == 0) item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                } else if (page == 0) item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
             }
         }
     }
