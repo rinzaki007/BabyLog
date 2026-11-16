@@ -43,6 +43,10 @@ internal fun TodaySummary(events: List<BabyEventEntity>) {
     val sleepMinutes = today.filter { it.eventType == "SLEEP" }.sumOf {
         runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0)
     }
+    val supplements = today.filter { it.eventType == "SUPPLEMENT" }
+    val waterMl = supplements.filter {
+        runCatching { JSONObject(it.payloadJson).optString("supplementName") == "水" }.getOrDefault(false)
+    }.sumOf { runCatching { JSONObject(it.payloadJson).optDouble("amount").toInt() }.getOrDefault(0) }
     val sleepLabel = if (sleepMinutes >= 60) {
         "${sleepMinutes / 60}小时${sleepMinutes % 60}分"
     } else {
@@ -82,6 +86,11 @@ internal fun TodaySummary(events: List<BabyEventEntity>) {
                 SummaryPill("💧", "小便", "${pee} 次", Modifier.weight(1f))
                 SummaryPill("🌿", "大便", "${stool} 次", Modifier.weight(1f))
                 SummaryPill("📏", "成长测量", "${today.count { it.eventType == "GROWTH" }} 次", Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                SummaryPill("🧴", "补充记录", "${supplements.size} 次", Modifier.weight(1f))
+                SummaryPill("🚰", "饮水", "${waterMl} ml", Modifier.weight(1f))
+                SummaryPill("📝", "其他记录", "${today.count { it.eventType == "OTHER" }} 次", Modifier.weight(1f))
             }
         }
     }
