@@ -272,8 +272,9 @@ internal fun BabyAlbumSection(
             var panX by remember(photo.id) { mutableStateOf(0f) }
             var panY by remember(photo.id) { mutableStateOf(0f) }
             var viewportSize by remember(photo.id) { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+            var bitmapForPan by remember(photo.id) { mutableStateOf<android.graphics.Bitmap?>(null) }
             fun clampPhotoPan(nextZoom: Float, x: Float, y: Float): Pair<Float, Float> {
-                val image = bitmap
+                val image = bitmapForPan
                 if (nextZoom <= 1f || image == null || viewportSize.width == 0 || viewportSize.height == 0) return 0f to 0f
                 val fitScale = minOf(viewportSize.width.toFloat() / image.width.toFloat(), viewportSize.height.toFloat() / image.height.toFloat())
                 val fittedWidth = image.width * fitScale
@@ -377,6 +378,9 @@ internal fun BabyAlbumSection(
                                 }
                             }
                             val targetBitmap = targetBitmapResult?.getOrNull()
+                            LaunchedEffect(targetPhotoId, targetBitmap) {
+                                if (targetBitmap != null) bitmapForPan = targetBitmap
+                            }
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 if (targetBitmap != null) {
                                     Image(
