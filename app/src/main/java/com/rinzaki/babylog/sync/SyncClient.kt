@@ -99,6 +99,8 @@ class SyncHttpException(val statusCode: Int, message: String) : IllegalStateExce
 internal const val FAMILY_OWNERSHIP_CONFLICT_REASON =
     "这条数据属于其他家庭空间，已暂停上传。请切回原家庭完成同步，或先核对本机数据归属。"
 
+internal const val UNASSIGNED_FAMILY_ID = "00000000-0000-0000-0000-000000000000"
+
 internal fun isFamilyOwnershipConflict(reason: String?): Boolean =
     reason == FAMILY_OWNERSHIP_CONFLICT_REASON
 
