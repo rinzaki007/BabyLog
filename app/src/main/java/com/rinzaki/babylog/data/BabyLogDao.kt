@@ -178,6 +178,9 @@ interface BabyLogDao {
     suspend fun restoreFamilyOwnershipConflicts(familyId: String, ownershipReason: String): Int
 
 
+    @Query("UPDATE baby_photos SET originalOnDevice = :available, photoMimeType = :mimeType WHERE id = :photoId")
+    suspend fun setPhotoOriginalState(photoId: String, available: Boolean, mimeType: String?)
+
     @Query("UPDATE baby_photos SET serverVersion = :version, syncStatus = :status WHERE id = :photoId")
     suspend fun setPhotoServerVersion(photoId: String, version: Long, status: String)
 
