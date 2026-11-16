@@ -13,6 +13,8 @@ import androidx.work.WorkerParameters
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
 import com.rinzaki.babylog.data.BabyLogDatabase
+import com.rinzaki.babylog.data.BabyLogDao
+import com.rinzaki.babylog.data.SyncOperationEntity
 import com.rinzaki.babylog.data.BabyPhotoEntity
 import org.json.JSONArray
 import org.json.JSONObject
@@ -95,6 +97,77 @@ object SyncPreferences {
 }
 
 class SyncHttpException(val statusCode: Int, message: String) : IllegalStateException(message)
+
+internal const val FAMILY_OWNERSHIP_CONFLICT_REASON =
+    "这条数据属于其他家庭空间，已暂停上传。请切回原家庭完成同步，或先核对本机数据归属。"
+
+internal const val UNASSIGNED_FAMILY_ID = "00000000-0000-0000-0000-000000000000"
+
+internal suspend fun enqueueUnassignedFamilyData(
+    dao: BabyLogDao,
+    unassignedBabies: List<BabyEntity>,
+    familyId: String
+): Int {
+    require(familyId.isNotBlank()) { "当前家庭空间标识无效" }
+    if (unassignedBabies.isEmpty()) return 0
+
+    val claimedCount = dao.assignUnassignedBabiesToFamily(familyId, UNASSIGNED_FAMILY_ID)
+    if (claimedCount == 0) return 0
+
+    val claimedBabyIds = unassignedBabies.map { it.id }.toSet()
+    val now = System.currentTimeMillis()
+    unassignedBabies.forEach { original ->
+        val baby = dao.getBaby(original.id) ?: return@forEach
+        val babyPayload = babySyncPayload(baby).toString()
+        if (dao.hasLocalOperation("baby", baby.id)) {
+            // A pre-login queued payload may still carry the unassigned placeholder ID.
+            // Refresh it before the worker uploads this profile to the newly linked family.
+            dao.updateBabyOperationPayload(baby.id, babyPayload)
+        } else {
+            dao.enqueueOperation(SyncOperationEntity(
+                java.util.UUID.randomUUID().toString(), "baby", baby.id, "upsert",
+                babyPayload, baby.serverVersion, now
+            ))
+        }
+    }
+    dao.getAllEvents().filter { it.babyId in claimedBabyIds }.forEach { event ->
+        if (!dao.hasLocalOperation("event", event.id)) {
+            dao.enqueueOperation(SyncOperationEntity(
+                java.util.UUID.randomUUID().toString(), "event", event.id,
+                if (event.deletedAt == null) "upsert" else "delete",
+                eventSyncPayload(event).toString(), event.serverVersion, now
+            ))
+        }
+    }
+    dao.getAllPhotos().filter { it.babyId in claimedBabyIds }.forEach { photo ->
+        if (!dao.hasLocalOperation("photo", photo.id)) {
+            dao.enqueueOperation(SyncOperationEntity(
+                java.util.UUID.randomUUID().toString(), "photo", photo.id,
+                if (photo.deletedAt == null) "upsert" else "delete",
+                photoSyncPayload(photo, mimeTypeForPath(photo.localPath)).toString(),
+                photo.serverVersion, now
+            ))
+        }
+    }
+    return claimedCount
+}
+
+internal fun isFamilyOwnershipConflict(reason: String?): Boolean =
+    reason == FAMILY_OWNERSHIP_CONFLICT_REASON
+
+internal fun canRetrySyncConflict(reason: String?): Boolean =
+    !isFamilyOwnershipConflict(reason)
+
+internal fun canSwitchAccountWithConflicts(
+    pendingCount: Int,
+    conflictReasons: List<String?>
+): Boolean = pendingCount == 0 && conflictReasons.all(::isFamilyOwnershipConflict)
+
+internal fun canSubmitAuthoritativeSnapshot(
+    babyFamilyIds: List<String>,
+    activeFamilyId: String
+): Boolean = activeFamilyId.isNotBlank() && babyFamilyIds.isNotEmpty() &&
+    babyFamilyIds.all { it == activeFamilyId }
 
 internal fun shouldRetrySyncStatus(statusCode: Int): Boolean =
     statusCode !in 400..499 || statusCode in setOf(408, 425, 429)
@@ -287,9 +360,16 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
     val token = SyncPreferences.token(context)
     val familyId = SyncPreferences.familyId(context)
     require(base.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) { "请先登录并加入家庭空间" }
+    // Preserve operations created while the snapshot is being uploaded; only the
+    // queue that existed before this snapshot may be cleared after it succeeds.
+    val snapshotStartedAt = System.currentTimeMillis()
     val babies = dao.getAllBabies()
-    val events = dao.getAllEvents()
-    val photos = dao.getAllPhotos()
+    require(canSubmitAuthoritativeSnapshot(babies.map { it.familyId }, familyId)) {
+        "本机宝宝档案包含其他家庭或尚未归属的本地数据，已停止全量覆盖；请切回对应家庭账号并核对数据归属。"
+    }
+    val babyIds = babies.map { it.id }.toSet()
+    val events = dao.getAllEvents().filter { it.babyId in babyIds }
+    val photos = dao.getAllPhotos().filter { it.babyId in babyIds }
     val items = JSONArray()
 
     for (baby in babies) {
@@ -335,7 +415,7 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
             "photo" -> dao.setPhotoServerVersion(id, version, "SYNCED")
         }
     }
-    dao.clearAllSyncOperations()
+    dao.clearSyncOperationsForFamily(familyId, snapshotStartedAt)
     SyncPreferences.saveCursor(context, result.optLong("cursor", 0L))
     SyncPreferences.markSyncSuccess(context)
     return "覆盖完成：已将本机 " + babies.size + " 份档案、" + events.size + " 条记录、" +
@@ -369,7 +449,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         else -> familyId
                     }
                     if (!syncOperationBelongsToFamily(ownerFamilyId, familyId)) {
-                        dao.markOperationConflict(operation.operationId, "这条数据属于其他家庭空间，已暂停上传。请切回原家庭完成同步，或先核对本机数据归属。")
+                        dao.markOperationConflict(operation.operationId, FAMILY_OWNERSHIP_CONFLICT_REASON)
                         return@forEach
                     }
                     if (operation.entityType == "baby" && operation.operation == "upsert") {

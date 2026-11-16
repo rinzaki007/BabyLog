@@ -52,10 +52,11 @@ internal fun VaccineScheduleSection(
     }
     val today = LocalDate.now()
     val decorated = allItems.map { (item, date) ->
-        Triple(item, date, vaccineDoseIsRecorded(item, records))
+        Triple(item, date, vaccineDoseStatus(item, records))
     }.sortedBy { it.second }
-    val pending = decorated.filterNot { it.third }
-    val completedCount = decorated.size - pending.size
+    val pending = decorated.filter { it.third != VaccineDoseStatus.RECORDED }
+    val completedCount = decorated.count { it.third == VaccineDoseStatus.RECORDED }
+    val reviewCount = decorated.count { it.third == VaccineDoseStatus.REVIEW_REQUIRED }
     val filtered = when (selectedCategory) {
         "待接种" -> pending
         "全部" -> decorated
@@ -63,7 +64,8 @@ internal fun VaccineScheduleSection(
     }
     val visible = if (showAll) filtered else {
         if (selectedCategory == "待接种") filtered.take(8)
-        else (filtered.filterNot { it.third }.take(8) + filtered.filter { it.third }.takeLast(4)).distinct().sortedBy { it.second }
+        else (filtered.filter { it.third != VaccineDoseStatus.RECORDED }.take(8) +
+            filtered.filter { it.third == VaccineDoseStatus.RECORDED }.takeLast(4)).distinct().sortedBy { it.second }
     }
     val recordedConflicts = remember(events) {
         recordedLiveVaccineConflicts(events.mapNotNull { event ->
@@ -79,13 +81,20 @@ internal fun VaccineScheduleSection(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("接种计划 · 倒计时", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("按类别查看计划剂次，完成后可直接在项目旁记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("按类别查看计划剂次；联合疫苗成分不自动抵扣", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text("已接种 $completedCount/${decorated.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
             SelectionRow(listOf("待接种", "全部", "国家免规", "自费常见", "流脑系列", "联合疫苗"), selectedCategory) {
                 selectedCategory = it
                 showAll = false
+            }
+            if (reviewCount > 0) {
+                Text(
+                    "有 $reviewCount 项可能受到联合疫苗或流脑替代产品影响，暂不自动抵扣，也不标记为逾期。请携带具体疫苗名称、剂次和接种日期向接种门诊核对。",
+                    color = Color(0xFF9A6727),
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
             conflicts.forEach { warning ->
                 Text("⚠ 接种间隔提示：$warning。部分注射用减毒活疫苗通常需同日接种或间隔至少 28 天，请让接种门诊核对具体产品和日期。",
@@ -94,19 +103,25 @@ internal fun VaccineScheduleSection(
             if (visible.isEmpty()) {
                 Text(if (selectedCategory == "待接种") "当前没有待记录剂次，太棒啦！" else "这个分类下暂时没有计划项目。", color = MaterialTheme.colorScheme.primary)
             } else {
-                visible.forEach { (item, date, completed) ->
+                visible.forEach { (item, date, doseStatus) ->
                     val days = java.time.temporal.ChronoUnit.DAYS.between(today, date)
-                    val status = when {
-                        completed -> "已接种"
-                        days < 0 -> "逾期 ${-days} 天"
-                        days == 0L -> "今天接种"
-                        else -> "还有 ${days} 天"
+                    val status = when (doseStatus) {
+                        VaccineDoseStatus.RECORDED -> "已接种"
+                        VaccineDoseStatus.REVIEW_REQUIRED -> "待门诊核对"
+                        VaccineDoseStatus.PENDING -> when {
+                            days < 0 -> "逾期 ${-days} 天"
+                            days == 0L -> "今天接种"
+                            else -> "还有 ${days} 天"
+                        }
                     }
-                    val statusColor = when {
-                        completed -> Color(0xFF54856A)
-                        days <= 0 -> Color(0xFFB65D4A)
-                        days <= 14 -> Color(0xFFB77936)
-                        else -> MaterialTheme.colorScheme.primary
+                    val statusColor = when (doseStatus) {
+                        VaccineDoseStatus.RECORDED -> Color(0xFF54856A)
+                        VaccineDoseStatus.REVIEW_REQUIRED -> Color(0xFFB77936)
+                        VaccineDoseStatus.PENDING -> when {
+                            days <= 0 -> Color(0xFFB65D4A)
+                            days <= 14 -> Color(0xFFB77936)
+                            else -> MaterialTheme.colorScheme.primary
+                        }
                     }
                     Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(14.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -119,8 +134,16 @@ internal fun VaccineScheduleSection(
                         }
                         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(status, color = statusColor, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            if (!completed) TextButton(onClick = { onAddRecord(item.vaccineName, item.dose) }) {
-                                Text("＋ 记录", style = MaterialTheme.typography.labelMedium)
+                            when (doseStatus) {
+                                VaccineDoseStatus.PENDING -> TextButton(onClick = { onAddRecord(item.vaccineName, item.dose) }) {
+                                    Text("＋ 记录", style = MaterialTheme.typography.labelMedium)
+                                }
+                                VaccineDoseStatus.REVIEW_REQUIRED -> Text(
+                                    "核对成分",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = statusColor
+                                )
+                                VaccineDoseStatus.RECORDED -> Unit
                             }
                         }
                     }

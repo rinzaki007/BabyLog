@@ -69,6 +69,31 @@ interface BabyLogDao {
     @Query("DELETE FROM sync_operations")
     suspend fun clearAllSyncOperations()
 
+    // Never clear operations created while an authoritative snapshot is in flight.
+    @Query(
+        """
+        DELETE FROM sync_operations
+        WHERE createdAt < :snapshotStartedAt
+          AND (
+              (entityType = 'baby' AND entityId IN (
+                  SELECT id FROM babies WHERE familyId = :familyId
+              ))
+              OR (entityType = 'event' AND entityId IN (
+                  SELECT e.id FROM baby_events e
+                  INNER JOIN babies b ON b.id = e.babyId
+                  WHERE b.familyId = :familyId
+              ))
+              OR (entityType = 'photo' AND entityId IN (
+                  SELECT p.id FROM baby_photos p
+                  INNER JOIN babies b ON b.id = p.babyId
+                  WHERE b.familyId = :familyId
+              ))
+          )
+        """
+    )
+    suspend fun clearSyncOperationsForFamily(familyId: String, snapshotStartedAt: Long): Int
+
+
     @Query("DELETE FROM baby_photos")
     suspend fun clearAllPhotos()
 
@@ -84,6 +109,18 @@ interface BabyLogDao {
 
     @Query("SELECT * FROM baby_events")
     suspend fun getAllEvents(): List<BabyEventEntity>
+
+    @Query("SELECT * FROM babies WHERE TRIM(familyId) = '' OR familyId = :unassignedFamilyId")
+    suspend fun getUnassignedBabies(unassignedFamilyId: String): List<BabyEntity>
+
+    @Query(
+        """
+        UPDATE babies
+        SET familyId = :familyId
+        WHERE TRIM(familyId) = '' OR familyId = :unassignedFamilyId
+        """
+    )
+    suspend fun assignUnassignedBabiesToFamily(familyId: String, unassignedFamilyId: String): Int
 
     @Query("UPDATE babies SET familyId = :familyId WHERE id = :babyId")
     suspend fun setBabyFamily(babyId: String, familyId: String)
@@ -112,8 +149,34 @@ interface BabyLogDao {
     @Query("SELECT COUNT(*) FROM sync_operations WHERE status = 'CONFLICT'")
     suspend fun conflictOperationCount(): Int
 
-    @Query("SELECT * FROM sync_operations WHERE status = 'CONFLICT' ORDER BY createdAt DESC LIMIT 20")
+    @Query("SELECT * FROM sync_operations WHERE status = 'CONFLICT' ORDER BY createdAt DESC")
     suspend fun conflictOperations(): List<SyncOperationEntity>
+
+    @Query(
+        """
+        UPDATE sync_operations
+        SET status = 'PENDING', error = NULL
+        WHERE status = 'CONFLICT'
+          AND error = :ownershipReason
+          AND (
+              (entityType = 'baby' AND entityId IN (
+                  SELECT id FROM babies WHERE familyId = :familyId
+              ))
+              OR (entityType = 'event' AND entityId IN (
+                  SELECT e.id FROM baby_events e
+                  INNER JOIN babies b ON b.id = e.babyId
+                  WHERE b.familyId = :familyId
+              ))
+              OR (entityType = 'photo' AND entityId IN (
+                  SELECT p.id FROM baby_photos p
+                  INNER JOIN babies b ON b.id = p.babyId
+                  WHERE b.familyId = :familyId
+              ))
+          )
+        """
+    )
+    suspend fun restoreFamilyOwnershipConflicts(familyId: String, ownershipReason: String): Int
+
 
     @Query("UPDATE baby_photos SET serverVersion = :version, syncStatus = :status WHERE id = :photoId")
     suspend fun setPhotoServerVersion(photoId: String, version: Long, status: String)
@@ -138,6 +201,17 @@ interface BabyLogDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM sync_operations WHERE entityType = :entityType AND entityId = :entityId AND status IN ('PENDING', 'CONFLICT'))")
     suspend fun hasLocalOperation(entityType: String, entityId: String): Boolean
+
+    @Query(
+        """
+        UPDATE sync_operations
+        SET payloadJson = :payloadJson
+        WHERE entityType = 'baby'
+          AND entityId = :babyId
+          AND status IN ('PENDING', 'CONFLICT')
+        """
+    )
+    suspend fun updateBabyOperationPayload(babyId: String, payloadJson: String): Int
 
     @Query("UPDATE sync_operations SET baseVersion = :baseVersion, status = 'PENDING', error = NULL WHERE operationId = :operationId AND status = 'CONFLICT'")
     suspend fun rebaseConflict(operationId: String, baseVersion: Long)
