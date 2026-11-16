@@ -48,6 +48,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyPhotoEntity
 import com.rinzaki.babylog.sync.mimeTypeForPath
+import com.rinzaki.babylog.sync.SyncPreferences
+import com.rinzaki.babylog.sync.SyncHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -283,6 +285,7 @@ internal fun BabyAlbumSection(
             )
             val activePhoto = sortedFilteredPhotos.getOrNull(pagerState.currentPage) ?: photo
             val photoBitmapCache = remember { mutableStateMapOf<String, android.graphics.Bitmap>() }
+            val photoOriginalCache = remember { mutableStateMapOf<String, String>() }
 
             // Reset gesture state only after a page has settled, and keep the pan bounds
             // derived from the active page's bitmap to avoid a stale/null bitmap race.
@@ -314,6 +317,43 @@ internal fun BabyAlbumSection(
                                 runCatching { decodeSampledPhoto(neighbor.localPath, 1600, 2000) }.getOrNull()
                             }
                             if (bitmap != null) photoBitmapCache[neighbor.id] = bitmap
+                        }
+                    }
+                }
+            }
+            // Cloud-only photos show their local preview immediately, then fetch the
+            // original in the background for full-resolution viewing when online.
+            LaunchedEffect(activePhoto.id, activePhoto.originalOnDevice) {
+                if (!activePhoto.originalOnDevice && activePhoto.id !in photoOriginalCache) {
+                    val base = SyncPreferences.server(context)
+                    val token = SyncPreferences.token(context)
+                    val familyId = SyncPreferences.familyId(context)
+                    if (base.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) {
+                        val extension = activePhoto.photoMimeType?.let {
+                            when (it) {
+                                "image/png" -> "png"
+                                "image/webp" -> "webp"
+                                "image/heic" -> "heic"
+                                "image/heif" -> "heif"
+                                else -> "jpg"
+                            }
+                        } ?: "jpg"
+                        val destination = File(context.cacheDir, "babylog_photo_originals/${activePhoto.id}.$extension")
+                        val downloaded = withContext(Dispatchers.IO) {
+                            runCatching {
+                                if (!destination.isFile || destination.length() <= 0L) {
+                                    SyncHttp.downloadPhoto(base, familyId, activePhoto.id, token, destination)
+                                }
+                                trimPhotoOriginalCache(context.cacheDir, destination)
+                                destination.absolutePath
+                            }.getOrNull()
+                        }
+                        if (downloaded != null) {
+                            photoOriginalCache[activePhoto.id] = downloaded
+                            val fullBitmap = withContext(Dispatchers.IO) {
+                                runCatching { decodeSampledPhoto(downloaded, 2400, 3000) }.getOrNull()
+                            }
+                            if (fullBitmap != null) photoBitmapCache[activePhoto.id] = fullBitmap
                         }
                     }
                 }
@@ -439,7 +479,7 @@ internal fun BabyAlbumSection(
                         TextButton(onClick = {
                             albumScope.launch {
                                 galleryMessage = runCatching {
-                                    withContext(Dispatchers.IO) { savePhotoToGallery(context, activePhoto.localPath) }
+                                    withContext(Dispatchers.IO) { savePhotoToGallery(context, photoOriginalCache[activePhoto.id] ?: activePhoto.localPath) }
                                     "已保存到手机相册"
                                 }.getOrElse { "保存失败：${it.message}" }
                             }
@@ -527,6 +567,19 @@ internal fun BabyAlbumSection(
         }
     )
 }
+private fun trimPhotoOriginalCache(cacheDir: File, keep: File) {
+    val folder = File(cacheDir, "babylog_photo_originals")
+    val files = folder.listFiles()?.filter { it.isFile && !it.name.endsWith(".part") }?.sortedBy { it.lastModified() } ?: return
+    var total = files.sumOf { it.length() }
+    val limit = 300L * 1024L * 1024L
+    for (file in files) {
+        if (total <= limit) break
+        if (file.absolutePath == keep.absolutePath) continue
+        val size = file.length()
+        if (file.delete()) total -= size
+    }
+}
+
 private fun savePhotoToGallery(context: android.content.Context, path: String) {
     val source = File(path)
     require(source.isFile) { "照片文件不存在" }
