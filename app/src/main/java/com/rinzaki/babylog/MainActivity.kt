@@ -186,10 +186,17 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
     var syncConsistency by remember { mutableStateOf(SyncPreferences.lastConsistency(appContext)) }
     var selectedEventFilter by remember { mutableStateOf("全部") }
+    var selectedStartDate by remember { mutableStateOf<LocalDate?>(null) }
+    var selectedEndDate by remember { mutableStateOf<LocalDate?>(null) }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
     val vaccineEvents = events.filter { it.eventType == "VACCINE" }
     val normalEvents = events.filter { it.eventType != "VACCINE" }
     val filteredEvents = normalEvents.filter { event ->
-        when (selectedEventFilter) {
+        val eventDate = java.time.Instant.ofEpochMilli(event.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate()
+        val inDateRange = (selectedStartDate == null || !eventDate.isBefore(selectedStartDate)) &&
+            (selectedEndDate == null || !eventDate.isAfter(selectedEndDate))
+        inDateRange && when (selectedEventFilter) {
             "喂养" -> event.eventType == "FEEDING"
             "大小便" -> event.eventType == "DIAPER"
             "睡眠" -> event.eventType == "SLEEP"
@@ -419,7 +426,17 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                     if (selectedNav == 1) item {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedButton(onClick = { showStartDatePicker = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
+                                    Text(selectedStartDate?.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))?.let { "从 $it" } ?: "开始日期", maxLines = 1)
+                                }
+                                OutlinedButton(onClick = { showEndDatePicker = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
+                                    Text(selectedEndDate?.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))?.let { "至 $it" } ?: "结束日期", maxLines = 1)
+                                }
+                                if (selectedStartDate != null || selectedEndDate != null) TextButton(onClick = { selectedStartDate = null; selectedEndDate = null }) { Text("清除") }
+                            }
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(listOf("全部", "喂养", "大小便", "睡眠", "成长测量", "其他")) { category ->
                                 if (selectedEventFilter == category) {
                                     FilledTonalButton(onClick = { selectedEventFilter = category }) { Text(category) }
@@ -504,6 +521,28 @@ private fun BabyLogApp(dao: BabyLogDao) {
     if (showSyncSettings) {
         SyncSettingsDialog(dao = dao, onDismiss = { showSyncSettings = false })
     }
+    if (showStartDatePicker) DateTimeOptionDialog(
+        initial = (selectedStartDate ?: LocalDate.now().minusDays(7)).atStartOfDay(),
+        includeTime = false,
+        onDismiss = { showStartDatePicker = false },
+        onConfirm = { selected ->
+            val date = selected.toLocalDate()
+            selectedStartDate = date
+            if (selectedEndDate != null && selectedEndDate!!.isBefore(date)) selectedEndDate = date
+            showStartDatePicker = false
+        }
+    )
+    if (showEndDatePicker) DateTimeOptionDialog(
+        initial = (selectedEndDate ?: LocalDate.now()).atStartOfDay(),
+        includeTime = false,
+        onDismiss = { showEndDatePicker = false },
+        onConfirm = { selected ->
+            val date = selected.toLocalDate()
+            selectedEndDate = date
+            if (selectedStartDate != null && selectedStartDate!!.isAfter(date)) selectedStartDate = date
+            showEndDatePicker = false
+        }
+    )
 
     if ((addingEvent != null || editingEvent != null) && baby != null) {
         val currentEvent = editingEvent
