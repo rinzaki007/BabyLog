@@ -199,6 +199,17 @@ interface BabyLogDao {
     @Query("SELECT EXISTS(SELECT 1 FROM sync_operations WHERE entityType = :entityType AND entityId = :entityId AND status IN ('PENDING', 'CONFLICT'))")
     suspend fun hasLocalOperation(entityType: String, entityId: String): Boolean
 
+    @Query(
+        """
+        UPDATE sync_operations
+        SET payloadJson = :payloadJson
+        WHERE entityType = 'baby'
+          AND entityId = :babyId
+          AND status IN ('PENDING', 'CONFLICT')
+        """
+    )
+    suspend fun updateBabyOperationPayload(babyId: String, payloadJson: String): Int
+
     @Query("UPDATE sync_operations SET baseVersion = :baseVersion, status = 'PENDING', error = NULL WHERE operationId = :operationId AND status = 'CONFLICT'")
     suspend fun rebaseConflict(operationId: String, baseVersion: Long)
 
