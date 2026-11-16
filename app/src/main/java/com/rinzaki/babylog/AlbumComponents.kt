@@ -316,7 +316,7 @@ internal fun BabyAlbumSection(
                             val bitmap = withContext(Dispatchers.IO) {
                                 runCatching { decodeSampledPhoto(neighbor.localPath, 1600, 2000) }.getOrNull()
                             }
-                            if (bitmap != null) photoBitmapCache[neighbor.id] = bitmap
+                            if (bitmap != null && neighbor.id !in photoOriginalCache) photoBitmapCache[neighbor.id] = bitmap
                         }
                     }
                 }
