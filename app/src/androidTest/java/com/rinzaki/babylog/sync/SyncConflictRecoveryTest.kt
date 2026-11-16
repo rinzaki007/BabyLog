@@ -108,7 +108,12 @@ class SyncConflictRecoveryTest {
 
         try {
             val dao = database.babyLogDao()
-            dao.upsertBaby(BabyEntity("local-baby", UNASSIGNED_FAMILY_ID, "离线宝宝", 1_000L, 1_000L, 1_000L))
+            val localBaby = BabyEntity("local-baby", UNASSIGNED_FAMILY_ID, "离线宝宝", 1_000L, 1_000L, 1_000L)
+            dao.upsertBaby(localBaby)
+            dao.enqueueOperation(SyncOperationEntity(
+                "old-baby-op", "baby", "local-baby", "upsert",
+                babySyncPayload(localBaby).toString(), null, 1_500L
+            ))
             dao.upsertEvent(BabyEventEntity("local-event", "local-baby", "FEEDING", 2_000L, "{\"amountMl\":120}", null, 2_000L))
             dao.upsertPhoto(BabyPhotoEntity("local-photo", "local-baby", "/tmp/local-photo.jpg", null, 3_000L, 3_000L, 3_000L))
             dao.upsertBaby(BabyEntity("foreign-baby", "family-b", "其他家庭宝宝", 1_000L, 1_000L, 1_000L))
@@ -118,10 +123,9 @@ class SyncConflictRecoveryTest {
             assertEquals("family-a", dao.getBaby("local-baby")?.familyId)
             assertEquals("family-b", dao.getBaby("foreign-baby")?.familyId)
             assertEquals(3, dao.pendingOperationCount())
-            assertEquals(
-                setOf("baby", "event", "photo"),
-                dao.pendingOperations().map { it.entityType }.toSet()
-            )
+            val queued = dao.pendingOperations()
+            assertEquals(setOf("baby", "event", "photo"), queued.map { it.entityType }.toSet())
+            assertTrue(queued.first { it.entityType == "baby" }.payloadJson.contains("\"familyId\":\"family-a\""))
         } finally {
             database.close()
         }
