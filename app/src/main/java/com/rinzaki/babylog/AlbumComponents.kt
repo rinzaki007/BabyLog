@@ -277,12 +277,15 @@ internal fun BabyAlbumSection(
             var panX by remember(photo.id) { mutableStateOf(0f) }
             var panY by remember(photo.id) { mutableStateOf(0f) }
             var viewportSize by remember(photo.id) { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
-            var bitmapForPan by remember(photo.id) { mutableStateOf<android.graphics.Bitmap?>(null) }
             val pagerState = rememberPagerState(
                 initialPage = currentPhotoIndex.coerceAtLeast(0),
                 pageCount = { sortedFilteredPhotos.size }
             )
             val activePhoto = sortedFilteredPhotos.getOrNull(pagerState.currentPage) ?: photo
+            val photoBitmapCache = remember { mutableStateMapOf<String, android.graphics.Bitmap>() }
+
+            // Reset gesture state only after a page has settled, and keep the pan bounds
+            // derived from the active page's bitmap to avoid a stale/null bitmap race.
             LaunchedEffect(pagerState, sortedFilteredPhotos) {
                 snapshotFlow { pagerState.settledPage }
                     .distinctUntilChanged()
@@ -292,27 +295,18 @@ internal fun BabyAlbumSection(
                             zoom = 1f
                             panX = 0f
                             panY = 0f
-                            bitmapForPan = null
                         }
                     }
             }
-            // Keep only the current photo and its immediate neighbors decoded. This avoids
-            // decoding a full-resolution image after the user has already swiped to it.
-            val photoBitmapCache = remember { mutableStateMapOf<String, android.graphics.Bitmap>() }
-            LaunchedEffect(currentPhotoIndex, sortedFilteredPhotos) {
-                val nearbyIndices = (currentPhotoIndex - 1..currentPhotoIndex + 1)
+
+            // Decode the visible page and both neighbors concurrently as soon as the pager
+            // starts moving, rather than waiting for viewingPhoto/currentPhotoIndex to update.
+            LaunchedEffect(pagerState.currentPage, sortedFilteredPhotos) {
+                val nearbyIndices = (pagerState.currentPage - 1..pagerState.currentPage + 1)
                     .filter { it in sortedFilteredPhotos.indices }
                 val nearbyIds = nearbyIndices.map { sortedFilteredPhotos[it].id }.toSet()
                 photoBitmapCache.keys.toList().filterNot { it in nearbyIds }.forEach { photoBitmapCache.remove(it) }
-
-                val current = sortedFilteredPhotos.getOrNull(currentPhotoIndex)
-                if (current != null && current.id !in photoBitmapCache) {
-                    val bitmap = withContext(Dispatchers.IO) {
-                        runCatching { decodeSampledPhoto(current.localPath, 1600, 2000) }.getOrNull()
-                    }
-                    if (bitmap != null) photoBitmapCache[current.id] = bitmap
-                }
-                nearbyIndices.filter { it != currentPhotoIndex }.forEach { index ->
+                nearbyIndices.forEach { index ->
                     val neighbor = sortedFilteredPhotos[index]
                     if (neighbor.id !in photoBitmapCache) {
                         launch {
@@ -324,8 +318,9 @@ internal fun BabyAlbumSection(
                     }
                 }
             }
+            val activeBitmap = photoBitmapCache[activePhoto.id]
             fun clampPhotoPan(nextZoom: Float, x: Float, y: Float): Pair<Float, Float> {
-                val image = bitmapForPan
+                val image = activeBitmap
                 if (nextZoom <= 1f || image == null || viewportSize.width == 0 || viewportSize.height == 0) return 0f to 0f
                 val fitScale = minOf(viewportSize.width.toFloat() / image.width.toFloat(), viewportSize.height.toFloat() / image.height.toFloat())
                 val fittedWidth = image.width * fitScale
@@ -381,9 +376,6 @@ internal fun BabyAlbumSection(
                     ) { page ->
                         val pagePhoto = sortedFilteredPhotos[page]
                         val pageBitmap = photoBitmapCache[pagePhoto.id]
-                        LaunchedEffect(pagePhoto.id, pageBitmap) {
-                            if (page == pagerState.currentPage && pageBitmap != null) bitmapForPan = pageBitmap
-                        }
                         Box(
                             Modifier.fillMaxSize().clipToBounds()
                                 .then(
