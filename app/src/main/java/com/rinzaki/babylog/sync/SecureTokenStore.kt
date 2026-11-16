@@ -19,22 +19,30 @@ internal object SecureTokenStore {
     private const val IV_LENGTH = 12
     private const val TAG_LENGTH_BITS = 128
 
-    fun encrypt(value: String): String {
+    fun encrypt(value: String): String = encrypt(value, ::getOrCreateKey)
+
+    /**
+     * The key-provider overload keeps the AES-GCM format testable on the JVM.
+     * Production callers always use the Android Keystore-backed overload above.
+     */
+    internal fun encrypt(value: String, keyProvider: () -> SecretKey): String {
         require(value.isNotBlank()) { "同步令牌不能为空" }
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        cipher.init(Cipher.ENCRYPT_MODE, keyProvider())
         val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
         val payload = cipher.iv + encrypted
         return Base64.encodeToString(payload, Base64.NO_WRAP)
     }
 
-    fun decrypt(value: String): String {
+    fun decrypt(value: String): String = decrypt(value, ::getOrCreateKey)
+
+    internal fun decrypt(value: String, keyProvider: () -> SecretKey): String {
         val payload = Base64.decode(value, Base64.NO_WRAP)
         require(payload.size > IV_LENGTH + TAG_LENGTH_BITS / 8) { "加密令牌格式无效" }
         val iv = payload.copyOfRange(0, IV_LENGTH)
         val ciphertext = payload.copyOfRange(IV_LENGTH, payload.size)
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(TAG_LENGTH_BITS, iv))
+        cipher.init(Cipher.DECRYPT_MODE, keyProvider(), GCMParameterSpec(TAG_LENGTH_BITS, iv))
         return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
     }
 

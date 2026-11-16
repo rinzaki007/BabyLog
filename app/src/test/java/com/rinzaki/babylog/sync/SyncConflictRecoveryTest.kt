@@ -2,7 +2,6 @@ package com.rinzaki.babylog.sync
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
 import com.rinzaki.babylog.data.BabyLogDatabase
@@ -13,8 +12,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-@RunWith(AndroidJUnit4::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class SyncConflictRecoveryTest {
     @Test
     fun restoresOnlyOwnershipConflictsWhoseEntitiesBelongToTheActiveFamily() = runBlocking {
@@ -30,22 +32,8 @@ class SyncConflictRecoveryTest {
             dao.upsertEvent(BabyEventEntity("event-a", "baby-a", "FEEDING", 2_000L, "{}", null, 2_000L))
             dao.upsertPhoto(BabyPhotoEntity("photo-a", "baby-a", "/tmp/photo-a.jpg", null, 3_000L, 3_000L, 3_000L))
 
-            fun conflict(
-                operationId: String,
-                entityType: String,
-                entityId: String,
-                reason: String
-            ) = SyncOperationEntity(
-                operationId = operationId,
-                entityType = entityType,
-                entityId = entityId,
-                operation = "upsert",
-                payloadJson = "{}",
-                baseVersion = null,
-                createdAt = 4_000L,
-                status = "CONFLICT",
-                error = reason
-            )
+            fun conflict(operationId: String, entityType: String, entityId: String, reason: String) =
+                SyncOperationEntity(operationId, entityType, entityId, "upsert", "{}", null, 4_000L, "CONFLICT", reason)
 
             dao.enqueueOperation(conflict("baby-a-op", "baby", "baby-a", FAMILY_OWNERSHIP_CONFLICT_REASON))
             dao.enqueueOperation(conflict("event-a-op", "event", "event-a", FAMILY_OWNERSHIP_CONFLICT_REASON))
@@ -53,10 +41,7 @@ class SyncConflictRecoveryTest {
             dao.enqueueOperation(conflict("baby-b-op", "baby", "baby-b", FAMILY_OWNERSHIP_CONFLICT_REASON))
             dao.enqueueOperation(conflict("event-a-version-op", "event", "event-a", "HTTP 409: version conflict"))
 
-            val restored = dao.restoreFamilyOwnershipConflicts(
-                "family-a",
-                FAMILY_OWNERSHIP_CONFLICT_REASON
-            )
+            val restored = dao.restoreFamilyOwnershipConflicts("family-a", FAMILY_OWNERSHIP_CONFLICT_REASON)
 
             assertEquals(3, restored)
             assertEquals(
@@ -73,16 +58,14 @@ class SyncConflictRecoveryTest {
                 "new-event-op", "event", "event-a", "upsert", "{}", null, 5_000L
             ))
             assertEquals(4, dao.clearSyncOperationsForFamily("family-a", 4_500L))
-            assertEquals(
-                setOf("baby-b-op"),
-                dao.conflictOperations().map { it.operationId }.toSet()
-            )
+            assertEquals(setOf("baby-b-op"), dao.conflictOperations().map { it.operationId }.toSet())
             assertEquals(setOf("new-event-op"), dao.pendingOperations().map { it.operationId }.toSet())
             assertEquals(1, dao.pendingOperationCount())
         } finally {
             database.close()
         }
     }
+
     @Test
     fun firstAccountLinkClaimsOnlyUnassignedOfflineProfiles() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -136,5 +119,4 @@ class SyncConflictRecoveryTest {
             database.close()
         }
     }
-
 }

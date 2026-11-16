@@ -1,24 +1,25 @@
 package com.rinzaki.babylog.data
 
-import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-@RunWith(AndroidJUnit4::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class BabyLogDaoPaginationTest {
     private lateinit var database: BabyLogDatabase
     private lateinit var dao: BabyLogDao
 
     @Before
     fun setUp() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         database = Room.inMemoryDatabaseBuilder(context, BabyLogDatabase::class.java)
             .allowMainThreadQueries()
             .build()
