@@ -2,7 +2,6 @@ package com.rinzaki.babylog
 
 import android.content.ComponentName
 import android.content.Context
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -37,7 +36,7 @@ class LauncherIconTest {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             assertTrue(
-                "Android 8+ launcher icon should resolve as an adaptive icon",
+                "Android 8+ application icon should resolve as an adaptive icon",
                 applicationIcon is AdaptiveIconDrawable
             )
         }
@@ -48,9 +47,17 @@ class LauncherIconTest {
             context.packageName
         )
         assertNotEquals("Round launcher icon resource must be packaged", 0, roundIconId)
-        val roundIcon = packageManager.getDrawable(context.packageName, roundIconId, applicationInfo)
-        assertTrue("Round launcher icon resource must decode", roundIcon != null)
-        assertRendersVisiblePixels(roundIcon!!)
+
+        // Load through the app's Resources. PackageManager.getDrawable() may return null
+        // for resource-backed adaptive icons even when the resource is present in the APK.
+        val roundIcon = context.resources.getDrawable(roundIconId, context.theme)
+        assertRendersVisiblePixels(roundIcon)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            assertTrue(
+                "Android 8+ round launcher icon should resolve as an adaptive icon",
+                roundIcon is AdaptiveIconDrawable
+            )
+        }
     }
 
     private fun assertRendersVisiblePixels(drawable: Drawable) {
