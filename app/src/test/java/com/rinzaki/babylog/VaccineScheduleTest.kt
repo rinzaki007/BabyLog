@@ -139,4 +139,64 @@ class VaccineScheduleTest {
         assertTrue(chinaOptionalVaccineCatalog().any { it.category == "特殊风险" })
     }
 
+
+@Test
+    fun compositeVaccineComponentsRequireClinicReviewAndAreNotAutomaticallyCredited() {
+        val dtap = VaccineScheduleItem("百白破疫苗", "第 1 剂", 2)
+        val ipv = VaccineScheduleItem("脊灰灭活疫苗", "第 1 剂", 2)
+        val hib = VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true)
+
+        val pentavalent = listOf("五联疫苗" to "第1剂")
+        assertTrue(!vaccineDoseIsRecorded(dtap, pentavalent))
+        assertTrue(!vaccineDoseIsRecorded(ipv, pentavalent))
+        assertTrue(!vaccineDoseIsRecorded(hib, pentavalent))
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(dtap, pentavalent))
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(ipv, pentavalent))
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(hib, pentavalent))
+        assertEquals(
+            VaccineDoseStatus.PENDING,
+            vaccineDoseStatus(VaccineScheduleItem("百白破疫苗", "第 2 剂", 4), pentavalent)
+        )
+
+        val quadrivalent = listOf("DTaP-Hib 四联疫苗" to "第1剂")
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(dtap, quadrivalent))
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(hib, quadrivalent))
+        assertEquals(VaccineDoseStatus.PENDING, vaccineDoseStatus(ipv, quadrivalent))
+
+        val acHib = listOf("AC-Hib 联合疫苗" to "第1剂")
+        val aGroup = VaccineScheduleItem("A 群流脑多糖疫苗", "第 1 剂", 6)
+        val acGroup = VaccineScheduleItem("A 群 C 群流脑多糖疫苗", "第 1 剂", 36)
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(hib, acHib))
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(aGroup, acHib))
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(acGroup, acHib))
+        assertTrue(!vaccineDoseIsRecorded(aGroup, acHib))
+        assertTrue(!vaccineDoseIsRecorded(acGroup, acHib))
+    }
+
+    @Test
+    fun meningococcalConjugateAndQuadrivalentRecordsRequireReviewNotAutomaticDeduction() {
+        val aGroup = VaccineScheduleItem("A 群流脑多糖疫苗", "第 1 剂", 6)
+        val acGroup = VaccineScheduleItem("A 群 C 群流脑多糖疫苗", "第 1 剂", 36)
+
+        val acConjugate = listOf("A+C 群流脑结合疫苗" to "第1剂")
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(aGroup, acConjugate))
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(acGroup, acConjugate))
+        assertTrue(!vaccineDoseIsRecorded(aGroup, acConjugate))
+        assertTrue(!vaccineDoseIsRecorded(acGroup, acConjugate))
+
+        val acyw = listOf("ACYW135 四价流脑多糖疫苗" to "第1剂")
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(aGroup, acyw))
+        assertEquals(VaccineDoseStatus.REVIEW_REQUIRED, vaccineDoseStatus(acGroup, acyw))
+        assertTrue(!vaccineDoseIsRecorded(aGroup, acyw))
+        assertTrue(!vaccineDoseIsRecorded(acGroup, acyw))
+    }
+
+    @Test
+    fun explicitSingleComponentRecordsRemainNormallyCompleted() {
+        val dtap = VaccineScheduleItem("百白破疫苗", "第 1 剂", 2)
+        val hib = VaccineScheduleItem("Hib 疫苗", "第 1 剂", 2, isSelfPaid = true)
+        assertEquals(VaccineDoseStatus.RECORDED, vaccineDoseStatus(dtap, listOf("百白破疫苗" to "第1剂")))
+        assertEquals(VaccineDoseStatus.RECORDED, vaccineDoseStatus(hib, listOf("Hib 疫苗" to "第1剂")))
+        assertEquals(VaccineDoseStatus.PENDING, vaccineDoseStatus(dtap, emptyList()))
+    }
 }
