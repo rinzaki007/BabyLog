@@ -6,6 +6,15 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    ignore:
+      # These releases require AGP 9.1+ and compileSdk 37; keep updates paused
+      # until the Android build toolchain is deliberately upgraded together.
+      - dependency-name: "androidx.core:core"
+        versions: [">= 1.19.0"]
+      - dependency-name: "androidx.core:core-ktx"
+        versions: [">= 1.19.0"]
+      - dependency-name: "androidx.compose:compose-bom"
+        versions: [">= 2026.09.00"]
 
   - package-ecosystem: pip
     directory: /server
