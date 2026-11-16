@@ -135,6 +135,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             SyncPreferences.saveServer(context, base)
             SyncPreferences.saveAccountEmail(context, accountIdentifier)
             val accessToken = result.getString("access_token")
+            val previousFamilyId = SyncPreferences.familyId(context)
             SyncPreferences.saveSession(context, accessToken)
             val profile = SyncHttp.request(base, "/api/me", token = accessToken)
             SyncPreferences.saveAccountEmail(context, profile.optString("username", accountIdentifier.trim()))
@@ -146,16 +147,24 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             // with this account receives the same family ID from /api/me.
             val familyId = linkedFamilies.getJSONObject(0).getString("id")
             SyncPreferences.saveFamily(context, familyId)
+            // A profile created while the app was offline has no family owner yet.
+            // Claim only these unassigned profiles on the first account link; never
+            // reassign records that already belong to another family.
+            val claimedLocalBabies = if (previousFamilyId.isBlank()) {
+                dao.assignUnassignedBabiesToFamily(familyId, UNASSIGNED_FAMILY_ID)
+            } else {
+                0
+            }
             val restoredConflicts = dao.restoreFamilyOwnershipConflicts(
                 familyId,
                 FAMILY_OWNERSHIP_CONFLICT_REASON
             )
             SyncScheduler.schedule(context)
-            if (restoredConflicts > 0) {
-                "$successMessage 已恢复 $restoredConflicts 条属于当前家庭的冲突记录，正在重新同步。"
-            } else {
-                successMessage
+            val recoveryNotes = buildList {
+                if (claimedLocalBabies > 0) add("已将 $claimedLocalBabies 份此前离线创建的档案关联到当前家庭")
+                if (restoredConflicts > 0) add("已恢复 $restoredConflicts 条属于当前家庭的冲突记录")
             }
+            if (recoveryNotes.isNotEmpty()) "$successMessage ${recoveryNotes.joinToString("；")}，正在重新同步。" else successMessage
         }
     }
 
