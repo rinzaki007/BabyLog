@@ -360,6 +360,9 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
     val token = SyncPreferences.token(context)
     val familyId = SyncPreferences.familyId(context)
     require(base.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) { "请先登录并加入家庭空间" }
+    // Preserve operations created while the snapshot is being uploaded; only the
+    // queue that existed before this snapshot may be cleared after it succeeds.
+    val snapshotStartedAt = System.currentTimeMillis()
     val babies = dao.getAllBabies()
     require(canSubmitAuthoritativeSnapshot(babies.map { it.familyId }, familyId)) {
         "本机宝宝档案包含其他家庭或尚未归属的本地数据，已停止全量覆盖；请切回对应家庭账号并核对数据归属。"
@@ -412,7 +415,7 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
             "photo" -> dao.setPhotoServerVersion(id, version, "SYNCED")
         }
     }
-    dao.clearSyncOperationsForFamily(familyId)
+    dao.clearSyncOperationsForFamily(familyId, snapshotStartedAt)
     SyncPreferences.saveCursor(context, result.optLong("cursor", 0L))
     SyncPreferences.markSyncSuccess(context)
     return "覆盖完成：已将本机 " + babies.size + " 份档案、" + events.size + " 条记录、" +
