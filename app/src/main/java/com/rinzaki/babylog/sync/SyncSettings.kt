@@ -69,6 +69,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var showBreastMilk by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.BREAST_MILK)) }
     var showFormula by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.FORMULA)) }
     var showMixed by remember { mutableStateOf(FeedingPreferences.isEnabled(context, FeedingPreferences.MIXED)) }
+    var cloudPhotoStorage by remember { mutableStateOf(SyncPreferences.cloudPhotoStorageEnabled(context)) }
 
     fun updateFeedingMethod(method: String, enabled: Boolean) {
         val enabledCount = listOf(showBreastMilk, showFormula, showMixed).count { it }
@@ -192,6 +193,35 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("混合喂养", modifier = Modifier.weight(1f))
                     Switch(checked = showMixed, onCheckedChange = { updateFeedingMethod(FeedingPreferences.MIXED, it) })
+                }
+
+                Text("相册原图存储", fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("NAS 云端保存原图")
+                        Text(
+                            "开启后，本机同步成功的照片仅保留轻量预览；打开照片时再从 NAS 按需读取原图。仅影响这台手机，NAS 原图不会删除。",
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = cloudPhotoStorage,
+                        onCheckedChange = { enabled ->
+                            if (enabled && (token.isBlank() || server.isBlank() || SyncPreferences.familyId(context).isBlank())) {
+                                message = "请先连接 NAS 并登录账号，再开启云端原图存储。"
+                            } else {
+                                cloudPhotoStorage = enabled
+                                SyncPreferences.setCloudPhotoStorageEnabled(context, enabled)
+                                if (enabled) SyncScheduler.enqueue(context)
+                                message = if (enabled) {
+                                    "已开启。后续成功同步的照片会保留轻量预览；已在本机的原图会在确认上传成功后逐步释放。"
+                                } else {
+                                    "已关闭。之后同步的照片会优先保留原图；已释放的原图仍可在查看时从 NAS 下载。"
+                                }
+                            }
+                        },
+                        enabled = token.isNotBlank() && server.isNotBlank() && !busy
+                    )
                 }
 
                 Text("同步状态", fontWeight = FontWeight.SemiBold)
