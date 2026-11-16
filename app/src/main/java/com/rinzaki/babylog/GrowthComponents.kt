@@ -29,7 +29,7 @@ import java.util.Locale
 @Composable
 internal fun TrendsSummary(events: List<BabyEventEntity>) {
     val context = LocalContext.current.applicationContext
-    val visibleFeedingMethods = remember { FeedingPreferences.enabledMethods(context) }
+    val visibleFeedingMethods = FeedingPreferences.enabledMethods(context)
     var range by remember { mutableStateOf("近7天") }
     var category by remember { mutableStateOf("全部") }
     val days = when (range) { "近7天" -> 7L; "近30天" -> 30L; "近90天" -> 90L; else -> Long.MAX_VALUE }
