@@ -34,6 +34,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -253,9 +254,11 @@ internal fun BabyAlbumSection(
         // Photo navigation follows the active album filter, matching the visible timeline.
         val currentPhotoIndex = sortedFilteredPhotos.indexOfFirst { it.id == photo.id }
         val viewerScope = rememberCoroutineScope()
-        val openingScale = remember(photo.id) { Animatable(0.96f) }
-        val openingAlpha = remember(photo.id) { Animatable(0f) }
-        LaunchedEffect(photo.id) {
+        // The opening transition belongs to the viewer session, not each pager page.
+        // Re-keying these Animatables by photo.id caused a fade/flash after every swipe.
+        val openingScale = remember { Animatable(0.96f) }
+        val openingAlpha = remember { Animatable(0f) }
+        LaunchedEffect(Unit) {
             launch { openingScale.animateTo(1f, animationSpec = tween(260)) }
             openingAlpha.animateTo(1f, animationSpec = tween(220))
         }
@@ -289,6 +292,7 @@ internal fun BabyAlbumSection(
                             zoom = 1f
                             panX = 0f
                             panY = 0f
+                            bitmapForPan = null
                         }
                     }
             }
@@ -381,22 +385,27 @@ internal fun BabyAlbumSection(
                             if (page == pagerState.currentPage && pageBitmap != null) bitmapForPan = pageBitmap
                         }
                         Box(
-                            Modifier.fillMaxSize()
-                                .pointerInput(pagePhoto.id) {
-                                    detectTapGestures(onDoubleTap = {
-                                        if (zoom > 1f) {
-                                            zoom = 1f
-                                            panX = 0f
-                                            panY = 0f
-                                        } else {
-                                            zoom = 2.5f
-                                            val bounded = clampPhotoPan(zoom, panX, panY)
-                                            panX = bounded.first
-                                            panY = bounded.second
-                                        }
-                                    })
-                                }
-                                .transformable(zoomState, canPan = { zoom > 1.01f }),
+                            Modifier.fillMaxSize().clipToBounds()
+                                .then(
+                                    if (page == pagerState.currentPage) {
+                                        Modifier
+                                            .pointerInput(pagePhoto.id) {
+                                                detectTapGestures(onDoubleTap = {
+                                                    if (zoom > 1f) {
+                                                        zoom = 1f
+                                                        panX = 0f
+                                                        panY = 0f
+                                                    } else {
+                                                        zoom = 2.5f
+                                                        val bounded = clampPhotoPan(zoom, panX, panY)
+                                                        panX = bounded.first
+                                                        panY = bounded.second
+                                                    }
+                                                })
+                                            }
+                                            .transformable(zoomState, canPan = { zoom > 1.01f })
+                                    } else Modifier
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             if (pageBitmap != null) {
@@ -404,10 +413,13 @@ internal fun BabyAlbumSection(
                                     pageBitmap.asImageBitmap(),
                                     contentDescription = "宝宝照片，可双指缩放、拖动查看，双击放大",
                                     modifier = Modifier.fillMaxSize().graphicsLayer {
-                                        scaleX = zoom
-                                        scaleY = zoom
-                                        translationX = panX
-                                        translationY = panY
+                                        // Neighbor pages are decoded ahead of time, but must
+                                        // never inherit the active page's zoom/pan transform.
+                                        val isActivePage = page == pagerState.currentPage
+                                        scaleX = if (isActivePage) zoom else 1f
+                                        scaleY = if (isActivePage) zoom else 1f
+                                        translationX = if (isActivePage) panX else 0f
+                                        translationY = if (isActivePage) panY else 0f
                                     },
                                     contentScale = ContentScale.Fit
                                 )
