@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
@@ -27,6 +28,8 @@ import java.util.Locale
 
 @Composable
 internal fun TrendsSummary(events: List<BabyEventEntity>) {
+    val context = LocalContext.current.applicationContext
+    val visibleFeedingMethods = remember { FeedingPreferences.enabledMethods(context) }
     var range by remember { mutableStateOf("近7天") }
     var category by remember { mutableStateOf("全部") }
     val days = when (range) { "近7天" -> 7L; "近30天" -> 30L; "近90天" -> 90L; else -> Long.MAX_VALUE }
@@ -75,12 +78,15 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SummaryPill("🍼", "记录奶量", "${milk} ml", Modifier.weight(1f))
                     SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
-                    SummaryPill("🤱", "亲喂时长", if (breastMinutes > 0) "${breastMinutes} 分钟" else "未记录", Modifier.weight(1f))
+                    if (visibleFeedingMethods.any { it == "母乳" || it == "混合喂养" }) {
+                        SummaryPill("🤱", "亲喂时长", if (breastMinutes > 0) "${breastMinutes} 分钟" else "未记录", Modifier.weight(1f))
+                    }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryPill("🤱", "母乳", "${feedingMethods["母乳"] ?: 0} 次", Modifier.weight(1f))
-                    SummaryPill("🍼", "配方奶", "${feedingMethods["配方奶"] ?: 0} 次", Modifier.weight(1f))
-                    SummaryPill("🥛", "混合喂养", "${feedingMethods["混合喂养"] ?: 0} 次", Modifier.weight(1f))
+                    visibleFeedingMethods.forEach { method ->
+                        val icon = when (method) { "母乳" -> "🤱"; "配方奶" -> "🍼"; else -> "🥛" }
+                        SummaryPill(icon, method, "${feedingMethods[method] ?: 0} 次", Modifier.weight(1f))
+                    }
                 }
             }
             if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
