@@ -247,8 +247,6 @@ internal fun BabyAlbumSection(
     viewingPhoto?.let { photo ->
         // Photo navigation follows the active album filter, matching the visible timeline.
         val currentPhotoIndex = sortedFilteredPhotos.indexOfFirst { it.id == photo.id }
-        val previousPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex - 1)
-        val nextPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex + 1)
         val viewerScope = rememberCoroutineScope()
         val openingScale = remember(photo.id) { Animatable(0.96f) }
         val openingAlpha = remember(photo.id) { Animatable(0f) }
@@ -333,9 +331,13 @@ internal fun BabyAlbumSection(
                                     detectHorizontalDragGestures(
                                         onHorizontalDrag = { _, dragAmount -> horizontalTravel += dragAmount },
                                         onDragEnd = {
-                                            when {
-                                                horizontalTravel < -72.dp.toPx() -> nextPhoto?.let { viewingPhoto = it }
-                                                horizontalTravel > 72.dp.toPx() -> previousPhoto?.let { viewingPhoto = it }
+                                            photoIndexAfterHorizontalSwipe(
+                                                currentIndex = currentPhotoIndex,
+                                                horizontalDragPx = horizontalTravel,
+                                                thresholdPx = 72.dp.toPx(),
+                                                photoCount = sortedFilteredPhotos.size
+                                            )?.let { targetIndex ->
+                                                viewingPhoto = sortedFilteredPhotos.getOrNull(targetIndex)
                                             }
                                             horizontalTravel = 0f
                                         },
