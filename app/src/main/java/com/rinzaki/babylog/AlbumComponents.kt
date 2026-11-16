@@ -654,22 +654,6 @@ private fun AlbumPhotoCard(
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))
     ) {
         Box(Modifier.fillMaxWidth().height(124.dp)) {
-            Box(
-                Modifier.align(Alignment.TopStart).padding(5.dp)
-                    .background(Color.Black.copy(alpha = 0.68f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    when {
-                        photo.originalOnDevice -> "本地原图"
-                        hasCachedOriginal -> "已缓存"
-                        else -> "云端原图"
-                    },
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
             if (bitmap != null) {
                 Image(
                     bitmap!!.asImageBitmap(),
@@ -681,6 +665,23 @@ private fun AlbumPhotoCard(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("📷", style = MaterialTheme.typography.titleLarge)
                 }
+            }
+            // Draw the status badge after the image so it stays visible on top of the thumbnail.
+            Box(
+                Modifier.align(Alignment.TopStart).padding(5.dp)
+                    .background(Color.Black.copy(alpha = 0.56f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 7.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    when {
+                        photo.originalOnDevice -> "本地原图"
+                        hasCachedOriginal -> "已缓存"
+                        else -> "云端原图"
+                    },
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
             Box(
                 Modifier.align(Alignment.BottomEnd)
