@@ -801,7 +801,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", "糊状")) }
     var stoolColor by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolColor", "黄色")) }
     var stoolAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolAmount", "中量")) }
-    var sleepMinutes by remember(existing?.id) { mutableStateOf(initialPayload.optInt("durationMinutes", 60).toFloat().coerceIn(10f, 720f)) }
+    var sleepMinutesText by remember(existing?.id) { mutableStateOf(initialPayload.optInt("durationMinutes", 60).coerceIn(10, 720).toString()) }
     var weightKg by remember(existing?.id) { mutableStateOf(initialPayload.optInt("weightGrams").takeIf { it > 0 }?.div(1000.0)?.toString().orEmpty()) }
     var lengthCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("lengthCm").takeIf { it > 0 }?.toString().orEmpty()) }
     var headCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.toString().orEmpty()) }
@@ -856,9 +856,16 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                         }
                     }
                     "SLEEP" -> {
-                        Text("睡眠时长  ${sleepMinutes.toInt()} 分钟", fontWeight = FontWeight.SemiBold)
-                        SelectionRow(listOf("30", "60", "90", "120", "180"), sleepMinutes.toInt().toString()) { sleepMinutes = it.toFloat() }
-                        Slider(sleepMinutes, { sleepMinutes = it }, valueRange = 10f..720f, steps = 70)
+                        Text("睡眠时长", fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(
+                            value = sleepMinutesText,
+                            onValueChange = { raw -> sleepMinutesText = raw.filter(Char::isDigit).take(3) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("时长（分钟）") },
+                            supportingText = { Text("可直接输入 10–720 分钟") },
+                            singleLine = true
+                        )
+                        SelectionRow(listOf("30", "60", "90", "120", "180", "240"), sleepMinutesText) { sleepMinutesText = it }
                     }
                     "GROWTH" -> {
                         OutlinedTextField(
@@ -902,7 +909,14 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                         payload.put("urine", urine).put("stool", stool)
                         if (stool) payload.put("stoolShape", stoolShape).put("stoolColor", stoolColor).put("stoolAmount", stoolAmount)
                     }
-                    "SLEEP" -> payload.put("durationMinutes", sleepMinutes.toInt())
+                    "SLEEP" -> {
+                        val duration = sleepMinutesText.toIntOrNull()
+                        if (duration == null || duration !in 10..720) {
+                            error = "睡眠时长请输入 10–720 分钟"
+                            return@Button
+                        }
+                        payload.put("durationMinutes", duration)
+                    }
                     "GROWTH" -> {
                         val weight = weightKg.toDoubleOrNull()
                         val length = lengthCm.toDoubleOrNull()
