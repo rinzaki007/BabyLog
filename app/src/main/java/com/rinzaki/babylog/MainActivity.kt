@@ -28,6 +28,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -89,6 +91,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -244,6 +247,13 @@ private fun BabyLogApp(dao: BabyLogDao) {
         }
     }
     var selectedNav by remember { mutableStateOf(0) }
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 5 })
+    LaunchedEffect(selectedNav) {
+        if (pagerState.currentPage != selectedNav) pagerState.animateScrollToPage(selectedNav)
+    }
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page -> selectedNav = page }
+    }
 
     MaterialTheme(colorScheme = WarmColors, typography = BabyLogTypography) {
         Scaffold(
@@ -267,34 +277,14 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 }
             },
         ) { scaffoldPadding ->
-            AnimatedContent(
-                targetState = selectedNav,
-                transitionSpec = {
-                    if (targetState > initialState) {
-                        (slideInHorizontally(animationSpec = tween(190)) { it / 8 } + fadeIn(tween(190))) togetherWith
-                            (slideOutHorizontally(animationSpec = tween(150)) { -it / 8 } + fadeOut(tween(150)))
-                    } else {
-                        (slideInHorizontally(animationSpec = tween(190)) { -it / 8 } + fadeIn(tween(190))) togetherWith
-                            (slideOutHorizontally(animationSpec = tween(150)) { it / 8 } + fadeOut(tween(150)))
-                    }
-                },
-                label = "main-page-transition"
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
+                beyondViewportPageCount = 1
             ) { page ->
             LazyColumn(
                 state = pageListStates[page],
-                modifier = Modifier.fillMaxSize().padding(scaffoldPadding).pointerInput(page) {
-                    var horizontalTravel = 0f
-                    val swipeThreshold = 72.dp.toPx()
-                    detectHorizontalDragGestures(
-                        onHorizontalDrag = { change, dragAmount -> horizontalTravel += dragAmount },
-                        onDragEnd = {
-                            if (horizontalTravel < -swipeThreshold) selectedNav = (page + 1).coerceAtMost(4)
-                            else if (horizontalTravel > swipeThreshold) selectedNav = (page - 1).coerceAtLeast(0)
-                            horizontalTravel = 0f
-                        },
-                        onDragCancel = { horizontalTravel = 0f }
-                    )
-                },
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
