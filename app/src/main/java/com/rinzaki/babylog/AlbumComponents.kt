@@ -438,6 +438,7 @@ internal fun BabyAlbumSection(
                         TextButton(onClick = closeViewer) { Text("关闭", color = Color.White) }
                     }
                     }
+                    }
                     Box(Modifier.fillMaxWidth().weight(1f)) {
                         HorizontalPager(
                         state = pagerState,
