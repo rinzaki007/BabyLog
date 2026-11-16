@@ -368,9 +368,10 @@ internal fun BabyAlbumSection(
                         TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("适应屏幕", color = Color.White) }
                         TextButton(onClick = closeViewer) { Text("关闭", color = Color.White) }
                     }
-                    HorizontalPager(
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        HorizontalPager(
                         state = pagerState,
-                        modifier = Modifier.fillMaxWidth().weight(1f).onSizeChanged { viewportSize = it },
+                        modifier = Modifier.fillMaxSize().onSizeChanged { viewportSize = it },
                         beyondViewportPageCount = 1,
                         userScrollEnabled = zoom <= 1.01f,
                         key = { page -> sortedFilteredPhotos[page].id }
