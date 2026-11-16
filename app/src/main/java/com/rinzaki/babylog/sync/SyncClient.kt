@@ -147,7 +147,7 @@ internal suspend fun enqueueUnassignedFamilyData(
             dao.enqueueOperation(SyncOperationEntity(
                 java.util.UUID.randomUUID().toString(), "photo", photo.id,
                 if (photo.deletedAt == null) "upsert" else "delete",
-                photoSyncPayload(photo, mimeTypeForPath(photo.localPath)).toString(),
+                photoSyncPayload(photo, photo.photoMimeType ?: mimeTypeForPath(photo.localPath)).toString(),
                 photo.serverVersion, now
             ))
         }
@@ -386,6 +386,23 @@ private suspend fun releasePhotoOriginalIfEnabled(
     // Commit the preview path first. A crash before this write leaves the original intact.
     dao.upsertPhoto(photo.copy(localPath = preview.absolutePath, originalOnDevice = false, photoMimeType = mime))
     if (original.absolutePath != preview.absolutePath) original.delete()
+}
+
+private suspend fun restorePhotoOriginalIfDisabled(context: Context, dao: BabyLogDao, photoId: String) {
+    val photo = dao.getPhoto(photoId) ?: return
+    if (photo.originalOnDevice || photo.deletedAt != null || photo.serverVersion == null || photo.syncStatus != "SYNCED") return
+    val mime = photo.photoMimeType ?: "image/jpeg"
+    val extension = extensionForMime(mime)
+    val original = File(context.filesDir, "baby_album/$photoId$extension")
+    SyncHttp.downloadPhoto(
+        SyncPreferences.server(context),
+        SyncPreferences.familyId(context),
+        photoId,
+        SyncPreferences.token(context),
+        original
+    )
+    dao.upsertPhoto(photo.copy(localPath = original.absolutePath, originalOnDevice = true, photoMimeType = mime))
+    File(photo.localPath).takeIf { it.absolutePath != original.absolutePath }?.delete()
 }
 
 object SyncScheduler {
@@ -639,6 +656,17 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 // their cursor positions. Use scanned_count, not visible items,
                 // to decide whether another page is available.
                 if (pulled.optInt("scanned_count", items.length()) < 500) break
+            }
+            // Apply the per-device storage policy to already-synced photos too.
+            // Never convert a photo while a local write is still queued.
+            for (photo in dao.getAllPhotos()) {
+                if (photo.deletedAt != null || photo.serverVersion == null || photo.syncStatus != "SYNCED") continue
+                if (dao.hasLocalOperation("photo", photo.id)) continue
+                if (SyncPreferences.cloudPhotoStorageEnabled(applicationContext)) {
+                    releasePhotoOriginalIfEnabled(applicationContext, dao, photo.id)
+                } else if (!photo.originalOnDevice) {
+                    runCatching { restorePhotoOriginalIfDisabled(applicationContext, dao, photo.id) }
+                }
             }
             val remainingPending = dao.pendingOperationCount()
             require(remainingPending == 0) {
