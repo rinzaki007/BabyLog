@@ -273,6 +273,34 @@ internal fun BabyAlbumSection(
             var panY by remember(photo.id) { mutableStateOf(0f) }
             var viewportSize by remember(photo.id) { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
             var bitmapForPan by remember(photo.id) { mutableStateOf<android.graphics.Bitmap?>(null) }
+            // Keep only the current photo and its immediate neighbors decoded. This avoids
+            // decoding a full-resolution image after the user has already swiped to it.
+            val photoBitmapCache = remember { mutableStateMapOf<Long, android.graphics.Bitmap>() }
+            LaunchedEffect(currentPhotoIndex, sortedFilteredPhotos) {
+                val nearbyIndices = (currentPhotoIndex - 1..currentPhotoIndex + 1)
+                    .filter { it in sortedFilteredPhotos.indices }
+                val nearbyIds = nearbyIndices.map { sortedFilteredPhotos[it].id }.toSet()
+                photoBitmapCache.keys.toList().filterNot { it in nearbyIds }.forEach(photoBitmapCache::remove)
+
+                val current = sortedFilteredPhotos.getOrNull(currentPhotoIndex)
+                if (current != null && current.id !in photoBitmapCache) {
+                    val bitmap = withContext(Dispatchers.IO) {
+                        runCatching { decodeSampledPhoto(current.localPath, 1600, 2000) }.getOrNull()
+                    }
+                    if (bitmap != null) photoBitmapCache[current.id] = bitmap
+                }
+                nearbyIndices.filter { it != currentPhotoIndex }.forEach { index ->
+                    val neighbor = sortedFilteredPhotos[index]
+                    if (neighbor.id !in photoBitmapCache) {
+                        launch {
+                            val bitmap = withContext(Dispatchers.IO) {
+                                runCatching { decodeSampledPhoto(neighbor.localPath, 1600, 2000) }.getOrNull()
+                            }
+                            if (bitmap != null) photoBitmapCache[neighbor.id] = bitmap
+                        }
+                    }
+                }
+            }
             fun clampPhotoPan(nextZoom: Float, x: Float, y: Float): Pair<Float, Float> {
                 val image = bitmapForPan
                 if (nextZoom <= 1f || image == null || viewportSize.width == 0 || viewportSize.height == 0) return 0f to 0f
@@ -372,12 +400,7 @@ internal fun BabyAlbumSection(
                             label = "photo-swipe-transition"
                         ) { targetPhotoId ->
                             val targetPhoto = sortedFilteredPhotos.firstOrNull { it.id == targetPhotoId } ?: photo
-                            val targetBitmapResult by produceState<Result<android.graphics.Bitmap?>?>(initialValue = null, targetPhoto.localPath) {
-                                value = withContext(Dispatchers.IO) {
-                                    runCatching { decodeSampledPhoto(targetPhoto.localPath, 1600, 2000) }
-                                }
-                            }
-                            val targetBitmap = targetBitmapResult?.getOrNull()
+                            val targetBitmap = photoBitmapCache[targetPhoto.id]
                             LaunchedEffect(targetPhotoId, targetBitmap) {
                                 if (targetBitmap != null) bitmapForPan = targetBitmap
                             }
@@ -396,7 +419,7 @@ internal fun BabyAlbumSection(
                                     )
                                 } else {
                                     Text(
-                                        if (targetBitmapResult == null) "正在加载照片…" else "照片暂时无法读取",
+                                        if (targetPhoto.id !in photoBitmapCache) "正在加载照片…" else "照片暂时无法读取",
                                         color = Color.White
                                     )
                                 }
