@@ -592,8 +592,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
 }
 
-}
-
 @Composable
 private fun BabyProfileEditor(
     existing: BabyEntity?,
