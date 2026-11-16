@@ -238,6 +238,9 @@ internal fun BabyAlbumSection(
                     Text(if (loadingMorePhotos) "正在加载…" else "加载更多照片（已加载 ${loadedPhotos.size}/${photoCount} 张）")
                 }
             }
+            galleryMessage?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 
