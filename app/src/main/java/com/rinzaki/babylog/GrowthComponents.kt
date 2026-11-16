@@ -134,7 +134,7 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            SelectionRow(listOf("喂养奶量", "喂养次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
+            SelectionRow(listOf("喂养奶量", "喂养次数", "补充次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
             Canvas(
                 Modifier.fillMaxWidth().height(150.dp).pointerInput(points) {
                     detectTapGestures { tap ->
