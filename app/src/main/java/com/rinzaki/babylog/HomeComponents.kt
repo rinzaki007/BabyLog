@@ -75,7 +75,7 @@ internal fun TodaySummary(events: List<BabyEventEntity>) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 SummaryPill("🍼", "喂养", "${feeding.size} 次", Modifier.weight(1f))
-                SummaryPill("🥛", "瓶喂奶量", "${milk} ml", Modifier.weight(1f))
+                SummaryPill("🥛", "记录奶量", "${milk} ml", Modifier.weight(1f))
                 SummaryPill("🌙", "睡眠", sleepLabel, Modifier.weight(1f))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
