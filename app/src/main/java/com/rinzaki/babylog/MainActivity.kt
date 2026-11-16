@@ -806,8 +806,9 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var weightKg by remember(existing?.id) { mutableStateOf(initialPayload.optInt("weightGrams").takeIf { it > 0 }?.div(1000.0)?.toString().orEmpty()) }
     var lengthCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("lengthCm").takeIf { it > 0 }?.toString().orEmpty()) }
     var headCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.toString().orEmpty()) }
-    var supplementName by remember(existing?.id) { mutableStateOf(initialPayload.optString("supplementName", "维生素AD")) }
-    var customSupplementName by remember(existing?.id) { mutableStateOf(initialPayload.optString("supplementName").takeIf { it !in supplementPresets } ?: "") }
+    val savedSupplementName = initialPayload.optString("supplementName", "维生素AD")
+    var supplementName by remember(existing?.id) { mutableStateOf(if (savedSupplementName in supplementPresets) savedSupplementName else "其他") }
+    var customSupplementName by remember(existing?.id) { mutableStateOf(savedSupplementName.takeIf { it !in supplementPresets } ?: "") }
     var supplementAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("amount")) }
     var supplementUnit by remember(existing?.id) { mutableStateOf(initialPayload.optString("unit", "滴")) }
     var note by remember(existing?.id) { mutableStateOf(initialPayload.optString("note")) }
@@ -889,19 +890,15 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                             )
                         }
                         Text("补充数量（可选）", fontWeight = FontWeight.SemiBold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
-                                value = supplementAmount,
-                                onValueChange = { raw -> supplementAmount = raw.filter { it.isDigit() || it == '.' }.take(8) },
-                                modifier = Modifier.weight(1f),
-                                label = { Text("数量") },
-                                singleLine = true
-                            )
-                            Column(Modifier.weight(1f)) {
-                                Text("单位", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                SelectionRow(supplementUnits, supplementUnit) { supplementUnit = it }
-                            }
-                        }
+                        OutlinedTextField(
+                            value = supplementAmount,
+                            onValueChange = { raw -> supplementAmount = raw.filter { it.isDigit() || it == '.' }.take(8) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("数量") },
+                            singleLine = true
+                        )
+                        Text("单位", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SelectionRow(supplementUnits, supplementUnit) { supplementUnit = it }
                         Text("这里只记录实际补充情况，不提供剂量建议；具体用量请遵照医生或产品说明。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     "GROWTH" -> {
