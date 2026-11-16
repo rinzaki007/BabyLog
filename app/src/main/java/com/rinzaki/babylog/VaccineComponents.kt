@@ -181,6 +181,7 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
     var editorInitialName by remember { mutableStateOf("") }
     var editorInitialDose by remember { mutableStateOf("") }
     var visibleHistoryCount by remember { mutableStateOf(6) }
+    var showHistory by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("疫苗接种档案", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("独立管理宝宝每一次接种，方便长期查询和核对。", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -215,8 +216,16 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
                 }
             }
         } else {
-            Text("接种历史", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            events.sortedByDescending { it.occurredAt }.take(visibleHistoryCount).forEach { event ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("接种历史", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("共 ${events.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(onClick = { showHistory = !showHistory }) {
+                    Text(if (showHistory) "收起历史" else "展开历史")
+                }
+            }
+            if (showHistory) events.sortedByDescending { it.occurredAt }.take(visibleHistoryCount).forEach { event ->
                 val data = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
                 Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
