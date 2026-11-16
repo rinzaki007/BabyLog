@@ -280,7 +280,7 @@ internal fun BabyAlbumSection(
                 val nearbyIndices = (currentPhotoIndex - 1..currentPhotoIndex + 1)
                     .filter { it in sortedFilteredPhotos.indices }
                 val nearbyIds = nearbyIndices.map { sortedFilteredPhotos[it].id }.toSet()
-                photoBitmapCache.keys.toList().filterNot { it in nearbyIds }.forEach(photoBitmapCache::remove)
+                photoBitmapCache.keys.toList().filterNot { it in nearbyIds }.forEach { photoBitmapCache.remove(it) }
 
                 val current = sortedFilteredPhotos.getOrNull(currentPhotoIndex)
                 if (current != null && current.id !in photoBitmapCache) {
