@@ -68,12 +68,17 @@ class SyncConflictRecoveryTest {
                 dao.conflictOperations().map { it.operationId }.toSet()
             )
 
-            assertEquals(4, dao.clearSyncOperationsForFamily("family-a"))
+            // A local edit made after the snapshot began must survive snapshot cleanup.
+            dao.enqueueOperation(SyncOperationEntity(
+                "new-event-op", "event", "event-a", "upsert", "{}", null, 5_000L
+            ))
+            assertEquals(4, dao.clearSyncOperationsForFamily("family-a", 4_500L))
             assertEquals(
                 setOf("baby-b-op"),
                 dao.conflictOperations().map { it.operationId }.toSet()
             )
-            assertEquals(0, dao.pendingOperationCount())
+            assertEquals(setOf("new-event-op"), dao.pendingOperations().map { it.operationId }.toSet())
+            assertEquals(1, dao.pendingOperationCount())
         } finally {
             database.close()
         }
