@@ -396,7 +396,7 @@ internal fun BabyAlbumSection(
                                         }
                                     })
                                 }
-                                .transformable(zoomState),
+                                .transformable(zoomState, canPan = { zoom > 1.01f }),
                             contentAlignment = Alignment.Center
                         ) {
                             if (pageBitmap != null) {
