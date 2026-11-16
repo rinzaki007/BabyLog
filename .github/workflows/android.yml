@@ -52,12 +52,12 @@ jobs:
           changed="$(git diff --name-only "$BASE...$HEAD")"
           echo "Changed files:"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '(^app/src/androidTest/|^app/src/main/java/.*/data/|(^|/)(BabyLogDatabase|BabyLogDao|.*Migration.*)\.kt$|^app/build\.gradle\.kts$|^gradle/libs\.versions\.toml$|^build\.gradle\.kts$)'; then
+          if printf '%s\n' "$changed" | grep -Eq '(^app/src/androidTest/|^app/src/main/java/.*/data/|(^|/)(BabyLogDatabase|BabyLogDao|.*Migration.*)\.kt$|^app/src/main/res/(mipmap|drawable|values)/.*ic_launcher|^app/build\.gradle\.kts$|^gradle/libs\.versions\.toml$|^build\.gradle\.kts$)'; then
             echo "required=true" >> "$GITHUB_OUTPUT"
-            echo "Database-related files changed; instrumentation tests are required."
+            echo "Database or launcher-icon resources changed; Android instrumentation tests are required."
           else
             echo "required=false" >> "$GITHUB_OUTPUT"
-            echo "No database-related files changed; emulator startup is skipped."
+            echo "No database or launcher-icon files changed; emulator startup is skipped."
           fi
       - uses: actions/setup-java@v4
         with:
