@@ -32,6 +32,7 @@ fun dailyTrendPoints(
             val value = when (metric) {
                 "喂养奶量" -> if (event.eventType == "FEEDING") payload.optInt("amountMl").coerceAtLeast(0).toFloat() else 0f
                 "喂养次数" -> if (event.eventType == "FEEDING") 1f else 0f
+                "补充次数" -> if (event.eventType == "SUPPLEMENT") 1f else 0f
                 "小便次数" -> if (event.eventType == "DIAPER" && payload.optBoolean("urine")) 1f else 0f
                 "大便次数" -> if (event.eventType == "DIAPER" && payload.optBoolean("stool")) 1f else 0f
                 "睡眠小时" -> if (event.eventType == "SLEEP") payload.optInt("durationMinutes").coerceAtLeast(0) / 60f else 0f
