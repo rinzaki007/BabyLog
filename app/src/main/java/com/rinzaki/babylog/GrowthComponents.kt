@@ -37,7 +37,8 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
     var category by remember { mutableStateOf("全部") }
     val days = when (range) { "近7天" -> 7L; "近30天" -> 30L; "近90天" -> 90L; else -> Long.MAX_VALUE }
     val start = if (days == Long.MAX_VALUE) 0L else LocalDate.now().minusDays(days - 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val ranged = events.filter { it.occurredAt >= start }
+    val now = System.currentTimeMillis()
+    val ranged = events.filter { it.deletedAt == null && it.occurredAt >= start && it.occurredAt <= now }
     val recent = ranged.filter { event ->
         when (category) {
             "喂养" -> event.eventType == "FEEDING"
