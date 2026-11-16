@@ -786,7 +786,8 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 } else {
                     val mime = payload.optString("mimeType", "image/jpeg")
                     val extension = extensionForMime(mime)
-                    val unchanged = existing != null && existing.serverVersion == version
+                    val existingFileAvailable = existing?.let { File(it.localPath).isFile } == true
+                    val unchanged = existing != null && existing.serverVersion == version && existingFileAvailable
                     var storedPath = if (unchanged) existing!!.localPath else ""
                     var downloadedOriginalToDelete: File? = null
                     var originalOnDevice = unchanged && existing!!.originalOnDevice
