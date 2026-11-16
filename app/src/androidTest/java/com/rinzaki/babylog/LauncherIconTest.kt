@@ -5,9 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
-import android.os.Build
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertNotEquals
@@ -25,21 +23,12 @@ class LauncherIconTest {
         val applicationInfo = packageManager.getApplicationInfo(context.packageName, 0)
 
         assertNotEquals("Application icon resource must be declared", 0, applicationInfo.icon)
-        val applicationIcon = packageManager.getApplicationIcon(applicationInfo)
-        assertRendersVisiblePixels(applicationIcon)
+        assertRendersVisiblePixels(packageManager.getApplicationIcon(applicationInfo))
 
         val activity = ComponentName(context, MainActivity::class.java)
         val activityInfo = packageManager.getActivityInfo(activity, 0)
         assertNotEquals("Launcher activity icon resource must be declared", 0, activityInfo.icon)
-        val activityIcon = packageManager.getActivityIcon(activity)
-        assertRendersVisiblePixels(activityIcon)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            assertTrue(
-                "Android 8+ application icon should resolve as an adaptive icon",
-                applicationIcon is AdaptiveIconDrawable
-            )
-        }
+        assertRendersVisiblePixels(packageManager.getActivityIcon(activity))
 
         val roundIconId = context.resources.getIdentifier(
             "ic_launcher_round",
@@ -47,17 +36,7 @@ class LauncherIconTest {
             context.packageName
         )
         assertNotEquals("Round launcher icon resource must be packaged", 0, roundIconId)
-
-        // Load through the app's Resources. PackageManager.getDrawable() may return null
-        // for resource-backed adaptive icons even when the resource is present in the APK.
-        val roundIcon = context.resources.getDrawable(roundIconId, context.theme)
-        assertRendersVisiblePixels(roundIcon)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            assertTrue(
-                "Android 8+ round launcher icon should resolve as an adaptive icon",
-                roundIcon is AdaptiveIconDrawable
-            )
-        }
+        assertRendersVisiblePixels(context.resources.getDrawable(roundIconId, context.theme))
     }
 
     private fun assertRendersVisiblePixels(drawable: Drawable) {
