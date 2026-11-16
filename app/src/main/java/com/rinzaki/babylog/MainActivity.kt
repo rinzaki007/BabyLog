@@ -266,7 +266,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
             },
         ) { scaffoldPadding ->
             AnimatedContent(
-                targetState = page,
+                targetState = selectedNav,
                 transitionSpec = {
                     if (targetState > initialState) {
                         (slideInHorizontally(animationSpec = tween(190)) { it / 8 } + fadeIn(tween(190))) togetherWith
@@ -287,7 +287,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         onHorizontalDrag = { change, dragAmount -> horizontalTravel += dragAmount },
                         onDragEnd = {
                             if (horizontalTravel < -swipeThreshold) selectedNav = (page + 1).coerceAtMost(4)
-                            else if (horizontalTravel > swipeThreshold) page = (page - 1).coerceAtLeast(0)
+                            else if (horizontalTravel > swipeThreshold) selectedNav = (page - 1).coerceAtLeast(0)
                             horizontalTravel = 0f
                         },
                         onDragCancel = { horizontalTravel = 0f }
