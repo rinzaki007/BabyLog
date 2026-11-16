@@ -411,12 +411,12 @@ internal fun BabyAlbumSection(
                 }
             ) {
                 Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxWidth().height(58.dp)) {
                     AnimatedVisibility(
                         visible = showViewerChrome,
                         enter = fadeIn(animationSpec = tween(180)),
                         exit = fadeOut(animationSpec = tween(160))
                     ) {
-                    Box(Modifier.fillMaxWidth().height(58.dp)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             AnimatedContent(
@@ -436,7 +436,6 @@ internal fun BabyAlbumSection(
                         Text("${pagerState.currentPage + 1} / ${sortedFilteredPhotos.size}", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                         TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("适应屏幕", color = Color.White) }
                         TextButton(onClick = closeViewer) { Text("关闭", color = Color.White) }
-                    }
                     }
                     }
                     Box(Modifier.fillMaxWidth().weight(1f)) {
