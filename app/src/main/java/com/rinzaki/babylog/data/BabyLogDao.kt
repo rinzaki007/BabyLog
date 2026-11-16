@@ -17,6 +17,7 @@ interface BabyLogDao {
         SELECT * FROM baby_events
         WHERE babyId = :babyId
           AND deletedAt IS NULL
+          AND eventType != 'VACCINE'
           AND (:startAt IS NULL OR occurredAt >= :startAt)
           AND (:endAt IS NULL OR occurredAt < :endAt)
           AND (
@@ -33,6 +34,7 @@ interface BabyLogDao {
         SELECT COUNT(*) FROM baby_events
         WHERE babyId = :babyId
           AND deletedAt IS NULL
+          AND eventType != 'VACCINE'
           AND (:startAt IS NULL OR occurredAt >= :startAt)
           AND (:endAt IS NULL OR occurredAt < :endAt)
           AND (
