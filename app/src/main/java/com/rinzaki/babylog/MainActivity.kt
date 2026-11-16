@@ -843,25 +843,14 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
         confirmButton = {
             Button(onClick = {
                 val timestamp = date.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                val payload = JSONObject()
+                var payload = JSONObject()
                 when (eventType) {
                     "FEEDING" -> {
-                        payload.put("method", feedingMethod)
-                        if (feedingMethod != "母乳" || amountText.isNotBlank()) {
-                            val amountMl = amountText.toIntOrNull()
-                            if (amountMl == null || amountMl !in 1..1000) {
-                                error = "请输入 1–1000 ml 的奶量"
-                                return@Button
-                            }
-                            payload.put("amountMl", amountMl)
-                        }
-                        if (feedingMethod != "配方奶" && breastMinutes.isNotBlank()) {
-                            val minutes = breastMinutes.toIntOrNull()
-                            if (minutes == null || minutes !in 1..180) {
-                                error = "亲喂时长请填写 1–180 分钟"
-                                return@Button
-                            }
-                            payload.put("breastMinutes", minutes)
+                        payload = try {
+                            buildFeedingPayload(feedingMethod, amountText, breastMinutes)
+                        } catch (validation: IllegalArgumentException) {
+                            error = validation.message
+                            return@Button
                         }
                     }
                     "DIAPER" -> {
@@ -955,13 +944,7 @@ internal fun SelectionRow(options: List<String>, selected: String, onSelect: (St
 private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onEdit: () -> Unit, onDelete: () -> Unit) {
     val payload = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
     val (emoji, title, detail) = when (event.eventType) {
-        "FEEDING" -> {
-            val method = payload.optString("method", "配方奶").ifBlank { "配方奶" }
-            val amount = payload.optInt("amountMl").takeIf { it > 0 }?.let { "${it} ml" }
-            val duration = payload.optInt("breastMinutes").takeIf { it > 0 }?.let { "亲喂 ${it} 分钟" }
-            val detail = listOf(method, amount, duration).filterNotNull().joinToString(" · ")
-            Triple("🍼", "喂养", detail)
-        }
+        "FEEDING" -> Triple("🍼", "喂养", feedingDescription(event.payloadJson))
         "DIAPER" -> {
             val details = mutableListOf<String>()
             if (payload.optBoolean("urine")) details.add("小便")
