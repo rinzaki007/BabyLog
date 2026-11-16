@@ -192,6 +192,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var showEndDatePicker by remember { mutableStateOf(false) }
     val vaccineEvents = events.filter { it.eventType == "VACCINE" }
     val normalEvents = events.filter { it.eventType != "VACCINE" }
+    var timelineLimit by remember { mutableStateOf(100) }
+    LaunchedEffect(selectedEventFilter, selectedStartDate, selectedEndDate, baby?.id) { timelineLimit = 100 }
     val filteredEvents = normalEvents.filter { event ->
         val eventDate = java.time.Instant.ofEpochMilli(event.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate()
         val inDateRange = (selectedStartDate == null || !eventDate.isBefore(selectedStartDate)) &&
@@ -205,6 +207,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
             else -> true
         }
     }
+    val visibleEvents = filteredEvents.take(timelineLimit)
     LaunchedEffect(Unit) {
         if (SyncPreferences.familyId(appContext).isNotBlank()) SyncScheduler.schedule(appContext)
         var lastForegroundSync = 0L
@@ -462,10 +465,16 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                         }
-                    } else if (selectedNav == 1) items(filteredEvents, key = { it.id }) { event ->
+                    } else if (selectedNav == 1) items(visibleEvents, key = { it.id }) { event ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                             EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
                         }
+                    }
+                    if (selectedNav == 1 && filteredEvents.size > timelineLimit) item {
+                        OutlinedButton(
+                            onClick = { timelineLimit = (timelineLimit + 100).coerceAtMost(filteredEvents.size) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("加载更多记录（已显示 ${visibleEvents.size} / ${filteredEvents.size}）") }
                     }
                     if (selectedNav == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
