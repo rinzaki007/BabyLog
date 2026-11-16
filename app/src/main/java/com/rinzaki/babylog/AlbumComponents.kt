@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -287,6 +288,7 @@ internal fun BabyAlbumSection(
             onDismissRequest = closeViewer,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
+            var showViewerChrome by remember(photo.id) { mutableStateOf(true) }
             var zoom by remember(photo.id) { mutableStateOf(1f) }
             var panX by remember(photo.id) { mutableStateOf(0f) }
             var panY by remember(photo.id) { mutableStateOf(0f) }
@@ -394,6 +396,11 @@ internal fun BabyAlbumSection(
                 }
             ) {
                 Column(Modifier.fillMaxSize()) {
+                    AnimatedVisibility(
+                        visible = showViewerChrome,
+                        enter = fadeIn(animationSpec = tween(180)),
+                        exit = fadeOut(animationSpec = tween(160))
+                    ) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             AnimatedContent(
@@ -414,6 +421,7 @@ internal fun BabyAlbumSection(
                         TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("适应屏幕", color = Color.White) }
                         TextButton(onClick = closeViewer) { Text("关闭", color = Color.White) }
                     }
+                    }
                     Box(Modifier.fillMaxWidth().weight(1f)) {
                         HorizontalPager(
                         state = pagerState,
@@ -430,18 +438,21 @@ internal fun BabyAlbumSection(
                                     if (page == pagerState.currentPage) {
                                         Modifier
                                             .pointerInput(pagePhoto.id) {
-                                                detectTapGestures(onDoubleTap = {
-                                                    if (zoom > 1f) {
-                                                        zoom = 1f
-                                                        panX = 0f
-                                                        panY = 0f
-                                                    } else {
-                                                        zoom = 2.5f
-                                                        val bounded = clampPhotoPan(zoom, panX, panY)
-                                                        panX = bounded.first
-                                                        panY = bounded.second
+                                                detectTapGestures(
+                                                    onTap = { showViewerChrome = !showViewerChrome },
+                                                    onDoubleTap = {
+                                                        if (zoom > 1f) {
+                                                            zoom = 1f
+                                                            panX = 0f
+                                                            panY = 0f
+                                                        } else {
+                                                            zoom = 2.5f
+                                                            val bounded = clampPhotoPan(zoom, panX, panY)
+                                                            panX = bounded.first
+                                                            panY = bounded.second
+                                                        }
                                                     }
-                                                })
+                                                )
                                             }
                                             .transformable(zoomState, canPan = { zoom > 1.01f })
                                     } else Modifier
@@ -471,28 +482,39 @@ internal fun BabyAlbumSection(
                             }
                         }
                     }
-                        Text(
-                            if (zoom > 1.01f) "双指缩放 · 拖动查看 · 双击还原" else "左右滑动切换 · 双指缩放 · 双击放大",
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
-                            color = Color.LightGray,
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                        if (showViewerChrome) {
+                            Text(
+                                if (zoom > 1.01f) "轻触照片隐藏工具栏 · 双指缩放 · 拖动查看 · 双击还原"
+                                else "轻触照片隐藏工具栏 · 左右滑动切换 · 双指缩放 · 双击放大",
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                                color = Color.LightGray,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
                     }
-                    Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                        galleryMessage?.let { Text(it, color = Color(0xFFD7C9F4), style = MaterialTheme.typography.bodySmall) }
-                    }
-                    Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
-                        TextButton(onClick = {
-                            albumScope.launch {
-                                galleryMessage = runCatching {
-                                    withContext(Dispatchers.IO) { savePhotoToGallery(context, photoOriginalCache[activePhoto.id] ?: activePhoto.localPath) }
-                                    "已保存到手机相册"
-                                }.getOrElse { "保存失败：${it.message}" }
+                    AnimatedVisibility(
+                        visible = showViewerChrome,
+                        enter = fadeIn(animationSpec = tween(180)),
+                        exit = fadeOut(animationSpec = tween(160))
+                    ) {
+                        Column {
+                            Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                                galleryMessage?.let { Text(it, color = Color(0xFFD7C9F4), style = MaterialTheme.typography.bodySmall) }
                             }
-                        }) { Text("保存到手机", color = Color.White) }
-                        TextButton(onClick = { deletingPhoto = activePhoto; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
+                            Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
+                                TextButton(onClick = {
+                                    albumScope.launch {
+                                        galleryMessage = runCatching {
+                                            withContext(Dispatchers.IO) { savePhotoToGallery(context, photoOriginalCache[activePhoto.id] ?: activePhoto.localPath) }
+                                            "已保存到手机相册"
+                                        }.getOrElse { "保存失败：" + (it.message ?: "未知错误") }
+                                    }
+                                }) { Text("保存到手机", color = Color.White) }
+                                TextButton(onClick = { deletingPhoto = activePhoto; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
+                            }
+                        }
                     }
                 }
             }
@@ -654,22 +676,6 @@ private fun AlbumPhotoCard(
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))
     ) {
         Box(Modifier.fillMaxWidth().height(124.dp)) {
-            Box(
-                Modifier.align(Alignment.TopStart).padding(5.dp)
-                    .background(Color.Black.copy(alpha = 0.68f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    when {
-                        photo.originalOnDevice -> "本地原图"
-                        hasCachedOriginal -> "已缓存"
-                        else -> "云端原图"
-                    },
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
             if (bitmap != null) {
                 Image(
                     bitmap!!.asImageBitmap(),
@@ -681,6 +687,23 @@ private fun AlbumPhotoCard(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("📷", style = MaterialTheme.typography.titleLarge)
                 }
+            }
+            // Draw the status badge after the image so it stays visible on top of the thumbnail.
+            Box(
+                Modifier.align(Alignment.TopStart).padding(5.dp)
+                    .background(Color.Black.copy(alpha = 0.56f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 7.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    when {
+                        photo.originalOnDevice -> "本地原图"
+                        hasCachedOriginal -> "已缓存"
+                        else -> "云端原图"
+                    },
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
             Box(
                 Modifier.align(Alignment.BottomEnd)
