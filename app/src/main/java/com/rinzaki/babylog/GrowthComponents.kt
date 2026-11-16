@@ -41,8 +41,15 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
             else -> true
         }
     }
-    val milk = recent.filter { it.eventType == "FEEDING" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0) }
-    val feedCount = recent.count { it.eventType == "FEEDING" }
+    val feedingEvents = recent.filter { it.eventType == "FEEDING" }
+    val milk = feedingEvents.sumOf { runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0) }
+    val feedCount = feedingEvents.size
+    val feedingMethods = feedingEvents.groupingBy {
+        runCatching { JSONObject(it.payloadJson).optString("method", "配方奶").ifBlank { "配方奶" } }.getOrDefault("配方奶")
+    }.eachCount()
+    val breastMinutes = feedingEvents.sumOf {
+        runCatching { JSONObject(it.payloadJson).optInt("breastMinutes") }.getOrDefault(0)
+    }
     val peeCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("urine") }.getOrDefault(false) }
     val stoolCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
     val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0) }
@@ -64,9 +71,17 @@ internal fun TrendsSummary(events: List<BabyEventEntity>) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
             }
-            if (category == "全部" || category == "喂养") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryPill("🍼", "配方奶总量", "${milk} ml", Modifier.weight(1f))
-                SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
+            if (category == "全部" || category == "喂养") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryPill("🍼", "记录奶量", "${milk} ml", Modifier.weight(1f))
+                    SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
+                    SummaryPill("🤱", "亲喂时长", "${breastMinutes} 分钟", Modifier.weight(1f))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryPill("🤱", "母乳", "${feedingMethods["母乳"] ?: 0} 次", Modifier.weight(1f))
+                    SummaryPill("🍼", "配方奶", "${feedingMethods["配方奶"] ?: 0} 次", Modifier.weight(1f))
+                    SummaryPill("🥛", "混合喂养", "${feedingMethods["混合喂养"] ?: 0} 次", Modifier.weight(1f))
+                }
             }
             if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
