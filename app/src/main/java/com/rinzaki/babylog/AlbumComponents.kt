@@ -76,6 +76,10 @@ internal fun BabyAlbumSection(
 ) {
     var deletingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var viewingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
+    var photoCacheRefreshKey by remember { mutableStateOf(0) }
+    LaunchedEffect(viewingPhoto) {
+        if (viewingPhoto == null) photoCacheRefreshKey++
+    }
     var editingCaption by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var photoDateTime by remember { mutableStateOf(LocalDateTime.now()) }
     val photoDateTimeLabel = remember(photoDateTime) {
@@ -137,6 +141,13 @@ internal fun BabyAlbumSection(
         SelectionRow(listOf("全部", "近7天", "近30天", "本月", "指定日期"), albumFilter) { selected ->
             albumFilter = selected
             if (selected == "指定日期") showPhotoDatePicker = true
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("照片角标说明：本地原图 · 已缓存 · 云端原图", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (albumFilter == "指定日期" && selectedPhotoDate != null) {
             Text("已筛选：${selectedPhotoDate!!.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
@@ -213,6 +224,7 @@ internal fun BabyAlbumSection(
                                 rowPhotos.forEach { photo ->
                                     AlbumPhotoCard(
                                         photo = photo,
+                                        cacheRefreshKey = photoCacheRefreshKey,
                                         onClick = {
                                             viewingPhoto = photo
                                             galleryMessage = null
@@ -623,11 +635,14 @@ private fun decodeSampledPhoto(path: String, reqWidth: Int, reqHeight: Int): and
 @Composable
 private fun AlbumPhotoCard(
     photo: BabyPhotoEntity,
+    cacheRefreshKey: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val hasCachedOriginal = !photo.originalOnDevice && photoOriginalCacheFile(context.cacheDir, photo).isFile
+    val hasCachedOriginal = remember(photo.id, photo.originalOnDevice, cacheRefreshKey) {
+        !photo.originalOnDevice && photoOriginalCacheFile(context.cacheDir, photo).isFile
+    }
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
         value = withContext(Dispatchers.IO) {
             runCatching { decodeSampledPhoto(photo.localPath, 360, 360) }.getOrNull()
@@ -639,18 +654,21 @@ private fun AlbumPhotoCard(
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))
     ) {
         Box(Modifier.fillMaxWidth().height(124.dp)) {
-            if (!photo.originalOnDevice) {
-                Box(
-                    Modifier.align(Alignment.TopStart).padding(5.dp)
-                        .background(Color.Black.copy(alpha = 0.62f), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 6.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        if (hasCachedOriginal) "☁ 已缓存" else "☁ 云端原图",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
+            Box(
+                Modifier.align(Alignment.TopStart).padding(5.dp)
+                    .background(Color.Black.copy(alpha = 0.68f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    when {
+                        photo.originalOnDevice -> "本地原图"
+                        hasCachedOriginal -> "已缓存"
+                        else -> "云端原图"
+                    },
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
             if (bitmap != null) {
                 Image(
