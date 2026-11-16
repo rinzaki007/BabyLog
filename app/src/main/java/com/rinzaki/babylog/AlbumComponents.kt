@@ -325,6 +325,15 @@ internal fun BabyAlbumSection(
                     Box(
                         Modifier.fillMaxWidth().weight(1f)
                             .onSizeChanged { viewportSize = it }
+                            .pointerInput(photo.id) {
+                                detectTapGestures(onDoubleTap = {
+                                    if (zoom > 1f) { zoom = 1f; panX = 0f; panY = 0f } else { zoom = 2.5f; val bounded = clampPhotoPan(zoom, panX, panY); panX = bounded.first; panY = bounded.second }
+                                })
+                            }
+                            .transformable(zoomState)
+                            // Keep the swipe detector inside the transformable modifier in the
+                            // pointer-input chain. Otherwise transformable consumes horizontal
+                            // drag changes before the gallery navigation detector can observe them.
                             .pointerInput(photo.id, zoom) {
                                 if (zoom <= 1.01f) {
                                     var horizontalTravel = 0f
@@ -344,13 +353,7 @@ internal fun BabyAlbumSection(
                                         onDragCancel = { horizontalTravel = 0f }
                                     )
                                 }
-                            }
-                            .pointerInput(photo.id) {
-                                detectTapGestures(onDoubleTap = {
-                                    if (zoom > 1f) { zoom = 1f; panX = 0f; panY = 0f } else { zoom = 2.5f; val bounded = clampPhotoPan(zoom, panX, panY); panX = bounded.first; panY = bounded.second }
-                                })
-                            }
-                            .transformable(zoomState),
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         if (bitmap != null) {
