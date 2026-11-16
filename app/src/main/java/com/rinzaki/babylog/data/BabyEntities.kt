@@ -52,7 +52,9 @@ data class BabyPhotoEntity(
     val syncStatus: String = "PENDING",
     val remotePath: String? = null,
     val deletedAt: Long? = null,
-    val serverVersion: Long? = null
+    val serverVersion: Long? = null,
+    val originalOnDevice: Boolean = true,
+    val photoMimeType: String? = null
 )
 
 @Entity(tableName = "sync_operations", indices = [Index("createdAt"), Index("status")])
