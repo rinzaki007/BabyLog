@@ -15,6 +15,9 @@ updates:
         versions: [">= 1.19.0"]
       - dependency-name: "androidx.compose:compose-bom"
         versions: [">= 2026.09.00"]
+      # KSP 2.3.x requires AGP 8.12.0+, while this project remains on AGP 8.9.2.
+      - dependency-name: "com.google.devtools.ksp"
+        versions: [">= 2.3.0"]
 
   - package-ecosystem: pip
     directory: /server
