@@ -7,9 +7,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -49,6 +50,8 @@ import com.rinzaki.babylog.sync.mimeTypeForPath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.snapshotFlow
 import java.io.File
 import java.text.SimpleDateFormat
 import java.time.LocalDate
@@ -273,9 +276,26 @@ internal fun BabyAlbumSection(
             var panY by remember(photo.id) { mutableStateOf(0f) }
             var viewportSize by remember(photo.id) { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
             var bitmapForPan by remember(photo.id) { mutableStateOf<android.graphics.Bitmap?>(null) }
+            val pagerState = rememberPagerState(
+                initialPage = currentPhotoIndex.coerceAtLeast(0),
+                pageCount = { sortedFilteredPhotos.size }
+            )
+            val activePhoto = sortedFilteredPhotos.getOrNull(pagerState.currentPage) ?: photo
+            LaunchedEffect(pagerState, sortedFilteredPhotos) {
+                snapshotFlow { pagerState.settledPage }
+                    .distinctUntilChanged()
+                    .collect { page ->
+                        sortedFilteredPhotos.getOrNull(page)?.let { settledPhoto ->
+                            if (viewingPhoto?.id != settledPhoto.id) viewingPhoto = settledPhoto
+                            zoom = 1f
+                            panX = 0f
+                            panY = 0f
+                        }
+                    }
+            }
             // Keep only the current photo and its immediate neighbors decoded. This avoids
             // decoding a full-resolution image after the user has already swiped to it.
-            val photoBitmapCache = remember { mutableStateMapOf<Long, android.graphics.Bitmap>() }
+            val photoBitmapCache = remember { mutableStateMapOf<String, android.graphics.Bitmap>() }
             LaunchedEffect(currentPhotoIndex, sortedFilteredPhotos) {
                 val nearbyIndices = (currentPhotoIndex - 1..currentPhotoIndex + 1)
                     .filter { it in sortedFilteredPhotos.indices }
@@ -331,7 +351,7 @@ internal fun BabyAlbumSection(
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             AnimatedContent(
-                                targetState = photo.takenAt,
+                                targetState = activePhoto.takenAt,
                                 transitionSpec = {
                                     (slideInHorizontally(animationSpec = tween(180)) { it / 5 } + fadeIn(tween(180))) togetherWith
                                         (slideOutHorizontally(animationSpec = tween(180)) { -it / 5 } + fadeOut(tween(180)))
@@ -344,87 +364,61 @@ internal fun BabyAlbumSection(
                                 }
                             }
                         }
-                        Text("${currentPhotoIndex + 1} / ${sortedFilteredPhotos.size}", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                        Text("${pagerState.currentPage + 1} / ${sortedFilteredPhotos.size}", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                         TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("适应屏幕", color = Color.White) }
                         TextButton(onClick = closeViewer) { Text("关闭", color = Color.White) }
                     }
-                    Box(
-                        Modifier.fillMaxWidth().weight(1f)
-                            .onSizeChanged { viewportSize = it }
-                            .pointerInput(photo.id) {
-                                detectTapGestures(onDoubleTap = {
-                                    if (zoom > 1f) { zoom = 1f; panX = 0f; panY = 0f } else { zoom = 2.5f; val bounded = clampPhotoPan(zoom, panX, panY); panX = bounded.first; panY = bounded.second }
-                                })
-                            }
-                            .transformable(zoomState)
-                            // Keep the swipe detector inside the transformable modifier in the
-                            // pointer-input chain. Otherwise transformable consumes horizontal
-                            // drag changes before the gallery navigation detector can observe them.
-                            .pointerInput(photo.id, zoom) {
-                                if (zoom <= 1.01f) {
-                                    var horizontalTravel = 0f
-                                    detectHorizontalDragGestures(
-                                        onHorizontalDrag = { _, dragAmount -> horizontalTravel += dragAmount },
-                                        onDragEnd = {
-                                            photoIndexAfterHorizontalSwipe(
-                                                currentIndex = currentPhotoIndex,
-                                                horizontalDragPx = horizontalTravel,
-                                                thresholdPx = 72.dp.toPx(),
-                                                photoCount = sortedFilteredPhotos.size
-                                            )?.let { targetIndex ->
-                                                viewingPhoto = sortedFilteredPhotos.getOrNull(targetIndex)
-                                            }
-                                            horizontalTravel = 0f
-                                        },
-                                        onDragCancel = { horizontalTravel = 0f }
-                                    )
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxWidth().weight(1f).onSizeChanged { viewportSize = it },
+                        beyondViewportPageCount = 1,
+                        userScrollEnabled = zoom <= 1.01f,
+                        key = { page -> sortedFilteredPhotos[page].id }
+                    ) { page ->
+                        val pagePhoto = sortedFilteredPhotos[page]
+                        val pageBitmap = photoBitmapCache[pagePhoto.id]
+                        LaunchedEffect(pagePhoto.id, pageBitmap) {
+                            if (page == pagerState.currentPage && pageBitmap != null) bitmapForPan = pageBitmap
+                        }
+                        Box(
+                            Modifier.fillMaxSize()
+                                .pointerInput(pagePhoto.id) {
+                                    detectTapGestures(onDoubleTap = {
+                                        if (zoom > 1f) {
+                                            zoom = 1f
+                                            panX = 0f
+                                            panY = 0f
+                                        } else {
+                                            zoom = 2.5f
+                                            val bounded = clampPhotoPan(zoom, panX, panY)
+                                            panX = bounded.first
+                                            panY = bounded.second
+                                        }
+                                    })
                                 }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AnimatedContent(
-                            targetState = photo.id,
-                            transitionSpec = {
-                                val initialIndex = sortedFilteredPhotos.indexOfFirst { it.id == initialState }
-                                val targetIndex = sortedFilteredPhotos.indexOfFirst { it.id == targetState }
-                                val movingForward = targetIndex > initialIndex
-                                val motion = spring<IntOffset>(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessMedium
+                                .transformable(zoomState),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (pageBitmap != null) {
+                                Image(
+                                    pageBitmap.asImageBitmap(),
+                                    contentDescription = "宝宝照片，可双指缩放、拖动查看，双击放大",
+                                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                                        scaleX = zoom
+                                        scaleY = zoom
+                                        translationX = panX
+                                        translationY = panY
+                                    },
+                                    contentScale = ContentScale.Fit
                                 )
-                                (slideInHorizontally(animationSpec = motion) { width -> if (movingForward) width else -width } +
-                                    fadeIn(tween(130))) togetherWith
-                                    (slideOutHorizontally(animationSpec = motion) { width -> if (movingForward) -width else width } +
-                                        fadeOut(tween(110)))
-                            },
-                            label = "photo-swipe-transition"
-                        ) { targetPhotoId ->
-                            val targetPhoto = sortedFilteredPhotos.firstOrNull { it.id == targetPhotoId } ?: photo
-                            val targetBitmap = photoBitmapCache[targetPhoto.id]
-                            LaunchedEffect(targetPhotoId, targetBitmap) {
-                                if (targetBitmap != null) bitmapForPan = targetBitmap
-                            }
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                if (targetBitmap != null) {
-                                    Image(
-                                        targetBitmap.asImageBitmap(),
-                                        contentDescription = "宝宝照片，可双指缩放、拖动查看，双击放大",
-                                        modifier = Modifier.fillMaxSize().graphicsLayer {
-                                            scaleX = zoom
-                                            scaleY = zoom
-                                            translationX = panX
-                                            translationY = panY
-                                        },
-                                        contentScale = ContentScale.Fit
-                                    )
-                                } else {
-                                    Text(
-                                        if (targetPhoto.id !in photoBitmapCache) "正在加载照片…" else "照片暂时无法读取",
-                                        color = Color.White
-                                    )
-                                }
+                            } else {
+                                Text(
+                                    if (pagePhoto.id !in photoBitmapCache) "正在加载照片…" else "照片暂时无法读取",
+                                    color = Color.White
+                                )
                             }
                         }
+                    }
                         Text(
                             if (zoom > 1.01f) "双指缩放 · 拖动查看 · 双击还原" else "左右滑动切换 · 双指缩放 · 双击放大",
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
@@ -433,20 +427,20 @@ internal fun BabyAlbumSection(
                         )
                     }
                     Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(photo.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                        Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                         galleryMessage?.let { Text(it, color = Color(0xFFD7C9F4), style = MaterialTheme.typography.bodySmall) }
                     }
                     Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { editingCaption = photo; closeViewer() }) { Text("编辑备注", color = Color.White) }
+                        TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
                         TextButton(onClick = {
                             albumScope.launch {
                                 galleryMessage = runCatching {
-                                    withContext(Dispatchers.IO) { savePhotoToGallery(context, photo.localPath) }
+                                    withContext(Dispatchers.IO) { savePhotoToGallery(context, activePhoto.localPath) }
                                     "已保存到手机相册"
                                 }.getOrElse { "保存失败：${it.message}" }
                             }
                         }) { Text("保存到手机", color = Color.White) }
-                        TextButton(onClick = { deletingPhoto = photo; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
+                        TextButton(onClick = { deletingPhoto = activePhoto; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
                     }
                 }
             }
