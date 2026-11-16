@@ -212,7 +212,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                             } else {
                                 cloudPhotoStorage = enabled
                                 SyncPreferences.setCloudPhotoStorageEnabled(context, enabled)
-                                if (enabled) SyncScheduler.enqueue(context)
+                                SyncScheduler.enqueue(context)
                                 message = if (enabled) {
                                     "已开启。后续成功同步的照片会保留轻量预览；已在本机的原图会在确认上传成功后逐步释放。"
                                 } else {
