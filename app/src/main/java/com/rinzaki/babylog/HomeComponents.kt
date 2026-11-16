@@ -45,7 +45,7 @@ internal fun TodaySummary(events: List<BabyEventEntity>) {
     }
     val supplements = today.filter { it.eventType == "SUPPLEMENT" }
     val waterMl = supplements.filter {
-        runCatching { JSONObject(it.payloadJson).optString("supplementName") == "水" }.getOrDefault(false)
+        runCatching { val payload = JSONObject(it.payloadJson); payload.optString("supplementName") == "水" && payload.optString("unit") == "ml" }.getOrDefault(false)
     }.sumOf { runCatching { JSONObject(it.payloadJson).optDouble("amount").toInt() }.getOrDefault(0) }
     val sleepLabel = if (sleepMinutes >= 60) {
         "${sleepMinutes / 60}小时${sleepMinutes % 60}分"
