@@ -199,4 +199,15 @@ class VaccineScheduleTest {
         assertEquals(VaccineDoseStatus.RECORDED, vaccineDoseStatus(hib, listOf("Hib 疫苗" to "第1剂")))
         assertEquals(VaccineDoseStatus.PENDING, vaccineDoseStatus(dtap, emptyList()))
     }
+
+    @Test
+    fun missingDoseOnCompositeVaccineRequiresClinicReviewForBoosterRows() {
+        val hibBooster = VaccineScheduleItem("Hib 疫苗", "加强剂", 18, isSelfPaid = true)
+        val pentavalentWithoutDose = listOf("五联疫苗" to "")
+        assertEquals(
+            VaccineDoseStatus.REVIEW_REQUIRED,
+            vaccineDoseStatus(hibBooster, pentavalentWithoutDose)
+        )
+        assertTrue(!vaccineDoseIsRecorded(hibBooster, pentavalentWithoutDose))
+    }
 }
