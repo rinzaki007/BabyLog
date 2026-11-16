@@ -196,8 +196,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
     LaunchedEffect(selectedEventFilter, selectedStartDate, selectedEndDate, baby?.id) { timelineLimit = 100 }
     val filteredEvents = normalEvents.filter { event ->
         val eventDate = java.time.Instant.ofEpochMilli(event.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate()
-        val inDateRange = (selectedStartDate == null || !eventDate.isBefore(selectedStartDate)) &&
-            (selectedEndDate == null || !eventDate.isAfter(selectedEndDate))
+        val startDate = selectedStartDate
+        val endDate = selectedEndDate
+        val inDateRange = (startDate == null || !eventDate.isBefore(startDate)) &&
+            (endDate == null || !eventDate.isAfter(endDate))
         inDateRange && when (selectedEventFilter) {
             "喂养" -> event.eventType == "FEEDING"
             "大小便" -> event.eventType == "DIAPER"
