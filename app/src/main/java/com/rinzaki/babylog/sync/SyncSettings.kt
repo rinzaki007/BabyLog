@@ -150,10 +150,47 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
             // A profile created while the app was offline has no family owner yet.
             // Claim only these unassigned profiles on the first account link; never
             // reassign records that already belong to another family.
-            val claimedLocalBabies = if (previousFamilyId.isBlank()) {
+            val unassignedBabies = if (previousFamilyId.isBlank()) {
+                dao.getUnassignedBabies(UNASSIGNED_FAMILY_ID)
+            } else {
+                emptyList()
+            }
+            val claimedLocalBabies = if (unassignedBabies.isNotEmpty()) {
                 dao.assignUnassignedBabiesToFamily(familyId, UNASSIGNED_FAMILY_ID)
             } else {
                 0
+            }
+            if (claimedLocalBabies > 0) {
+                val claimedBabyIds = unassignedBabies.map { it.id }.toSet()
+                val now = System.currentTimeMillis()
+                unassignedBabies.forEach { original ->
+                    val baby = dao.getBaby(original.id) ?: return@forEach
+                    if (!dao.hasLocalOperation("baby", baby.id)) {
+                        dao.enqueueOperation(SyncOperationEntity(
+                            java.util.UUID.randomUUID().toString(), "baby", baby.id, "upsert",
+                            babySyncPayload(baby).toString(), baby.serverVersion, now
+                        ))
+                    }
+                }
+                dao.getAllEvents().filter { it.babyId in claimedBabyIds }.forEach { event ->
+                    if (!dao.hasLocalOperation("event", event.id)) {
+                        dao.enqueueOperation(SyncOperationEntity(
+                            java.util.UUID.randomUUID().toString(), "event", event.id,
+                            if (event.deletedAt == null) "upsert" else "delete",
+                            eventSyncPayload(event).toString(), event.serverVersion, now
+                        ))
+                    }
+                }
+                dao.getAllPhotos().filter { it.babyId in claimedBabyIds }.forEach { photo ->
+                    if (!dao.hasLocalOperation("photo", photo.id)) {
+                        dao.enqueueOperation(SyncOperationEntity(
+                            java.util.UUID.randomUUID().toString(), "photo", photo.id,
+                            if (photo.deletedAt == null) "upsert" else "delete",
+                            photoSyncPayload(photo, mimeTypeForPath(photo.localPath)).toString(),
+                            photo.serverVersion, now
+                        ))
+                    }
+                }
             }
             val restoredConflicts = dao.restoreFamilyOwnershipConflicts(
                 familyId,
