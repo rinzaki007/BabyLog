@@ -267,7 +267,7 @@ internal fun BabyAlbumSection(
             onDismissRequest = closeViewer,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            val bitmapResult by produceState<Result<android.graphics.Bitmap>?>(initialValue = null, photo.localPath) {
+            val bitmapResult by produceState<Result<android.graphics.Bitmap?>?>(initialValue = null, photo.localPath) {
                 value = withContext(Dispatchers.IO) {
                     runCatching { decodeSampledPhoto(photo.localPath, 1600, 2000) }
                 }
