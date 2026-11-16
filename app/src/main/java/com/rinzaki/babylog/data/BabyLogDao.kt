@@ -107,6 +107,9 @@ interface BabyLogDao {
     @Query("SELECT * FROM baby_events")
     suspend fun getAllEvents(): List<BabyEventEntity>
 
+    @Query("SELECT * FROM babies WHERE TRIM(familyId) = '' OR familyId = :unassignedFamilyId")
+    suspend fun getUnassignedBabies(unassignedFamilyId: String): List<BabyEntity>
+
     @Query(
         """
         UPDATE babies
