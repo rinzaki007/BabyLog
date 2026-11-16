@@ -476,12 +476,14 @@ internal fun BabyAlbumSection(
                             }
                         }
                     }
-                        Text(
-                            if (zoom > 1.01f) "双指缩放 · 拖动查看 · 双击还原" else "左右滑动切换 · 双指缩放 · 双击放大",
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
-                            color = Color.LightGray,
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                        if (showViewerChrome) {
+                            Text(
+                                if (zoom > 1.01f) "双指缩放 · 拖动查看 · 双击还原" else "左右滑动切换 · 双指缩放 · 双击放大",
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                                color = Color.LightGray,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
                     }
                     }
                     if (showViewerChrome) {
