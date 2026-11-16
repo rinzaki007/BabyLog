@@ -740,7 +740,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var minute by remember(existing?.id) { mutableStateOf(initialTime.minute) }
     var amountText by remember(existing?.id) { mutableStateOf(if (existing == null) "" else initialPayload.optInt("amountMl").takeIf { it > 0 }?.toString().orEmpty()) }
     var feedingMethod by remember(existing?.id) { mutableStateOf(initialPayload.optString("method", "配方奶").ifBlank { "配方奶" }) }
-    var breastMinutes by remember(existing?.id) { mutableStateOf(initialPayload.optInt("breastMinutes", 10).coerceIn(1, 180).toString()) }
+    var breastMinutes by remember(existing?.id) { mutableStateOf(initialPayload.optInt("breastMinutes").takeIf { it > 0 }?.toString().orEmpty()) }
     var urine by remember(existing?.id) { mutableStateOf(if (existing == null) true else initialPayload.optBoolean("urine")) }
     var stool by remember(existing?.id) { mutableStateOf(initialPayload.optBoolean("stool")) }
     var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", "糊状")) }
@@ -847,7 +847,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                             }
                             payload.put("amountMl", amountMl)
                         }
-                        if (feedingMethod != "配方奶") {
+                        if (feedingMethod != "配方奶" && breastMinutes.isNotBlank()) {
                             val minutes = breastMinutes.toIntOrNull()
                             if (minutes == null || minutes !in 1..180) {
                                 error = "亲喂时长请填写 1–180 分钟"
