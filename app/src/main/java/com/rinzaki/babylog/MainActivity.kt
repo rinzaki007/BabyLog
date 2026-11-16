@@ -163,7 +163,6 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
-                    }
 
 @Composable
 private fun BabyLogApp(dao: BabyLogDao) {
@@ -457,6 +456,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                         }
+                    }
                     }
                     if (selectedNav == 1 && timelineEvents.isEmpty() && !timelineLoading) {
                         item {
