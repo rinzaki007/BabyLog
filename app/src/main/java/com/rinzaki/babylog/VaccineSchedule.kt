@@ -196,3 +196,87 @@ internal fun vaccineDoseIsRecorded(item: VaccineScheduleItem, recordedNamesAndDo
     val explicitDoses = matches.mapNotNull { doseNumber(it.second) }.toSet()
     return expectedDose in explicitDoses || (explicitDoses.isEmpty() && matches.size >= expectedDose)
 }
+
+internal enum class VaccineDoseStatus {
+    RECORDED,
+    REVIEW_REQUIRED,
+    PENDING
+}
+
+/**
+ * Composite vaccines may contain components that overlap with routine schedule items.
+ * Their exact substitution depends on product, dose, date, age and prior history, so
+ * we deliberately flag potentially affected doses for clinic review instead of
+ * automatically counting them as complete.
+ */
+internal fun vaccineDoseNeedsClinicReview(
+    item: VaccineScheduleItem,
+    recordedNamesAndDoses: List<Pair<String, String>>
+): Boolean {
+    if (vaccineDoseIsRecorded(item, recordedNamesAndDoses)) return false
+
+    fun normalize(value: String) = value.lowercase()
+        .replace(" ", "").replace("（", "(").replace("）", ")")
+        .replace("-", "").replace("_", "").replace("/", "")
+
+    fun doseNumber(value: String): Int? {
+        Regex("\\d+").find(value)?.value?.toIntOrNull()?.let { return it }
+        val chinese = mapOf('一' to 1, '二' to 2, '三' to 3, '四' to 4, '五' to 5, '六' to 6, '七' to 7, '八' to 8, '九' to 9)
+        val text = value.replace("第", "").replace("剂", "").replace("针", "").replace("次", "").trim()
+        if (text == "十") return 10
+        if (text.length == 2 && text[0] == '十') return 10 + (chinese[text[1]] ?: return null)
+        if (text.length == 2 && text[1] == '十') return (chinese[text[0]] ?: return null) * 10
+        return text.singleOrNull()?.let { chinese[it] }
+    }
+
+    val normalizedRecords = recordedNamesAndDoses.map { normalize(it.first) to it.second }
+    val expectedDose = doseNumber(item.dose)
+
+    fun hasPotentialDose(matches: List<Pair<String, String>>): Boolean {
+        if (matches.isEmpty()) return false
+        if (item.dose.contains("加强")) {
+            return matches.any { (_, dose) ->
+                dose.contains("加强", ignoreCase = true) || dose.contains("boost", ignoreCase = true)
+            }
+        }
+        if (expectedDose == null) return false
+        val explicitDoses = matches.mapNotNull { doseNumber(it.second) }.toSet()
+        return expectedDose in explicitDoses ||
+            (explicitDoses.isEmpty() && matches.size >= expectedDose)
+    }
+
+    val pentavalent = hasPotentialDose(normalizedRecords.filter { (name, _) ->
+        name.contains("五联") || name.contains("dtapipvhib") ||
+            name.contains("pentaxim") || name.contains("潘太欣")
+    })
+    val quadrivalent = hasPotentialDose(normalizedRecords.filter { (name, _) ->
+        name.contains("四联") || name.contains("dtaphib")
+    })
+    val acHib = hasPotentialDose(normalizedRecords.filter { (name, _) ->
+        name.contains("achib") || name.contains("ac-hib")
+    })
+    val acMeningococcalAlternative = hasPotentialDose(normalizedRecords.filter { (name, _) ->
+        name.contains("acyw135") || name.contains("四价流脑") ||
+            (name.contains("流脑") && (name.contains("a+c") ||
+                (name.contains("a群") && name.contains("c群"))))
+    })
+
+    return when {
+        item.vaccineName.contains("百白破") -> pentavalent || quadrivalent
+        item.vaccineName.contains("脊灰灭活") -> pentavalent
+        item.vaccineName.startsWith("Hib") -> pentavalent || quadrivalent || acHib
+        item.vaccineName.contains("A 群流脑") ||
+            item.vaccineName.contains("A 群 C 群流脑") ->
+            acHib || acMeningococcalAlternative
+        else -> false
+    }
+}
+
+internal fun vaccineDoseStatus(
+    item: VaccineScheduleItem,
+    recordedNamesAndDoses: List<Pair<String, String>>
+): VaccineDoseStatus = when {
+    vaccineDoseIsRecorded(item, recordedNamesAndDoses) -> VaccineDoseStatus.RECORDED
+    vaccineDoseNeedsClinicReview(item, recordedNamesAndDoses) -> VaccineDoseStatus.REVIEW_REQUIRED
+    else -> VaccineDoseStatus.PENDING
+}
