@@ -8,6 +8,7 @@ import com.rinzaki.babylog.data.BabyEventEntity
 import com.rinzaki.babylog.data.BabyLogDatabase
 import com.rinzaki.babylog.data.BabyPhotoEntity
 import com.rinzaki.babylog.data.SyncOperationEntity
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,7 +16,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class SyncConflictRecoveryTest {
     @Test
-    fun restoresOnlyOwnershipConflictsWhoseEntitiesBelongToTheActiveFamily() {
+    fun restoresOnlyOwnershipConflictsWhoseEntitiesBelongToTheActiveFamily() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val database = Room.inMemoryDatabaseBuilder(context, BabyLogDatabase::class.java)
             .allowMainThreadQueries()
