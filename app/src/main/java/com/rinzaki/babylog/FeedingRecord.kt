@@ -8,6 +8,9 @@ internal fun buildFeedingPayload(
     breastMinutesText: String
 ): JSONObject {
     require(method in setOf("母乳", "配方奶", "混合喂养")) { "请选择有效的喂养方式" }
+    require(method != "母乳" || amountText.isNotBlank() || breastMinutesText.isNotBlank()) {
+        "请输入母乳奶量或亲喂时长"
+    }
     val payload = JSONObject().put("method", method)
     if (method != "母乳" || amountText.isNotBlank()) {
         val amountMl = amountText.toIntOrNull()
