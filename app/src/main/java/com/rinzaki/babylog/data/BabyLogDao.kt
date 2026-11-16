@@ -13,6 +13,35 @@ interface BabyLogDao {
 
     @Query("SELECT * FROM baby_events WHERE babyId = :babyId AND deletedAt IS NULL ORDER BY occurredAt DESC")
     fun observeEvents(babyId: String): Flow<List<BabyEventEntity>>
+    @Query("""
+        SELECT * FROM baby_events
+        WHERE babyId = :babyId
+          AND deletedAt IS NULL
+          AND (:startAt IS NULL OR occurredAt >= :startAt)
+          AND (:endAt IS NULL OR occurredAt < :endAt)
+          AND (
+              :eventType IS NULL
+              OR (:eventType = 'OTHER' AND eventType NOT IN ('FEEDING', 'DIAPER', 'SLEEP', 'GROWTH', 'VACCINE'))
+              OR eventType = :eventType
+          )
+        ORDER BY occurredAt DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getTimelinePage(babyId: String, startAt: Long?, endAt: Long?, eventType: String?, limit: Int, offset: Int): List<BabyEventEntity>
+
+    @Query("""
+        SELECT COUNT(*) FROM baby_events
+        WHERE babyId = :babyId
+          AND deletedAt IS NULL
+          AND (:startAt IS NULL OR occurredAt >= :startAt)
+          AND (:endAt IS NULL OR occurredAt < :endAt)
+          AND (
+              :eventType IS NULL
+              OR (:eventType = 'OTHER' AND eventType NOT IN ('FEEDING', 'DIAPER', 'SLEEP', 'GROWTH', 'VACCINE'))
+              OR eventType = :eventType
+          )
+    """)
+    suspend fun countTimelineEvents(babyId: String, startAt: Long?, endAt: Long?, eventType: String?): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertBaby(baby: BabyEntity)
