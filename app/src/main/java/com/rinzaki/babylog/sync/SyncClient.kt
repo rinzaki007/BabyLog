@@ -383,6 +383,7 @@ private suspend fun releasePhotoOriginalIfEnabled(
     val mime = photo.photoMimeType ?: mimeTypeForPath(photo.localPath)
     val preview = File(context.filesDir, "baby_album_previews/$photoId.jpg")
     if (!createPhotoPreview(original, preview)) return
+    if (preview.length() >= original.length()) { preview.delete(); return }
     // Commit the preview path first. A crash before this write leaves the original intact.
     dao.upsertPhoto(photo.copy(localPath = preview.absolutePath, originalOnDevice = false, photoMimeType = mime))
     if (original.absolutePath != preview.absolutePath) original.delete()
@@ -659,13 +660,17 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
             }
             // Apply the per-device storage policy to already-synced photos too.
             // Never convert a photo while a local write is still queued.
-            for (photo in dao.getAllPhotos()) {
-                if (photo.deletedAt != null || photo.serverVersion == null || photo.syncStatus != "SYNCED") continue
-                if (dao.hasLocalOperation("photo", photo.id)) continue
-                if (SyncPreferences.cloudPhotoStorageEnabled(applicationContext)) {
-                    releasePhotoOriginalIfEnabled(applicationContext, dao, photo.id)
-                } else if (!photo.originalOnDevice) {
-                    runCatching { restorePhotoOriginalIfDisabled(applicationContext, dao, photo.id) }
+            val storageCandidates = dao.getAllPhotos().filter {
+                it.deletedAt == null && it.serverVersion != null && it.syncStatus == "SYNCED" &&
+                    !dao.hasLocalOperation("photo", it.id)
+            }
+            if (SyncPreferences.cloudPhotoStorageEnabled(applicationContext)) {
+                storageCandidates.filter { it.originalOnDevice }.take(10).forEach {
+                    releasePhotoOriginalIfEnabled(applicationContext, dao, it.id)
+                }
+            } else {
+                storageCandidates.filterNot { it.originalOnDevice }.take(5).forEach {
+                    runCatching { restorePhotoOriginalIfDisabled(applicationContext, dao, it.id) }
                 }
             }
             val remainingPending = dao.pendingOperationCount()
@@ -797,11 +802,12 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         }
                         if (SyncPreferences.cloudPhotoStorageEnabled(applicationContext)) {
                             val preview = File(applicationContext.filesDir, "baby_album_previews/$id.jpg")
-                            if (createPhotoPreview(original, preview)) {
+                            if (createPhotoPreview(original, preview) && preview.length() < original.length()) {
                                 storedPath = preview.absolutePath
                                 originalOnDevice = false
                                 downloadedOriginalToDelete = original
                             } else {
+                                preview.delete()
                                 storedPath = original.absolutePath
                                 originalOnDevice = true
                             }
