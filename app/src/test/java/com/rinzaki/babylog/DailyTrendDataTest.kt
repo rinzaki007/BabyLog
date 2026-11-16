@@ -99,4 +99,15 @@ class DailyTrendDataTest {
         assertEquals(1, calendarDaysCovered(emptyList(), today, zone))
     }
 
+    @Test
+    fun countsSupplementRecordsSeparatelyFromFeeding() {
+        val events = listOf(
+            event("a1", "SUPPLEMENT", today, """{"supplementName":"维生素AD","amount":1,"unit":"滴"}"""),
+            event("a2", "SUPPLEMENT", today, """{"supplementName":"水","amount":30,"unit":"ml"}"""),
+            event("f1", "FEEDING", today, """{"amountMl":120}""")
+        )
+        assertEquals(2f, dailyTrendPoints(events, "补充次数", 1, today, zone).single().value)
+        assertEquals(1f, dailyTrendPoints(events, "喂养次数", 1, today, zone).single().value)
+    }
+
 }
