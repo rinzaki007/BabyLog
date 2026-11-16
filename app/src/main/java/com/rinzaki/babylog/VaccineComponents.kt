@@ -255,7 +255,7 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
                     }
                 }
             }
-            if (events.size > visibleHistoryCount) {
+            if (showHistory && events.size > visibleHistoryCount) {
                 OutlinedButton(
                     onClick = { visibleHistoryCount = (visibleHistoryCount + 6).coerceAtMost(events.size) },
                     modifier = Modifier.fillMaxWidth()
