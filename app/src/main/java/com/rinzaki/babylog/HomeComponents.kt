@@ -29,22 +29,59 @@ import java.time.ZoneId
 
 @Composable
 internal fun TodaySummary(events: List<BabyEventEntity>) {
-    val start = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val end = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val todayDate = LocalDate.now()
+    val start = todayDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val end = todayDate.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
     val today = events.filter { it.occurredAt in start until end }
-    val milk = today.filter { it.eventType == "FEEDING" }.sumOf {
+    val feeding = today.filter { it.eventType == "FEEDING" }
+    val diapers = today.filter { it.eventType == "DIAPER" }
+    val milk = feeding.sumOf {
         runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0)
     }
+    val pee = diapers.count { runCatching { JSONObject(it.payloadJson).optBoolean("urine") }.getOrDefault(false) }
+    val stool = diapers.count { runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
+    val sleepMinutes = today.filter { it.eventType == "SLEEP" }.sumOf {
+        runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0)
+    }
+    val sleepLabel = if (sleepMinutes >= 60) {
+        "${sleepMinutes / 60}小时${sleepMinutes % 60}分"
+    } else {
+        "${sleepMinutes}分钟"
+    }
+
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("今天的小日常", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text("${today.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text("今天的小日常", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (today.isEmpty()) "今天还没有记录，随时可以开始" else "今天已经留下了 ${today.size} 条记录",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Surface(shape = CircleShape, color = Color(0xFFF2EDF7)) {
+                    Text(
+                        today.size.toString(),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryPill("🍼", "喂养次数", today.count { it.eventType == "FEEDING" }.toString(), Modifier.weight(1f))
-                SummaryPill("🥛", "奶量合计", "$milk ml", Modifier.weight(1f))
-                SummaryPill("🌿", "护理", today.count { it.eventType == "DIAPER" }.toString(), Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                SummaryPill("🍼", "喂养", "${feeding.size} 次", Modifier.weight(1f))
+                SummaryPill("🥛", "奶量", "${milk} ml", Modifier.weight(1f))
+                SummaryPill("🌙", "睡眠", sleepLabel, Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                SummaryPill("💧", "小便", "${pee} 次", Modifier.weight(1f))
+                SummaryPill("🌿", "大便", "${stool} 次", Modifier.weight(1f))
+                SummaryPill("📏", "成长测量", "${today.count { it.eventType == "GROWTH" }} 次", Modifier.weight(1f))
             }
         }
     }
@@ -53,15 +90,25 @@ internal fun TodaySummary(events: List<BabyEventEntity>) {
 @Composable
 internal fun SummaryPill(emoji: String, label: String, value: String, modifier: Modifier = Modifier) {
     Column(
-        modifier.fillMaxWidth().heightIn(min = 84.dp)
-            .background(Color(0xFFFFF5F0), RoundedCornerShape(14.dp))
-            .padding(horizontal = 6.dp, vertical = 8.dp),
+        modifier.fillMaxWidth().heightIn(min = 72.dp)
+            .background(Color(0xFFFFF6F1), RoundedCornerShape(14.dp))
+            .padding(horizontal = 4.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
     ) {
-        Text(emoji)
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Text(emoji, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            value,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
     }
 }
 
@@ -75,16 +122,21 @@ internal fun ActionCard(emoji: String, title: String, subtitle: String, modifier
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 7.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Surface(shape = RoundedCornerShape(13.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(40.dp)) {
-                Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.headlineSmall) }
+            Surface(
+                shape = RoundedCornerShape(13.dp),
+                color = Color(0xFFF2EDF7),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(emoji, style = MaterialTheme.typography.headlineSmall)
+                }
             }
             Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
             Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
     }
 }
-

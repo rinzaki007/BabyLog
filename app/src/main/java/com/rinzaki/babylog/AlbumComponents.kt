@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +84,7 @@ internal fun BabyAlbumSection(
             else -> true
         }
     }
+    val sortedFilteredPhotos = remember(filteredPhotos) { filteredPhotos.sortedByDescending { it.takenAt } }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(20)
     ) { uris ->
@@ -136,7 +140,6 @@ internal fun BabyAlbumSection(
                 }
             }
         } else {
-            val sortedFilteredPhotos = filteredPhotos.sortedByDescending { it.takenAt }
             val visiblePhotos = sortedFilteredPhotos.take(visiblePhotoLimit)
             val grouped = visiblePhotos.groupBy {
                 SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(it.takenAt))
@@ -208,6 +211,10 @@ internal fun BabyAlbumSection(
     }
 
     viewingPhoto?.let { photo ->
+        // Photo navigation follows the active album filter, matching the visible timeline.
+        val currentPhotoIndex = sortedFilteredPhotos.indexOfFirst { it.id == photo.id }
+        val previousPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex + 1)
+        val nextPhoto = sortedFilteredPhotos.getOrNull(currentPhotoIndex - 1)
         Dialog(
             onDismissRequest = { viewingPhoto = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -244,6 +251,12 @@ internal fun BabyAlbumSection(
                         Column(Modifier.weight(1f)) {
                             Text(SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(photo.takenAt)), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
                             Text(SimpleDateFormat("HH时mm分", Locale.CHINA).format(Date(photo.takenAt)), style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
+                        }
+                        IconButton(onClick = { previousPhoto?.let { viewingPhoto = it } }, enabled = previousPhoto != null) {
+                            Icon(Icons.Filled.ChevronLeft, contentDescription = "上一张", tint = Color.White)
+                        }
+                        IconButton(onClick = { nextPhoto?.let { viewingPhoto = it } }, enabled = nextPhoto != null) {
+                            Icon(Icons.Filled.ChevronRight, contentDescription = "下一张", tint = Color.White)
                         }
                         TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) { Text("适应屏幕", color = Color.White) }
                         TextButton(onClick = { viewingPhoto = null }) { Text("关闭", color = Color.White) }
@@ -339,14 +352,22 @@ internal fun BabyAlbumSection(
             initialSelectedDateMillis = selectedPhotoDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
         )
         androidx.compose.material3.DatePickerDialog(
-            onDismissRequest = { showPhotoDatePicker = false },
+            onDismissRequest = {
+                showPhotoDatePicker = false
+                if (selectedPhotoDate == null) albumFilter = "全部"
+            },
             confirmButton = {
                 TextButton(onClick = {
                     selectedPhotoDate = datePickerState.selectedDateMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() }
                     showPhotoDatePicker = false
                 }) { Text("确定") }
             },
-            dismissButton = { TextButton(onClick = { showPhotoDatePicker = false }) { Text("取消") } }
+            dismissButton = {
+            TextButton(onClick = {
+                showPhotoDatePicker = false
+                if (selectedPhotoDate == null) albumFilter = "全部"
+            }) { Text("取消") }
+        }
         ) { androidx.compose.material3.DatePicker(state = datePickerState) }
     }
     if (showPhotoTimePicker) DateTimeOptionDialog(

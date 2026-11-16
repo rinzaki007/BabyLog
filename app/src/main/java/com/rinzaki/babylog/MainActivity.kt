@@ -55,6 +55,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -214,7 +221,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
                 NavigationBar(
-                    modifier = Modifier.navigationBarsPadding().height(64.dp),
+                    modifier = Modifier.navigationBarsPadding().height(68.dp),
                     containerColor = Color.White,
                     tonalElevation = 0.dp,
                     windowInsets = WindowInsets(0.dp)
@@ -224,8 +231,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         NavigationBarItem(
                             selected = selectedNav == index,
                             onClick = { selectedNav = index },
-                            icon = { Text(listOf("⌂", "＋", "⌁", "▦", "✚")[index], style = MaterialTheme.typography.titleMedium) },
-                            label = { Text(label, style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 14.sp, fontWeight = if (selectedNav == index) FontWeight.SemiBold else FontWeight.Medium), maxLines = 1) }
+                            icon = { Icon(imageVector = when (index) { 0 -> Icons.Filled.Home; 1 -> Icons.Filled.Add; 2 -> Icons.Filled.ShowChart; 3 -> Icons.Filled.Photo; else -> Icons.Filled.Favorite }, contentDescription = label) },
+                            label = { Text(label, style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = if (selectedNav == index) FontWeight.SemiBold else FontWeight.Medium), maxLines = 1) }
                         )
                     }
                 }
@@ -260,7 +267,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 Text("⚙ 设置")
                             }
                         }
-                        if (!syncError.isNullOrBlank()) Text("同步提示：" + syncError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                     }
                 }
                 if (selectedNav == 0) item {
@@ -727,6 +733,8 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                             singleLine = true
                         )
                         Text("单位：毫升（ml）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("常用奶量 · 也可以直接输入其他数值", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SelectionRow(listOf("90", "120", "150", "180", "210"), amountText) { amountText = it }
                     }
                     "DIAPER" -> {
                         Text("护理情况", fontWeight = FontWeight.SemiBold)
@@ -742,6 +750,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                     }
                     "SLEEP" -> {
                         Text("睡眠时长  ${sleepMinutes.toInt()} 分钟", fontWeight = FontWeight.SemiBold)
+                        SelectionRow(listOf("30", "60", "90", "120", "180"), sleepMinutes.toInt().toString()) { sleepMinutes = it.toFloat() }
                         Slider(sleepMinutes, { sleepMinutes = it }, valueRange = 10f..720f, steps = 70)
                     }
                     "GROWTH" -> {
