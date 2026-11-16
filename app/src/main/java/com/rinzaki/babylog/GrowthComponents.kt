@@ -115,7 +115,9 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
         "睡眠小时" -> "小时"
         else -> "次"
     }
-    val points = dailyTrendPoints(events, metric, days)
+    val points = remember(events, metric, days) { dailyTrendPoints(events, metric, days) }
+    var selectedDayIndex by remember(points) { mutableStateOf(points.lastIndex) }
+    val selectedDay = points.getOrNull(selectedDayIndex)
     val maximum = points.maxOfOrNull { it.value }?.coerceAtLeast(1f) ?: 1f
     val total = points.sumOf { it.value.toDouble() }.toFloat()
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -133,7 +135,15 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             SelectionRow(listOf("喂养奶量", "喂养次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
-            Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+            Canvas(
+                Modifier.fillMaxWidth().height(150.dp).pointerInput(points) {
+                    detectTapGestures { tap ->
+                        val horizontalPadding = 4.dp.toPx()
+                        val slotWidth = (size.width - horizontalPadding * 2) / points.size.coerceAtLeast(1)
+                        selectedDayIndex = ((tap.x - horizontalPadding) / slotWidth).toInt().coerceIn(points.indices)
+                    }
+                }
+            ) {
                 val horizontalPadding = 4.dp.toPx()
                 val topPadding = 8.dp.toPx()
                 val bottomPadding = 8.dp.toPx()
@@ -144,7 +154,11 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
                     val barHeight = chartHeight * (point.value / maximum)
                     val left = horizontalPadding + index * slotWidth + (slotWidth - barWidth) / 2f
                     drawRoundRect(
-                        color = Color(0xFF8874B8).copy(alpha = if (point.value == 0f) 0.16f else 0.85f),
+                        color = when {
+                            index == selectedDayIndex -> Color(0xFFB77969)
+                            point.value == 0f -> Color(0xFF8874B8).copy(alpha = 0.16f)
+                            else -> Color(0xFF8874B8).copy(alpha = 0.85f)
+                        },
                         topLeft = Offset(left, topPadding + chartHeight - barHeight),
                         size = androidx.compose.ui.geometry.Size(barWidth, barHeight.coerceAtLeast(2.dp.toPx())),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx(), 3.dp.toPx())
@@ -155,6 +169,15 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
                 Text(points.first().date.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("最高 ${"%.1f".format(Locale.CHINA, maximum)} $unit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(points.last().date.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            selectedDay?.let { point ->
+                Text(
+                    point.date.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA)) + " · " +
+                        String.format(Locale.CHINA, "%.1f", point.value) + " " + unit,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
             Text("每日无记录时按 0 统计；睡眠按记录的时长合计。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
