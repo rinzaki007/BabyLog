@@ -482,15 +482,11 @@ internal fun BabyAlbumSection(
                             }
                         }
                     }
-                        AnimatedVisibility(
-                            visible = showViewerChrome,
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
-                            enter = fadeIn(animationSpec = tween(180)),
-                            exit = fadeOut(animationSpec = tween(160))
-                        ) {
+                        if (showViewerChrome) {
                             Text(
                                 if (zoom > 1.01f) "轻触照片隐藏工具栏 · 双指缩放 · 拖动查看 · 双击还原"
                                 else "轻触照片隐藏工具栏 · 左右滑动切换 · 双指缩放 · 双击放大",
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
                                 color = Color.LightGray,
                                 style = MaterialTheme.typography.labelSmall
                             )
