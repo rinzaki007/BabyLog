@@ -69,6 +69,7 @@ interface BabyLogDao {
     @Query("DELETE FROM sync_operations")
     suspend fun clearAllSyncOperations()
 
+    // Never clear operations created while an authoritative snapshot is in flight.
     @Query(
         """
         DELETE FROM sync_operations
