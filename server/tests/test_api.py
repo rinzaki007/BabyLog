@@ -833,3 +833,86 @@ def test_web_cookie_auth_rejects_cross_origin_mutations(client):
     allowed = client.post("/api/families", headers={"Origin": "http://testserver"},
                           json={"name": "我的家庭"})
     assert allowed.status_code == 200
+
+
+
+def test_web_statistics_and_all_event_categories_are_visible(client):
+    import time
+    from app import main
+
+    token = register(client, "web-statistics@example.test")
+    family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    now = int(time.time() * 1000)
+    samples = [
+        ("FEEDING", {"method": "配方奶", "amountMl": 120}),
+        ("DIAPER", {"urine": True, "stool": False}),
+        ("SLEEP", {"durationMinutes": 90}),
+        ("GROWTH", {"weightGrams": 6500, "lengthCm": 62.5, "headCircumferenceCm": 41}),
+        ("SOLID_FOOD", {"foodName": "米粉", "amount": 10, "unit": "g", "eatingStatus": "正常"}),
+        ("SUPPLEMENT", {"supplementName": "维生素D3", "amount": 1, "unit": "滴"}),
+        ("VACCINE", {"vaccineName": "乙肝疫苗", "dose": "第 1 剂", "clinic": "社区门诊"}),
+    ]
+    changes = []
+    for event_type, details in samples:
+        event_id = str(uuid.uuid4())
+        changes.append({
+            "operation_id": str(uuid.uuid4()),
+            "entity_type": "event",
+            "entity_id": event_id,
+            "operation": "upsert",
+            "payload": {
+                "id": event_id,
+                "eventType": event_type,
+                "occurredAt": now,
+                "payloadJson": json.dumps(details, ensure_ascii=False),
+            },
+            "base_version": 0,
+        })
+
+    pushed = client.post(
+        "/api/sync/push",
+        headers=auth(token),
+        json={"family_id": family_id, "changes": changes},
+    )
+    assert pushed.status_code == 200, pushed.text
+
+    overview = client.get("/api/web/overview?event_limit=20", headers=auth(token))
+    assert overview.status_code == 200
+    assert overview.json()["counts"]["events"] == len(samples)
+    assert {item["payload"]["eventType"] for item in overview.json()["events"]} == {
+        event_type for event_type, _details in samples
+    }
+    assert next(item for item in overview.json()["events"]
+                if item["payload"]["eventType"] == "SUPPLEMENT")["details"]["supplementName"] == "维生素D3"
+
+    stats = client.get("/api/web/statistics?days=7", headers=auth(token))
+    assert stats.status_code == 200, stats.text
+    body = stats.json()
+    assert body["days"] == 7
+    assert body["totals"]["feeding_count"] == 1
+    assert body["totals"]["milk_ml"] == 120
+    assert body["totals"]["sleep_minutes"] == 90
+    assert body["totals"]["solid_food_count"] == 1
+    assert body["totals"]["supplement_count"] == 1
+    assert body["totals"]["diaper_count"] == 1
+    assert body["totals"]["vaccine_count"] == 1
+    assert body["totals"]["growth_count"] == 1
+    assert body["type_counts"]["SOLID_FOOD"] == 1
+    assert body["type_counts"]["SUPPLEMENT"] == 1
+    assert len(body["daily"]) == 7
+    assert sum(day["milk_ml"] for day in body["daily"]) == 120
+    assert body["growth"][-1]["weight_kg"] == 6.5
+    assert body["growth"][-1]["length_cm"] == 62.5
+
+    assert client.get("/api/web/statistics?days=14", headers=auth(token)).status_code == 422
+    assert client.get("/api/web/statistics?days=30").status_code == 401
+
+
+def test_web_page_uses_app_icon_and_exposes_statistics_tab(client):
+    page = client.get("/")
+    assert page.status_code == 200
+    assert "/static/babylog-icon.svg" in page.text
+    assert "统计报表" in page.text
+    icon = client.get("/static/babylog-icon.svg")
+    assert icon.status_code == 200
+    assert "<svg" in icon.text
