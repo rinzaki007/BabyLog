@@ -72,11 +72,40 @@ class PhotoFileCleanupTest {
 
         assertTrue(external.isFile)
     }
-}
 
 
     @Test
     fun replacementDeletesOnlySupersededManagedCopyAfterPathChanges() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val directory = File(context.filesDir, "baby_album_previews").apply { mkdirs() }
+        val previous = File(directory, "photo-old.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        val current = File(directory, "photo-new.jpg").apply { writeBytes(byteArrayOf(4, 5, 6)) }
+
+        deleteReplacedPhotoLocalArtifact(context, previous.absolutePath, current.absolutePath)
+
+        assertFalse(previous.exists())
+        assertTrue(current.isFile)
+    }
+
+    @Test
+    fun replacementPreservesSamePathAndExternalPreviousFile() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val managed = File(context.filesDir, "baby_album/photo-same.jpg").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+        val external = File(context.cacheDir, "external-old-photo.jpg").apply {
+            writeBytes(byteArrayOf(4, 5, 6))
+        }
+
+        deleteReplacedPhotoLocalArtifact(context, managed.absolutePath, managed.absolutePath)
+        deleteReplacedPhotoLocalArtifact(context, external.absolutePath, managed.absolutePath)
+
+        assertTrue(managed.isFile)
+        assertTrue(external.isFile)
+    }
+}
+ {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val directory = File(context.filesDir, "baby_album_previews").apply { mkdirs() }
         val previous = File(directory, "photo-old.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
