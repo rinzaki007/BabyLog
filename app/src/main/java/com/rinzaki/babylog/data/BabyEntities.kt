@@ -23,7 +23,7 @@ data class BabyEntity(
 
 @Entity(
     tableName = "baby_events",
-    indices = [Index("babyId"), Index("occurredAt"), Index("syncStatus")]
+    indices = [Index(value = ["babyId", "deletedAt", "occurredAt", "id"], name = "index_baby_events_babyId_deletedAt_occurredAt_id"), Index("occurredAt"), Index("syncStatus")]
 )
 data class BabyEventEntity(
     @PrimaryKey val id: String,
@@ -40,7 +40,7 @@ data class BabyEventEntity(
 
 @Entity(
     tableName = "baby_photos",
-    indices = [Index("babyId"), Index("takenAt"), Index("syncStatus")]
+    indices = [Index(value = ["babyId", "deletedAt", "takenAt", "id"], name = "index_baby_photos_babyId_deletedAt_takenAt_id"), Index("takenAt"), Index("syncStatus")]
 )
 data class BabyPhotoEntity(
     @PrimaryKey val id: String,
