@@ -67,7 +67,8 @@ class BabyLogMigrationTest {
                 BabyLogDatabase.MIGRATION_2_3,
                 BabyLogDatabase.MIGRATION_3_4,
                 BabyLogDatabase.MIGRATION_4_5,
-                BabyLogDatabase.MIGRATION_5_6
+                BabyLogDatabase.MIGRATION_5_6,
+                BabyLogDatabase.MIGRATION_6_7
             )
             .allowMainThreadQueries()
             .build()
@@ -95,7 +96,17 @@ class BabyLogMigrationTest {
                 assertEquals(1, cursor.getInt(0))
                 assertTrue(cursor.isNull(1))
             }
-            assertEquals(6, sqlDb.version)
+            assertEquals(7, sqlDb.version)
+            sqlDb.query("PRAGMA index_list('baby_events')").use { cursor ->
+                val names = mutableSetOf<String>()
+                while (cursor.moveToNext()) names += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                assertTrue(names.contains("index_baby_events_babyId_deletedAt_occurredAt_id"))
+            }
+            sqlDb.query("PRAGMA index_list('baby_photos')").use { cursor ->
+                val names = mutableSetOf<String>()
+                while (cursor.moveToNext()) names += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                assertTrue(names.contains("index_baby_photos_babyId_deletedAt_takenAt_id"))
+            }
         } finally {
             database.close()
             context.deleteDatabase(name)

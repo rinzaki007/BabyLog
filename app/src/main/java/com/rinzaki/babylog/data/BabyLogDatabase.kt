@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [BabyEntity::class, BabyEventEntity::class, BabyPhotoEntity::class, SyncOperationEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class BabyLogDatabase : RoomDatabase() {
@@ -37,6 +37,17 @@ abstract class BabyLogDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE baby_photos ADD COLUMN originalOnDevice INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("ALTER TABLE baby_photos ADD COLUMN photoMimeType TEXT")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // The composite indexes match the long-lived timeline and gallery
+                // access patterns: one baby, active rows, newest first.
+                db.execSQL("DROP INDEX IF EXISTS index_baby_events_babyId")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_events_babyId_deletedAt_occurredAt_id ON baby_events(babyId, deletedAt, occurredAt, id)")
+                db.execSQL("DROP INDEX IF EXISTS index_baby_photos_babyId")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_photos_babyId_deletedAt_takenAt_id ON baby_photos(babyId, deletedAt, takenAt, id)")
             }
         }
 
