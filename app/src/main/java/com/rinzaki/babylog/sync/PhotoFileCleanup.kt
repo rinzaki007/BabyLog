@@ -37,3 +37,26 @@ internal fun deletePhotoLocalArtifacts(context: Context, photo: BabyPhotoEntity)
 
     targets.forEach { file -> runCatching { file.delete() } }
 }
+
+
+/**
+ * Removes a superseded photo file only after its replacement has been committed to Room.
+ * Both paths are constrained to BabyLog-managed directories; external files are never touched.
+ */
+internal fun deleteReplacedPhotoLocalArtifact(context: Context, previousPath: String, currentPath: String) {
+    if (previousPath.isBlank() || currentPath.isBlank()) return
+    val managedDirectories = listOf(
+        File(context.filesDir, "baby_album"),
+        File(context.filesDir, "baby_album_originals"),
+        File(context.filesDir, "baby_album_previews"),
+        File(context.cacheDir, "babylog_photo_originals")
+    )
+    val previous = runCatching { File(previousPath).canonicalFile }.getOrNull() ?: return
+    val current = runCatching { File(currentPath).canonicalFile }.getOrNull() ?: return
+    if (previous == current) return
+    val isManaged = managedDirectories.any { directory ->
+        val root = runCatching { directory.canonicalPath }.getOrNull() ?: return@any false
+        previous.path.startsWith(root + File.separator)
+    }
+    if (isManaged) runCatching { previous.delete() }
+}
