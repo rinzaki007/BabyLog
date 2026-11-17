@@ -83,13 +83,15 @@ services:
       BABYLOG_JWT_SECRET: ${BABYLOG_JWT_SECRET:?请先设置 BABYLOG_JWT_SECRET}
       BABYLOG_TOKEN_TTL_SECONDS: ${BABYLOG_TOKEN_TTL_SECONDS:-2592000}
       BABYLOG_MAX_PHOTO_BYTES: ${BABYLOG_MAX_PHOTO_BYTES:-20971520}
+      # Exact reverse-proxy source IP(s); do not use *.
+      BABYLOG_TRUSTED_PROXY_IPS: ${BABYLOG_TRUSTED_PROXY_IPS:-127.0.0.1}
     ports:
       - "${BABYLOG_PORT:-18765}:18765"
     volumes:
       - ${BABYLOG_DATA_PATH:-./data}:/data
 ```
 
-升级服务端镜像时，务必保留原有数据卷和 `BABYLOG_JWT_SECRET`，不要删除 NAS 的 `/data` 持久化目录。建议通过 HTTPS 反向代理访问服务，不要将 SQLite 数据库文件或 NAS 管理端口直接暴露到公网。
+升级服务端镜像时，务必保留原有数据卷和 `BABYLOG_JWT_SECRET`，不要删除 NAS 的 `/data` 持久化目录。建议通过 HTTPS 反向代理访问服务，不要将 SQLite 数据库文件或 NAS 管理端口直接暴露到公网。若使用反向代理，请按下方说明配置 `BABYLOG_TRUSTED_PROXY_IPS`，只信任实际连接到 BabyLog 的代理来源 IP，不要填写代理的上游目标地址，也不要使用 `*`。
 
 ### 网页面板与备份
 
