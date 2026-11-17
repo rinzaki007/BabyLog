@@ -68,6 +68,21 @@ class BabyLogDaoPaginationTest {
     }
 
     @Test
+    fun timelinePhotoLookupMatchesBabyDateRangeAndExcludesDeletedPhotos() = runBlocking {
+        dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
+        dao.upsertBaby(BabyEntity("other-baby", "family", "另一个宝宝", 1L, 1L, 1L))
+        dao.upsertPhoto(BabyPhotoEntity("in-range", "baby", "/tmp/in.jpg", null, 150L, 150L, 150L))
+        dao.upsertPhoto(BabyPhotoEntity("at-end", "baby", "/tmp/end.jpg", null, 200L, 200L, 200L))
+        dao.upsertPhoto(BabyPhotoEntity("before", "baby", "/tmp/before.jpg", null, 99L, 99L, 99L))
+        dao.upsertPhoto(BabyPhotoEntity("deleted", "baby", "/tmp/deleted.jpg", null, 160L, 160L, 160L, deletedAt = 170L))
+        dao.upsertPhoto(BabyPhotoEntity("other-baby", "other-baby", "/tmp/other.jpg", null, 155L, 155L, 155L))
+
+        val photos = dao.getPhotosInRange("baby", 100L, 200L, 20)
+
+        assertEquals(listOf("in-range"), photos.map { it.id })
+    }
+
+    @Test
     fun otherCategoryExcludesVaccineEvents() = runBlocking {
         dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
         dao.upsertEvent(BabyEventEntity("note", "baby", "NOTE", 180L, "{}", null, 180L))
