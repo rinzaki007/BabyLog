@@ -917,3 +917,57 @@ def test_web_page_uses_app_icon_and_exposes_statistics_tab(client):
     icon = client.get("/static/babylog-icon.svg")
     assert icon.status_code == 200
     assert "<svg" in icon.text
+
+
+def test_web_import_rolls_back_database_and_new_media_when_later_media_collides(client):
+    source_token = register(client, "web-import-rollback-source@example.test")
+    source_family = client.get("/api/me", headers=auth(source_token)).json()["families"][0]["id"]
+    baby_one = "00000000-0000-0000-0000-000000000001"
+    baby_two = "00000000-0000-0000-0000-000000000002"
+
+    for baby_id, content in ((baby_one, b"first-avatar"), (baby_two, b"second-avatar")):
+        uploaded = client.post(
+            f"/api/babies/{baby_id}/avatar?family_id={source_family}",
+            headers=auth(source_token),
+            files={"file": ("avatar.jpg", content, "image/jpeg")},
+        )
+        assert uploaded.status_code == 200, uploaded.text
+
+    pushed = client.post("/api/sync/push", headers=auth(source_token), json={
+        "family_id": source_family,
+        "changes": [
+            {"operation_id": str(uuid.uuid4()), "entity_type": "baby", "entity_id": baby_id,
+             "operation": "upsert", "payload": {"id": baby_id, "displayName": baby_id, "hasAvatar": True},
+             "base_version": 0}
+            for baby_id in (baby_one, baby_two)
+        ],
+    })
+    assert pushed.status_code == 200, pushed.text
+    assert client.post("/api/web/login", json={
+        "email": "web-import-rollback-source@example.test", "password": "correct-horse-battery"
+    }).status_code == 200
+    exported = client.get("/api/web/export?include_photos=true")
+    assert exported.status_code == 200
+
+    target_token = register(client, "web-import-rollback-target@example.test")
+    target_family = client.get("/api/me", headers=auth(target_token)).json()["families"][0]["id"]
+    import app.main as main
+    target_folder = main.AVATAR_DIR / target_family
+    target_folder.mkdir(parents=True, exist_ok=True)
+    protected_file = target_folder / f"{baby_two}.jpg"
+    protected_file.write_bytes(b"pre-existing-user-file")
+
+    assert client.post("/api/web/login", json={
+        "email": "web-import-rollback-target@example.test", "password": "correct-horse-battery"
+    }).status_code == 200
+    imported = client.post(
+        "/api/web/import",
+        headers={"Origin": "http://testserver", "Content-Type": "application/zip"},
+        content=exported.content,
+    )
+    assert imported.status_code == 409
+    overview = client.get("/api/web/overview")
+    assert overview.status_code == 200
+    assert overview.json()["counts"] == {"babies": 0, "events": 0, "photos": 0}
+    assert not (target_folder / f"{baby_one}.jpg").exists()
+    assert protected_file.read_bytes() == b"pre-existing-user-file"
