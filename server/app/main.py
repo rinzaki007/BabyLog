@@ -1,4 +1,5 @@
-import asyncio, hashlib, io, json, os, re, secrets, shutil, sqlite3, time, uuid, tempfile, zipfile
+import asyncio, hashlib, io, json, os, re, secrets, shutil, sqlite3, time, uuid, tempfile, zipfile, threading
+from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any
 import jwt
@@ -378,6 +379,8 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_changes_family_seq ON changes(family_id,seq);
         """)
         columns={row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+        if "token_version" not in columns:
+            db.execute("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0")
         if "username" not in columns:
             db.execute("ALTER TABLE users ADD COLUMN username TEXT")
         db.execute("UPDATE users SET username=lower(email) WHERE username IS NULL OR username=''")
@@ -385,7 +388,40 @@ def init_db():
 init_db()
 
 def issue_token(uid, ttl:int|None=None):
-    now=int(time.time()); return jwt.encode({"sub":uid,"iss":JWT_ISSUER,"iat":now,"exp":now+(TOKEN_TTL if ttl is None else ttl)},JWT_SECRET,algorithm="HS256")
+    with connect() as db:
+        user=db.execute("SELECT token_version FROM users WHERE id=?",(uid,)).fetchone()
+    if not user: raise HTTPException(401,"账号不存在")
+    now=int(time.time())
+    return jwt.encode({"sub":uid,"ver":int(user["token_version"] or 0),"iss":JWT_ISSUER,"iat":now,"exp":now+(TOKEN_TTL if ttl is None else ttl)},JWT_SECRET,algorithm="HS256")
+
+# Lightweight per-process throttling; no Redis or extra service required.
+_LOGIN_ATTEMPTS=defaultdict(deque)
+_LOGIN_LOCK=threading.Lock()
+_LOGIN_WINDOW_SECONDS=15*60
+_LOGIN_MAX_ATTEMPTS=8
+
+def _login_rate_key(request:Request,identifier:str):
+    ip=request.client.host if request.client else "unknown"
+    return f"{ip}:{clean_username(identifier)[:254]}"
+
+def _check_login_rate(request:Request,identifier:str):
+    key=_login_rate_key(request,identifier); now=time.monotonic()
+    with _LOGIN_LOCK:
+        attempts=_LOGIN_ATTEMPTS[key]
+        while attempts and now-attempts[0]>=_LOGIN_WINDOW_SECONDS: attempts.popleft()
+        if len(attempts)>=_LOGIN_MAX_ATTEMPTS:
+            raise HTTPException(429,"登录尝试过于频繁，请 15 分钟后再试")
+
+def _record_login_failure(request:Request,identifier:str):
+    key=_login_rate_key(request,identifier)
+    with _LOGIN_LOCK:
+        attempts=_LOGIN_ATTEMPTS[key]; now=time.monotonic()
+        while attempts and now-attempts[0]>=_LOGIN_WINDOW_SECONDS: attempts.popleft()
+        attempts.append(now)
+
+def _clear_login_failures(request:Request,identifier:str):
+    with _LOGIN_LOCK:
+        _LOGIN_ATTEMPTS.pop(_login_rate_key(request,identifier),None)
 def current_user(request:Request,creds:HTTPAuthorizationCredentials|None=Depends(bearer)):
     if not JWT_SECRET or len(JWT_SECRET)<32: raise HTTPException(503,"服务器未配置有效的 BABYLOG_JWT_SECRET")
     cookie_token=request.cookies.get("babylog_session")
@@ -396,7 +432,14 @@ def current_user(request:Request,creds:HTTPAuthorizationCredentials|None=Depends
         host=request.headers.get("x-forwarded-host") or request.headers.get("host","")
         if not origin or not host or origin.split("://",1)[-1].rstrip("/").lower()!=host.lower():
             raise HTTPException(403,"网页请求来源校验失败")
-    try: return jwt.decode(token,JWT_SECRET,algorithms=["HS256"],issuer=JWT_ISSUER,options={"require":["exp","iat","sub","iss"]})["sub"]
+    try:
+        claims=jwt.decode(token,JWT_SECRET,algorithms=["HS256"],issuer=JWT_ISSUER,options={"require":["exp","iat","sub","iss"]})
+        uid=claims["sub"]
+        with connect() as db:
+            user=db.execute("SELECT token_version FROM users WHERE id=?",(uid,)).fetchone()
+        if not user or int(claims.get("ver",0))!=int(user["token_version"] or 0):
+            raise HTTPException(401,"登录凭证已失效，请重新登录")
+        return uid
     except jwt.PyJWTError: raise HTTPException(401,"登录凭证无效或已过期")
 def require_member(db,fid,uid):
     if not db.execute("SELECT 1 FROM family_members WHERE family_id=? AND user_id=?",(fid,uid)).fetchone(): raise HTTPException(403,"无权访问该家庭")
@@ -481,19 +524,27 @@ def register(body:Credentials):
     except sqlite3.IntegrityError: raise HTTPException(409,"该账号名或邮箱已注册")
     return {"access_token":issue_token(uid),"token_type":"bearer","user_id":uid,"username":username}
 @app.post("/api/auth/login")
-def login(body:Credentials):
+def login(body:Credentials,request:Request):
     identifier=clean_username(body.username or body.email or "")
+    _check_login_rate(request,identifier)
     with connect() as db:
         user=db.execute("SELECT * FROM users WHERE username=? OR email=?",(identifier,clean_email(identifier))).fetchone()
-    if not user or not password_hash.verify(body.password,user["password_hash"]): raise HTTPException(401,"账号名/邮箱或密码错误")
+    if not user or not password_hash.verify(body.password,user["password_hash"]):
+        _record_login_failure(request,identifier)
+        raise HTTPException(401,"账号名/邮箱或密码错误")
+    _clear_login_failures(request,identifier)
     return {"access_token":issue_token(user["id"]),"token_type":"bearer","user_id":user["id"],"username":user["username"]}
 
 @app.post("/api/web/login")
 def web_login(body:Credentials,request:Request,response:Response):
     identifier=clean_username(body.username or body.email or "")
+    _check_login_rate(request,identifier)
     with connect() as db:
         user=db.execute("SELECT * FROM users WHERE username=? OR email=?",(identifier,clean_email(identifier))).fetchone()
-    if not user or not password_hash.verify(body.password,user["password_hash"]): raise HTTPException(401,"账号名/邮箱或密码错误")
+    if not user or not password_hash.verify(body.password,user["password_hash"]):
+        _record_login_failure(request,identifier)
+        raise HTTPException(401,"账号名/邮箱或密码错误")
+    _clear_login_failures(request,identifier)
     secure=(request.headers.get("x-forwarded-proto","").split(",")[0].strip().lower()=="https" or request.url.scheme=="https")
     web_ttl=min(TOKEN_TTL,12*3600)
     response.set_cookie("babylog_session",issue_token(user["id"],web_ttl),max_age=web_ttl,
@@ -541,7 +592,7 @@ def change_password(body:PasswordChange,uid:str=Depends(current_user)):
         user=db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
         if not user or not password_hash.verify(body.current_password,user["password_hash"]):
             raise HTTPException(401,"当前密码错误")
-        db.execute("UPDATE users SET password_hash=? WHERE id=?",(password_hash.hash(body.new_password),uid))
+        db.execute("UPDATE users SET password_hash=?,token_version=token_version+1 WHERE id=?",(password_hash.hash(body.new_password),uid))
     return {"updated":True}
 
 
