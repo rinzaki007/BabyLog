@@ -846,7 +846,7 @@ private object RoomAccess {
     @Volatile private var instance: BabyLogDatabase? = null
     fun database(context: Context): BabyLogDatabase = instance ?: synchronized(this) {
         instance ?: androidx.room.Room.databaseBuilder(context, BabyLogDatabase::class.java, "babylog.db")
-            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4, BabyLogDatabase.MIGRATION_4_5, BabyLogDatabase.MIGRATION_5_6)
+            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4, BabyLogDatabase.MIGRATION_4_5, BabyLogDatabase.MIGRATION_5_6, BabyLogDatabase.MIGRATION_6_7)
             .enableMultiInstanceInvalidation().build().also { instance = it }
     }
 }
