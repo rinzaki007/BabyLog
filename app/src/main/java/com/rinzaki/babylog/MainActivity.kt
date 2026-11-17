@@ -981,11 +981,11 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                                             buildFeedingPayload(feedingMethod, amountText, breastMinutes)
                                         } catch (validation: IllegalArgumentException) {
                                             error = validation.message
-                                            return@Button
+                                            return
                                         }
                                     }
                                     "DIAPER" -> {
-                                        if (!urine && !stool) { error = "请至少选择一项护理情况"; return@Button }
+                                        if (!urine && !stool) { error = "请至少选择一项护理情况"; return }
                                         payload.put("urine", urine).put("stool", stool)
                                         if (stool) payload.put("stoolShape", stoolShape).put("stoolColor", stoolColor).put("stoolAmount", stoolAmount)
                                     }
@@ -993,28 +993,28 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                                         val duration = sleepMinutesText.toIntOrNull()
                                         if (duration == null || duration !in 10..720) {
                                             error = "睡眠时长请输入 10–720 分钟"
-                                            return@Button
+                                            return
                                         }
                                         payload.put("durationMinutes", duration)
                                     }
                                     "SOLID_FOOD" -> {
                                         val name = if (foodName == "其他") customFoodName.trim() else foodName
-                                        if (name.isBlank()) { error = "请输入食物名称"; return@Button }
+                                        if (name.isBlank()) { error = "请输入食物名称"; return }
                                         val amount = foodAmount.toDoubleOrNull()
                                         if (foodAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 10000.0)) {
                                             error = "请检查辅食数量"
-                                            return@Button
+                                            return
                                         }
                                         payload.put("foodName", name).put("eatingStatus", foodStatus)
                                         if (amount != null) payload.put("amount", amount).put("unit", foodUnit)
                                     }
                                     "SUPPLEMENT" -> {
                                         val name = if (supplementName == "其他") customSupplementName.trim() else supplementName
-                                        if (name.isBlank()) { error = "请输入补充项目名称"; return@Button }
+                                        if (name.isBlank()) { error = "请输入补充项目名称"; return }
                                         val amount = supplementAmount.toDoubleOrNull()
                                         if (supplementAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 100000.0)) {
                                             error = "请检查补充数量"
-                                            return@Button
+                                            return
                                         }
                                         payload.put("supplementName", name)
                                         if (amount != null) payload.put("amount", amount)
@@ -1026,13 +1026,13 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                                         val head = headCm.toDoubleOrNull()
                                         if (weight == null && length == null && head == null) {
                                             error = "请至少填写一项测量数据"
-                                            return@Button
+                                            return
                                         }
                                         if ((weight != null && weight !in 0.1..80.0) ||
                                             (length != null && length !in 20.0..120.0) ||
                                             (head != null && head !in 20.0..70.0)) {
                                             error = "请检查测量数值是否在合理范围内"
-                                            return@Button
+                                            return
                                         }
                                         weight?.let { payload.put("weightGrams", (it * 1000).toInt()) }
                                         length?.let { payload.put("lengthCm", it) }
