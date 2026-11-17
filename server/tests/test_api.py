@@ -30,6 +30,46 @@ def auth(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+
+def test_password_change_revokes_existing_access_tokens(client):
+    token = register(client, "token-revoke@example.test")
+    assert client.get("/api/me", headers=auth(token)).status_code == 200
+    changed = client.post("/api/account/password", headers=auth(token), json={
+        "current_password": "correct-horse-battery",
+        "new_password": "a-new-secure-password"
+    })
+    assert changed.status_code == 200
+    assert client.get("/api/me", headers=auth(token)).status_code == 401
+    login = client.post("/api/auth/login", json={
+        "email": "token-revoke@example.test",
+        "password": "a-new-secure-password"
+    })
+    assert login.status_code == 200
+    assert client.get("/api/me", headers=auth(login.json()["access_token"])).status_code == 200
+
+
+def test_login_attempts_are_rate_limited(client):
+    register(client, "login-limit@example.test")
+    for _ in range(8):
+        response = client.post("/api/auth/login", json={
+            "email": "login-limit@example.test", "password": "wrong-password"
+        })
+        assert response.status_code == 401
+    blocked = client.post("/api/auth/login", json={
+        "email": "login-limit@example.test", "password": "correct-horse-battery"
+    })
+    assert blocked.status_code == 429
+
+
+def test_photo_upload_rejects_mismatched_file_content(client):
+    token = register(client, "photo-mime@example.test")
+    family_id = client.post("/api/families", headers=auth(token), json={"name": "photos"}).json()["family_id"]
+    response = client.post("/api/photos/upload", headers=auth(token), params={
+        "family_id": family_id, "photo_id": str(uuid.uuid4())
+    }, files={"file": ("not-a-photo.jpg", b"this is not jpeg", "image/jpeg")})
+    assert response.status_code == 415
+
+
 def test_health_and_auth(client):
     assert client.get("/health").json()["status"] == "ok"
     token = register(client, "parent1@example.test")
@@ -169,7 +209,7 @@ def test_photo_metadata_sync_and_delete(client):
     uploaded = client.post(
         "/api/photos/upload", headers=auth(token),
         params={"family_id": family_id, "photo_id": photo_id},
-        files={"file": ("test.jpg", b"photo-bytes", "image/jpeg")}
+        files={"file": ("test.jpg", b"\xff\xd8\xffphoto-bytes", "image/jpeg")}
     )
     assert uploaded.status_code == 200
 
@@ -204,7 +244,7 @@ def test_pull_skips_photo_upsert_after_photo_was_deleted(client):
     uploaded = client.post(
         "/api/photos/upload", headers=auth(token),
         params={"family_id": family_id, "photo_id": photo_id},
-        files={"file": ("old.jpg", b"old-photo-bytes", "image/jpeg")}
+        files={"file": ("old.jpg", b"\xff\xd8\xffold-photo-bytes", "image/jpeg")}
     )
     assert uploaded.status_code == 200, uploaded.text
 
@@ -750,7 +790,7 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
     baby_id = str(uuid.uuid4())
     changes = [{"operation_id": str(uuid.uuid4()), "entity_type": "baby", "entity_id": baby_id,
                 "operation": "upsert", "payload": {"id": baby_id, "displayName": "来源宝宝", "hasAvatar": True}, "base_version": 0}]
-    avatar_bytes = b"baby-avatar-image"
+    avatar_bytes = b"\xff\xd8\xffbaby-avatar-image"
     avatar_upload = client.post(f"/api/babies/{baby_id}/avatar?family_id={family_id}", headers=auth(source_token), files={"file": ("avatar.jpg", avatar_bytes, "image/jpeg")})
     assert avatar_upload.status_code == 200
     event_ids = []
@@ -760,7 +800,7 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
             "operation": "upsert", "payload": {"id": event_id, "eventType": "FEEDING", "occurredAt": stamp,
                 "payloadJson": '{"amountMl":120}'}, "base_version": 0})
     photo_id = str(uuid.uuid4())
-    photo_bytes = b"baby-photo-image"
+    photo_bytes = b"\xff\xd8\xffbaby-photo-image"
     photo_upload = client.post(f"/api/photos/upload?family_id={family_id}&photo_id={photo_id}", headers=auth(source_token), files={"file": ("photo.jpg", photo_bytes, "image/jpeg")})
     assert photo_upload.status_code == 200
     changes.append({"operation_id": str(uuid.uuid4()), "entity_type": "photo", "entity_id": photo_id,
@@ -925,7 +965,7 @@ def test_web_import_rolls_back_database_and_new_media_when_later_media_collides(
     baby_one = "00000000-0000-0000-0000-000000000001"
     baby_two = "00000000-0000-0000-0000-000000000002"
 
-    for baby_id, content in ((baby_one, b"first-avatar"), (baby_two, b"second-avatar")):
+    for baby_id, content in ((baby_one, b"\xff\xd8\xfffirst-avatar"), (baby_two, b"\xff\xd8\xffsecond-avatar")):
         uploaded = client.post(
             f"/api/babies/{baby_id}/avatar?family_id={source_family}",
             headers=auth(source_token),
