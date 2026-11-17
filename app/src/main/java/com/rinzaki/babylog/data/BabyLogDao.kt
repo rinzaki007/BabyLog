@@ -216,6 +216,17 @@ interface BabyLogDao {
     @Query("SELECT * FROM baby_photos WHERE babyId = :babyId AND deletedAt IS NULL ORDER BY takenAt DESC, id DESC LIMIT :limit OFFSET :offset")
     suspend fun getPhotoPage(babyId: String, limit: Int, offset: Int): List<BabyPhotoEntity>
 
+    @Query("""
+        SELECT * FROM baby_photos
+        WHERE babyId = :babyId
+          AND deletedAt IS NULL
+          AND takenAt >= :startAt
+          AND takenAt < :endAt
+        ORDER BY takenAt DESC, id DESC
+        LIMIT :limit
+    """)
+    suspend fun getPhotosInRange(babyId: String, startAt: Long, endAt: Long, limit: Int): List<BabyPhotoEntity>
+
     @Query("SELECT COUNT(*) FROM baby_photos WHERE babyId = :babyId AND deletedAt IS NULL")
     fun observePhotoCount(babyId: String): Flow<Int>
 
