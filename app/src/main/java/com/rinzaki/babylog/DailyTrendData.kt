@@ -68,3 +68,14 @@ fun calendarDaysCovered(
         .toInt()
         .coerceAtLeast(1)
 }
+
+/** Metrics shown by the daily chart follow the currently selected statistics category. */
+fun trendMetricsForCategory(category: String): List<String> = when (category) {
+    "喂养" -> listOf("喂养奶量", "喂养次数")
+    "辅食" -> listOf("辅食次数")
+    "补充" -> listOf("补充次数")
+    "护理" -> listOf("小便次数", "大便次数")
+    "睡眠" -> listOf("睡眠小时")
+    "成长" -> listOf("记录总数")
+    else -> listOf("喂养奶量", "喂养次数", "辅食次数", "补充次数", "小便次数", "大便次数", "睡眠小时", "记录总数")
+}
