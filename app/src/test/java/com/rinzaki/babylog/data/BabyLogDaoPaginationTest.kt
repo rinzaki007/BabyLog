@@ -116,7 +116,10 @@ class BabyLogDaoPaginationTest {
             listOf("growth"),
             dao.observeEventsByType("baby", "GROWTH").first().map { it.id }
         )
-        assertEquals(4, dao.observeEventCount("baby").first())
+        assertEquals("5:220", dao.observeEventRevision("baby").first())
+
+        dao.upsertEvent(BabyEventEntity("old-feed", "baby", "FEEDING", 50L, "{}", null, 300L))
+        assertEquals("5:300", dao.observeEventRevision("baby").first())
     }
 
 }
