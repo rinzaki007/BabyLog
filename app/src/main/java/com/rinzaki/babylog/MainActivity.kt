@@ -108,6 +108,7 @@ import com.rinzaki.babylog.sync.babySyncPayload
 import com.rinzaki.babylog.sync.eventSyncPayload
 import com.rinzaki.babylog.sync.photoSyncPayload
 import com.rinzaki.babylog.sync.mimeTypeForPath
+import com.rinzaki.babylog.sync.deletePhotoLocalArtifacts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -483,7 +484,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                         dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "photo", photo.id, "delete", photoSyncPayload(photo, mimeTypeForPath(photo.localPath)).toString(), photo.serverVersion, now))
                                         SyncScheduler.enqueue(appContext)
                                     }
-                                    withContext(Dispatchers.IO) { File(photo.localPath).delete() }
+                                    withContext(Dispatchers.IO) { deletePhotoLocalArtifacts(appContext, photo) }
                                 }
                             }
                         )

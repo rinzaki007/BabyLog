@@ -783,7 +783,7 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                 val existing = dao.getPhoto(id)
                 if (operation == "delete") {
                     dao.softDeletePhotoFromServer(id, item.optLong("created_at", System.currentTimeMillis() / 1000L) * 1000L, version)
-                    existing?.let { File(it.localPath).delete() }
+                    existing?.let { deletePhotoLocalArtifacts(applicationContext, it) }
                 } else {
                     val mime = payload.optString("mimeType", "image/jpeg")
                     val extension = extensionForMime(mime)
