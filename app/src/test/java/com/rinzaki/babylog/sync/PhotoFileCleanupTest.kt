@@ -13,7 +13,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class PhotoFileCleanupTest {
-    // Keep every @Test method inside this JUnit4 test class.
+    // JUnit4 discovers only methods declared inside this concrete test class.
     @Test
     fun deletionRemovesEveryManagedCopyButPreservesOtherPhotosAndExternalFiles() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
