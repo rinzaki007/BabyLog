@@ -30,6 +30,46 @@ def auth(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+
+def test_password_change_revokes_existing_access_tokens(client):
+    token = register(client, "token-revoke@example.test")
+    assert client.get("/api/me", headers=auth(token)).status_code == 200
+    changed = client.post("/api/account/password", headers=auth(token), json={
+        "current_password": "correct-horse-battery",
+        "new_password": "a-new-secure-password"
+    })
+    assert changed.status_code == 200
+    assert client.get("/api/me", headers=auth(token)).status_code == 401
+    login = client.post("/api/auth/login", json={
+        "email": "token-revoke@example.test",
+        "password": "a-new-secure-password"
+    })
+    assert login.status_code == 200
+    assert client.get("/api/me", headers=auth(login.json()["access_token"])).status_code == 200
+
+
+def test_login_attempts_are_rate_limited(client):
+    register(client, "login-limit@example.test")
+    for _ in range(8):
+        response = client.post("/api/auth/login", json={
+            "email": "login-limit@example.test", "password": "wrong-password"
+        })
+        assert response.status_code == 401
+    blocked = client.post("/api/auth/login", json={
+        "email": "login-limit@example.test", "password": "correct-horse-battery"
+    })
+    assert blocked.status_code == 429
+
+
+def test_photo_upload_rejects_mismatched_file_content(client):
+    token = register(client, "photo-mime@example.test")
+    family_id = client.post("/api/families", headers=auth(token), json={"name": "photos"}).json()["family_id"]
+    response = client.post("/api/photos/upload", headers=auth(token), params={
+        "family_id": family_id, "photo_id": str(uuid.uuid4())
+    }, files={"file": ("not-a-photo.jpg", b"this is not jpeg", "image/jpeg")})
+    assert response.status_code == 415
+
+
 def test_health_and_auth(client):
     assert client.get("/health").json()["status"] == "ok"
     token = register(client, "parent1@example.test")
