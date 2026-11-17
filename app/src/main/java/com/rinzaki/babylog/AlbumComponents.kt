@@ -76,7 +76,9 @@ internal fun BabyAlbumSection(
     onLoadMore: suspend (offset: Int, limit: Int) -> List<BabyPhotoEntity>,
     onAdd: (android.net.Uri, Long) -> Unit,
     onCaption: (BabyPhotoEntity, String) -> Unit,
-    onDelete: (BabyPhotoEntity) -> Unit
+    onDelete: (BabyPhotoEntity) -> Unit,
+    initialPhoto: BabyPhotoEntity? = null,
+    onInitialPhotoConsumed: () -> Unit = {}
 ) {
     var deletingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var viewingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
@@ -99,10 +101,20 @@ internal fun BabyAlbumSection(
     var showPhotoDatePicker by remember { mutableStateOf(false) }
     var extraPhotos by remember(baby.id, photoCount) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
     var loadingMorePhotos by remember { mutableStateOf(false) }
-    val loadedPhotos = remember(photos, extraPhotos) {
-        (photos + extraPhotos).distinctBy { it.id }.sortedWith(compareByDescending<BabyPhotoEntity> { it.takenAt }.thenByDescending { it.id })
+    val loadedPhotos = remember(photos, extraPhotos, initialPhoto) {
+        (photos + extraPhotos + listOfNotNull(initialPhoto)).distinctBy { it.id }
+            .sortedWith(compareByDescending<BabyPhotoEntity> { it.takenAt }.thenByDescending { it.id })
     }
     LaunchedEffect(photos) { extraPhotos = emptyList() }
+    LaunchedEffect(initialPhoto?.id) {
+        initialPhoto?.let { target ->
+            extraPhotos = (extraPhotos + target).distinctBy { it.id }
+            albumFilter = "全部"
+            selectedPhotoDate = null
+            viewingPhoto = target
+            onInitialPhotoConsumed()
+        }
+    }
     val filteredPhotos = loadedPhotos.filter { photo ->
         val date = java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
         when (albumFilter) {
@@ -666,6 +678,42 @@ private fun savePhotoToGallery(context: android.content.Context, path: String) {
     } catch (e: Exception) { context.contentResolver.delete(uri, null, null); throw e }
 }
 
+@Composable
+internal fun TimelinePhotoStrip(
+    photos: List<BabyPhotoEntity>,
+    onPhotoClick: (BabyPhotoEntity) -> Unit
+) {
+    if (photos.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(
+            "当天照片 · ${photos.size} 张",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            photos.take(6).forEach { photo ->
+                AlbumPhotoCard(
+                    photo = photo,
+                    cacheRefreshKey = 0,
+                    onClick = { onPhotoClick(photo) },
+                    modifier = Modifier.width(66.dp),
+                    height = 66.dp
+                )
+            }
+            if (photos.size > 6) {
+                Box(
+                    Modifier.size(width = 66.dp, height = 66.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("+${photos.size - 6}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
 private fun decodeSampledPhoto(path: String, reqWidth: Int, reqHeight: Int): android.graphics.Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(path, bounds)
@@ -685,7 +733,8 @@ private fun AlbumPhotoCard(
     photo: BabyPhotoEntity,
     cacheRefreshKey: Int,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    height: androidx.compose.ui.unit.Dp = 124.dp
 ) {
     val context = LocalContext.current
     val hasCachedOriginal = remember(photo.id, photo.originalOnDevice, cacheRefreshKey) {
@@ -701,7 +750,7 @@ private fun AlbumPhotoCard(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))
     ) {
-        Box(Modifier.fillMaxWidth().height(124.dp)) {
+        Box(Modifier.fillMaxWidth().height(height)) {
             if (bitmap != null) {
                 Image(
                     bitmap!!.asImageBitmap(),
