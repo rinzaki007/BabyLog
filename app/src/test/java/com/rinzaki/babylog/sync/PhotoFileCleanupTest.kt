@@ -13,6 +13,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class PhotoFileCleanupTest {
+    // Regression coverage for safe cleanup of superseded local photo files.
     @Test
     fun deletionRemovesEveryManagedCopyButPreservesOtherPhotosAndExternalFiles() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
