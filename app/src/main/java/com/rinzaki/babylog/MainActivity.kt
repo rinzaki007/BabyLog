@@ -382,19 +382,26 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     } else BabyProfileCard(baby) { editingProfile = true }
                 }
                 if (page == 0 && baby != null) item {
+                    val stageProfile = remember(baby.birthTime) { homeStageProfile(baby.birthTime) }
+                    val shortcuts = remember(stageProfile) { orderedHomeShortcuts(stageProfile) }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("快捷记录", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ActionCard("🍼", "喂养", "多种喂养方式", Modifier.weight(1f)) { addingEvent = "FEEDING" }
-                            ActionCard("🥣", "辅食", "食物与进食情况", Modifier.weight(1f)) { addingEvent = "SOLID_FOOD" }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("快捷记录", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(7.dp))
+                            Text(stageProfile.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ActionCard("🧴", "补充记录", "AD、D3、饮水等", Modifier.weight(1f)) { addingEvent = "SUPPLEMENT" }
-                            ActionCard("🌿", "大小便", "护理情况", Modifier.weight(1f)) { addingEvent = "DIAPER" }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ActionCard("🌙", "睡眠", "休息时长", Modifier.weight(1f)) { addingEvent = "SLEEP" }
-                            ActionCard("📏", "成长测量", "体重身长", Modifier.weight(1f)) { addingEvent = "GROWTH" }
+                        shortcuts.chunked(2).forEach { rowShortcuts ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowShortcuts.forEach { shortcut ->
+                                    ActionCard(
+                                        shortcut.emoji,
+                                        shortcut.title,
+                                        shortcut.subtitle,
+                                        Modifier.weight(1f)
+                                    ) { addingEvent = shortcut.eventType }
+                                }
+                                if (rowShortcuts.size == 1) Spacer(Modifier.weight(1f))
+                            }
                         }
                     }
                 }
