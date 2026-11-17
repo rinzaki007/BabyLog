@@ -836,6 +836,11 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         photoMimeType = mime
                     ))
                     downloadedOriginalToDelete?.delete()
+                    // Room now points at the new file. Remove only the superseded managed
+                    // copy, and never delete the newly committed path or external files.
+                    existing?.let {
+                        deleteReplacedPhotoLocalArtifact(applicationContext, it.localPath, storedPath)
+                    }
                 }
             }
         }
