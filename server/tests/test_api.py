@@ -971,3 +971,89 @@ def test_web_import_rolls_back_database_and_new_media_when_later_media_collides(
     assert overview.json()["counts"] == {"babies": 0, "events": 0, "photos": 0}
     assert not (target_folder / f"{baby_one}.jpg").exists()
     assert protected_file.read_bytes() == b"pre-existing-user-file"
+
+
+
+def test_web_import_keeps_v1_data_only_backup_compatible_when_optional_fields_are_absent(client):
+    token = register(client, "web-import-v1-compat@example.test")
+    assert client.post("/api/web/login", json={
+        "email": "web-import-v1-compat@example.test", "password": "correct-horse-battery"
+    }).status_code == 200
+
+    baby_id = str(uuid.uuid4())
+    event_id = str(uuid.uuid4())
+    # Early v1 backups may omit server bookkeeping fields. Data-only exports
+    # also intentionally omit avatar files and clear hasAvatar on the manifest.
+    manifest = {
+        "format": "babylog-backup",
+        "format_version": 1,
+        "exported_at": 1,
+        "family_name": "旧设备家庭",
+        "records": [
+            {
+                "entity_type": "baby",
+                "entity_id": baby_id,
+                "payload": {"id": baby_id, "displayName": "旧备份宝宝", "hasAvatar": True},
+            },
+            {
+                "entity_type": "event",
+                "entity_id": event_id,
+                "payload": {
+                    "id": event_id,
+                    "eventType": "FEEDING",
+                    "occurredAt": 123456789,
+                    "payloadJson": "{\\"amountMl\\":120}",
+                },
+            },
+        ],
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("backup.json", json.dumps(manifest, ensure_ascii=False))
+
+    headers = {"Origin": "http://testserver", "Content-Type": "application/zip"}
+    imported = client.post("/api/web/import", headers=headers, content=buffer.getvalue())
+    assert imported.status_code == 200, imported.text
+    assert imported.json() == {"imported": 2, "skipped_existing": 0}
+
+    overview = client.get("/api/web/overview?event_limit=10")
+    assert overview.status_code == 200
+    assert overview.json()["counts"] == {"babies": 1, "events": 1, "photos": 0}
+    baby = overview.json()["babies"][0]["payload"]
+    assert baby["id"] == baby_id
+    assert baby["displayName"] == "旧备份宝宝"
+    assert baby["hasAvatar"] is False
+    event = overview.json()["events"][0]["payload"]
+    assert event["id"] == event_id
+    assert event["eventType"] == "FEEDING"
+    assert json.loads(event["payloadJson"])["amountMl"] == 120
+
+    repeated = client.post("/api/web/import", headers=headers, content=buffer.getvalue())
+    assert repeated.status_code == 200
+    assert repeated.json() == {"imported": 0, "skipped_existing": 2}
+
+
+def test_web_import_rejects_unsupported_backup_version_without_mutating_data(client):
+    register(client, "web-import-future-version@example.test")
+    assert client.post("/api/web/login", json={
+        "email": "web-import-future-version@example.test", "password": "correct-horse-battery"
+    }).status_code == 200
+
+    manifest = {
+        "format": "babylog-backup",
+        "format_version": 999,
+        "records": [],
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("backup.json", json.dumps(manifest))
+
+    response = client.post(
+        "/api/web/import",
+        headers={"Origin": "http://testserver", "Content-Type": "application/zip"},
+        content=buffer.getvalue(),
+    )
+    assert response.status_code == 400
+    overview = client.get("/api/web/overview")
+    assert overview.status_code == 200
+    assert overview.json()["counts"] == {"babies": 0, "events": 0, "photos": 0}
