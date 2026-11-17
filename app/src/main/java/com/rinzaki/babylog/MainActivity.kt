@@ -155,7 +155,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         database = Room.databaseBuilder(applicationContext, BabyLogDatabase::class.java, "babylog.db")
-            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4, BabyLogDatabase.MIGRATION_4_5, BabyLogDatabase.MIGRATION_5_6)
+            .addMigrations(BabyLogDatabase.MIGRATION_1_2, BabyLogDatabase.MIGRATION_2_3, BabyLogDatabase.MIGRATION_3_4, BabyLogDatabase.MIGRATION_4_5, BabyLogDatabase.MIGRATION_5_6, BabyLogDatabase.MIGRATION_6_7)
             .enableMultiInstanceInvalidation().build()
         setContent { BabyLogApp(database.babyLogDao()) }
     }
