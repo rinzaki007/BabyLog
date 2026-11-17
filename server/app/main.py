@@ -1133,7 +1133,7 @@ async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:
                 if total>MAX_PHOTO_BYTES: raise HTTPException(413,"照片超过服务器大小限制")
                 if len(header)<32: header.extend(chunk[:32-len(header)])
                 out.write(chunk)
-        valid=(mime=="image/jpeg" and header.startswith(b"\\xff\\xd8\\xff")) or (mime=="image/png" and header.startswith(b"\\x89PNG\\r\\n\\x1a\\n")) or (mime=="image/webp" and len(header)>=12 and header[:4]==b"RIFF" and header[8:12]==b"WEBP") or (mime in {"image/heic","image/heif"} and len(header)>=12 and header[4:8]==b"ftyp" and header[8:12] in {b"heic",b"heix",b"hevc",b"hevx",b"mif1",b"msf1"})
+        valid=(mime=="image/jpeg" and header.startswith(b"\xff\xd8\xff")) or (mime=="image/png" and header.startswith(b"\\x89PNG\\r\\n\\x1a\\n")) or (mime=="image/webp" and len(header)>=12 and header[:4]==b"RIFF" and header[8:12]==b"WEBP") or (mime in {"image/heic","image/heif"} and len(header)>=12 and header[4:8]==b"ftyp" and header[8:12] in {b"heic",b"heix",b"hevc",b"hevx",b"mif1",b"msf1"})
         if not valid: raise HTTPException(415,"图片文件内容与声明格式不符")
         temp.replace(target)
     except Exception:
