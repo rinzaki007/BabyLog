@@ -123,4 +123,15 @@ class DailyTrendDataTest {
         assertEquals(1f, dailyTrendPoints(events, "喂养次数", 1, today, zone).single().value)
     }
 
+    @Test
+    fun dailyTrendMetricsFollowSelectedStatisticsCategory() {
+        assertEquals(listOf("喂养奶量", "喂养次数"), trendMetricsForCategory("喂养"))
+        assertEquals(listOf("辅食次数"), trendMetricsForCategory("辅食"))
+        assertEquals(listOf("补充次数"), trendMetricsForCategory("补充"))
+        assertEquals(listOf("小便次数", "大便次数"), trendMetricsForCategory("护理"))
+        assertEquals(listOf("睡眠小时"), trendMetricsForCategory("睡眠"))
+        assertEquals(listOf("记录总数"), trendMetricsForCategory("成长"))
+        assertEquals(8, trendMetricsForCategory("全部").size)
+    }
+
 }
