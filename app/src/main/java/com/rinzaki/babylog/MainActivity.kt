@@ -606,7 +606,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
 
     if ((addingEvent != null || editingEvent != null) && baby != null) {
         val currentEvent = editingEvent
-        EventEditor(currentEvent?.eventType ?: addingEvent!!, existing = currentEvent, onDismiss = { addingEvent = null; editingEvent = null }) { type, payload, occurredAt ->
+        EventEditor(currentEvent?.eventType ?: addingEvent!!, existing = currentEvent, onDismiss = { addingEvent = null; editingEvent = null }) { type, payload, occurredAt, keepOpen ->
             val now = System.currentTimeMillis()
             scope.launch {
                 val event = currentEvent?.copy(
@@ -619,8 +619,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", event.id, "upsert", eventSyncPayload(event).toString(), event.serverVersion, now))
                     SyncScheduler.enqueue(appContext)
                 }
-                addingEvent = null
-                editingEvent = null
+                if (!keepOpen) {
+                    addingEvent = null
+                    editingEvent = null
+                }
             }
         }
     }
@@ -787,7 +789,7 @@ private fun ProfileMetric(label: String, value: String, modifier: Modifier = Mod
 }
 
 @Composable
-private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, onDismiss: () -> Unit, onSave: (String, JSONObject, Long) -> Unit) {
+private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, onDismiss: () -> Unit, onSave: (String, JSONObject, Long, Boolean) -> Unit) {
     val context = LocalContext.current.applicationContext
     val initialPayload = remember(existing?.id) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
     val existingFeedingMethod = initialPayload.optString("method", "配方奶").ifBlank { "配方奶" }
@@ -969,76 +971,91 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
             }
         },
         confirmButton = {
-            Button(onClick = {
-                val timestamp = date.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                var payload = JSONObject()
-                when (eventType) {
-                    "FEEDING" -> {
-                        payload = try {
-                            buildFeedingPayload(feedingMethod, amountText, breastMinutes)
-                        } catch (validation: IllegalArgumentException) {
-                            error = validation.message
-                            return@Button
-                        }
-                    }
-                    "DIAPER" -> {
-                        if (!urine && !stool) { error = "请至少选择一项护理情况"; return@Button }
-                        payload.put("urine", urine).put("stool", stool)
-                        if (stool) payload.put("stoolShape", stoolShape).put("stoolColor", stoolColor).put("stoolAmount", stoolAmount)
-                    }
-                    "SLEEP" -> {
-                        val duration = sleepMinutesText.toIntOrNull()
-                        if (duration == null || duration !in 10..720) {
-                            error = "睡眠时长请输入 10–720 分钟"
-                            return@Button
-                        }
-                        payload.put("durationMinutes", duration)
-                    }
-                    "SOLID_FOOD" -> {
-                        val name = if (foodName == "其他") customFoodName.trim() else foodName
-                        if (name.isBlank()) { error = "请输入食物名称"; return@Button }
-                        val amount = foodAmount.toDoubleOrNull()
-                        if (foodAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 10000.0)) {
-                            error = "请检查辅食数量"
-                            return@Button
-                        }
-                        payload.put("foodName", name).put("eatingStatus", foodStatus)
-                        if (amount != null) payload.put("amount", amount).put("unit", foodUnit)
-                    }
-                    "SUPPLEMENT" -> {
-                        val name = if (supplementName == "其他") customSupplementName.trim() else supplementName
-                        if (name.isBlank()) { error = "请输入补充项目名称"; return@Button }
-                        val amount = supplementAmount.toDoubleOrNull()
-                        if (supplementAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 100000.0)) {
-                            error = "请检查补充数量"
-                            return@Button
-                        }
-                        payload.put("supplementName", name)
-                        if (amount != null) payload.put("amount", amount)
-                        if (supplementAmount.isNotBlank()) payload.put("unit", supplementUnit)
-                    }
-                    "GROWTH" -> {
-                        val weight = weightKg.toDoubleOrNull()
-                        val length = lengthCm.toDoubleOrNull()
-                        val head = headCm.toDoubleOrNull()
-                        if (weight == null && length == null && head == null) {
-                            error = "请至少填写一项测量数据"
-                            return@Button
-                        }
-                        if ((weight != null && weight !in 0.1..80.0) ||
-                            (length != null && length !in 20.0..120.0) ||
-                            (head != null && head !in 20.0..70.0)) {
-                            error = "请检查测量数值是否在合理范围内"
-                            return@Button
-                        }
-                        weight?.let { payload.put("weightGrams", (it * 1000).toInt()) }
-                        length?.let { payload.put("lengthCm", it) }
-                        head?.let { payload.put("headCircumferenceCm", it) }
-                    }
+            fun submit(keepOpen: Boolean) {
+                
+                                val timestamp = date.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                var payload = JSONObject()
+                                when (eventType) {
+                                    "FEEDING" -> {
+                                        payload = try {
+                                            buildFeedingPayload(feedingMethod, amountText, breastMinutes)
+                                        } catch (validation: IllegalArgumentException) {
+                                            error = validation.message
+                                            return
+                                        }
+                                    }
+                                    "DIAPER" -> {
+                                        if (!urine && !stool) { error = "请至少选择一项护理情况"; return }
+                                        payload.put("urine", urine).put("stool", stool)
+                                        if (stool) payload.put("stoolShape", stoolShape).put("stoolColor", stoolColor).put("stoolAmount", stoolAmount)
+                                    }
+                                    "SLEEP" -> {
+                                        val duration = sleepMinutesText.toIntOrNull()
+                                        if (duration == null || duration !in 10..720) {
+                                            error = "睡眠时长请输入 10–720 分钟"
+                                            return
+                                        }
+                                        payload.put("durationMinutes", duration)
+                                    }
+                                    "SOLID_FOOD" -> {
+                                        val name = if (foodName == "其他") customFoodName.trim() else foodName
+                                        if (name.isBlank()) { error = "请输入食物名称"; return }
+                                        val amount = foodAmount.toDoubleOrNull()
+                                        if (foodAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 10000.0)) {
+                                            error = "请检查辅食数量"
+                                            return
+                                        }
+                                        payload.put("foodName", name).put("eatingStatus", foodStatus)
+                                        if (amount != null) payload.put("amount", amount).put("unit", foodUnit)
+                                    }
+                                    "SUPPLEMENT" -> {
+                                        val name = if (supplementName == "其他") customSupplementName.trim() else supplementName
+                                        if (name.isBlank()) { error = "请输入补充项目名称"; return }
+                                        val amount = supplementAmount.toDoubleOrNull()
+                                        if (supplementAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 100000.0)) {
+                                            error = "请检查补充数量"
+                                            return
+                                        }
+                                        payload.put("supplementName", name)
+                                        if (amount != null) payload.put("amount", amount)
+                                        if (supplementAmount.isNotBlank()) payload.put("unit", supplementUnit)
+                                    }
+                                    "GROWTH" -> {
+                                        val weight = weightKg.toDoubleOrNull()
+                                        val length = lengthCm.toDoubleOrNull()
+                                        val head = headCm.toDoubleOrNull()
+                                        if (weight == null && length == null && head == null) {
+                                            error = "请至少填写一项测量数据"
+                                            return
+                                        }
+                                        if ((weight != null && weight !in 0.1..80.0) ||
+                                            (length != null && length !in 20.0..120.0) ||
+                                            (head != null && head !in 20.0..70.0)) {
+                                            error = "请检查测量数值是否在合理范围内"
+                                            return
+                                        }
+                                        weight?.let { payload.put("weightGrams", (it * 1000).toInt()) }
+                                        length?.let { payload.put("lengthCm", it) }
+                                        head?.let { payload.put("headCircumferenceCm", it) }
+                                    }
+                                }
+                                if (note.isNotBlank()) payload.put("note", note.trim())
+                                onSave(eventType, payload, timestamp, keepOpen)
+                                if (keepOpen) {
+                                    val nextTime = LocalDateTime.now()
+                                    date = nextTime.toLocalDate()
+                                    hour = nextTime.hour
+                                    minute = nextTime.minute
+                                    error = null
+                                }
+                            
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (existing == null) {
+                    TextButton(onClick = { submit(true) }) { Text("保存并继续") }
                 }
-                if (note.isNotBlank()) payload.put("note", note.trim())
-                onSave(eventType, payload, timestamp)
-            }) { Text("保存记录") }
+                Button(onClick = { submit(false) }) { Text("保存记录") }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
