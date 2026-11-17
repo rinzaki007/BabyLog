@@ -211,6 +211,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
     var timelineEvents by remember { mutableStateOf<List<BabyEventEntity>>(emptyList()) }
+    var timelinePhotos by remember { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
+    var selectedTimelinePhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var timelineTotal by remember { mutableStateOf(0) }
     var timelineLoading by remember { mutableStateOf(false) }
     val timelineEventType = when (selectedEventFilter) {
@@ -234,6 +236,17 @@ private fun BabyLogApp(dao: BabyLogDao) {
             timelineEvents = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, 0)
             timelineTotal = dao.countTimelineEvents(baby.id, timelineStartAt, timelineEndAt, timelineEventType)
             timelineLoading = false
+        }
+    }
+    LaunchedEffect(baby?.id, timelineEvents) {
+        if (baby == null || timelineEvents.isEmpty()) {
+            timelinePhotos = emptyList()
+        } else {
+            val zone = ZoneId.systemDefault()
+            val days = timelineEvents.map { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(zone).toLocalDate() }
+            val startAt = days.minOrNull()!!.atStartOfDay(zone).toInstant().toEpochMilli()
+            val endAt = days.maxOrNull()!!.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            timelinePhotos = dao.getPhotosInRange(baby.id, startAt, endAt, 300)
         }
     }
     LaunchedEffect(Unit) {
@@ -438,6 +451,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                     }
                                 }
                             },
+                            initialPhoto = selectedTimelinePhoto,
+                            onInitialPhotoConsumed = { selectedTimelinePhoto = null },
                             onCaption = { photo, caption ->
                                 scope.launch {
                                     val updated = photo.copy(caption = caption, updatedAt = System.currentTimeMillis(), syncStatus = "PENDING")
@@ -508,8 +523,24 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     } else if (page == 1) items(timelineEvents, key = { it.id }) { event ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                            EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
+                        val zone = ZoneId.systemDefault()
+                        val eventDay = java.time.Instant.ofEpochMilli(event.occurredAt).atZone(zone).toLocalDate()
+                        val dayPhotos = timelinePhotos.filter {
+                            java.time.Instant.ofEpochMilli(it.takenAt).atZone(zone).toLocalDate() == eventDay
+                        }
+                        val isLastEventOfDay = timelineEvents.lastOrNull {
+                            java.time.Instant.ofEpochMilli(it.occurredAt).atZone(zone).toLocalDate() == eventDay
+                        }?.id == event.id
+                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                                EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
+                            }
+                            if (isLastEventOfDay && dayPhotos.isNotEmpty()) {
+                                TimelinePhotoStrip(dayPhotos) { photo ->
+                                    selectedTimelinePhoto = photo
+                                    page = 3
+                                }
+                            }
                         }
                     }
                     if (page == 1 && timelineEvents.size < timelineTotal) item {
