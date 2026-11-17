@@ -120,12 +120,13 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
-    DailyTrendChart(events, range)
+    DailyTrendChart(recent, range, category)
 }
 
 @Composable
-private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
-    var metric by remember { mutableStateOf("喂养奶量") }
+private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, category: String) {
+    val availableMetrics = remember(category) { trendMetricsForCategory(category) }
+    var metric by remember(category) { mutableStateOf(availableMetrics.first()) }
     val days = if (range == "全部") {
         calendarDaysCovered(events, LocalDate.now(), ZoneId.systemDefault()).coerceAtMost(366)
     } else when (range) { "近30天" -> 30; "近90天" -> 90; else -> 7 }
@@ -153,7 +154,7 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            SelectionRow(listOf("喂养奶量", "喂养次数", "辅食次数", "补充次数", "小便次数", "大便次数", "睡眠小时", "记录总数"), metric) { metric = it }
+            SelectionRow(availableMetrics, metric, onSelect = { metric = it })
             Canvas(
                 Modifier.fillMaxWidth().height(150.dp).pointerInput(points) {
                     detectTapGestures { tap ->
