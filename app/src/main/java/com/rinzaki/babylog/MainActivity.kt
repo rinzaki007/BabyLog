@@ -185,10 +185,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
         if (baby == null) flowOf(emptyList()) else dao.observeEventsByType(baby.id, "VACCINE")
     }
     val vaccineEvents by vaccineEventsFlow.collectAsState(initial = emptyList())
-    val eventCountFlow = remember(baby?.id) {
-        if (baby == null) flowOf(0) else dao.observeEventCount(baby.id)
+    val eventRevisionFlow = remember(baby?.id) {
+        if (baby == null) flowOf("0:0") else dao.observeEventRevision(baby.id)
     }
-    val eventCount by eventCountFlow.collectAsState(initial = 0)
+    val eventRevision by eventRevisionFlow.collectAsState(initial = "0:0")
     val photosFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observePhotoPage(baby.id, 60, 0) }
     val photos by photosFlow.collectAsState(initial = emptyList())
     val photoCountFlow = remember(baby?.id) { if (baby == null) flowOf(0) else dao.observePhotoCount(baby.id) }
@@ -225,7 +225,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
     val timelineStartAt = selectedStartDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
     val timelineEndAt = selectedEndDate?.plusDays(1)?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
-    LaunchedEffect(baby?.id, selectedEventFilter, selectedStartDate, selectedEndDate, eventCount) {
+    LaunchedEffect(baby?.id, selectedEventFilter, selectedStartDate, selectedEndDate, eventRevision) {
         if (baby == null) {
             timelineEvents = emptyList()
             timelineTotal = 0
