@@ -68,6 +68,23 @@ class BabyLogDaoPaginationTest {
     }
 
     @Test
+    fun photoRevisionChangesWhenPhotosAreAddedEditedOrDeleted() = runBlocking {
+        dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
+        dao.upsertBaby(BabyEntity("other-baby", "family", "另一个宝宝", 1L, 1L, 1L))
+
+        assertEquals("0:0", dao.observePhotoRevision("baby").first())
+        dao.upsertPhoto(BabyPhotoEntity("photo", "baby", "/tmp/photo.jpg", null, 100L, 100L, 100L))
+        assertEquals("1:100", dao.observePhotoRevision("baby").first())
+        assertEquals("0:0", dao.observePhotoRevision("other-baby").first())
+
+        dao.upsertPhoto(BabyPhotoEntity("photo", "baby", "/tmp/photo.jpg", "第一张照片", 100L, 100L, 200L))
+        assertEquals("1:200", dao.observePhotoRevision("baby").first())
+
+        dao.softDeletePhoto("photo", 300L)
+        assertEquals("1:300", dao.observePhotoRevision("baby").first())
+    }
+
+    @Test
     fun timelinePhotoLookupMatchesBabyDateRangeAndExcludesDeletedPhotos() = runBlocking {
         dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
         dao.upsertBaby(BabyEntity("other-baby", "family", "另一个宝宝", 1L, 1L, 1L))
