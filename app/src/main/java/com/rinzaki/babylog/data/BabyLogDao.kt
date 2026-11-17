@@ -34,8 +34,8 @@ interface BabyLogDao {
     """)
     fun observeEventsByType(babyId: String, eventType: String): Flow<List<BabyEventEntity>>
 
-    @Query("SELECT COUNT(*) FROM baby_events WHERE babyId = :babyId AND deletedAt IS NULL")
-    fun observeEventCount(babyId: String): Flow<Int>
+    @Query("SELECT CAST(COUNT(*) AS TEXT) || ':' || CAST(COALESCE(MAX(updatedAt), 0) AS TEXT) FROM baby_events WHERE babyId = :babyId")
+    fun observeEventRevision(babyId: String): Flow<String>
     @Query("""
         SELECT * FROM baby_events
         WHERE babyId = :babyId
