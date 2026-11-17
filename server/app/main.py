@@ -1122,14 +1122,19 @@ def pull(family_id:str,cursor:int=0,limit:int=500,uid:str=Depends(current_user))
 async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:str=Depends(current_user)):
     types={"image/jpeg":".jpg","image/png":".png","image/webp":".webp","image/heic":".heic","image/heif":".heif"}; mime=file.content_type or ""
     if mime not in types: raise HTTPException(415,"仅支持 JPEG、PNG、WebP 或 HEIC 图片")
+    try: safe_photo_id=str(uuid.UUID(photo_id))
+    except ValueError: raise HTTPException(422,"照片 ID 无效")
     with connect() as db: require_member(db,family_id,uid)
-    folder=PHOTO_DIR/family_id; folder.mkdir(parents=True,exist_ok=True); target=folder/f"{uuid.UUID(photo_id)}{types[mime]}"; temp=target.with_suffix(target.suffix+".part"); total=0
+    folder=PHOTO_DIR/str(uuid.UUID(family_id)); folder.mkdir(parents=True,exist_ok=True); target=folder/f"{safe_photo_id}{types[mime]}"; temp=target.with_suffix(target.suffix+".part"); total=0; header=bytearray()
     try:
         with temp.open("wb") as out:
             while chunk:=await file.read(1024*1024):
                 total+=len(chunk)
                 if total>MAX_PHOTO_BYTES: raise HTTPException(413,"照片超过服务器大小限制")
+                if len(header)<32: header.extend(chunk[:32-len(header)])
                 out.write(chunk)
+        valid=(mime=="image/jpeg" and header.startswith(b"\\xff\\xd8\\xff")) or (mime=="image/png" and header.startswith(b"\\x89PNG\\r\\n\\x1a\\n")) or (mime=="image/webp" and len(header)>=12 and header[:4]==b"RIFF" and header[8:12]==b"WEBP") or (mime in {"image/heic","image/heif"} and len(header)>=12 and header[4:8]==b"ftyp" and header[8:12] in {b"heic",b"heix",b"hevc",b"hevx",b"mif1",b"msf1"})
+        if not valid: raise HTTPException(415,"图片文件内容与声明格式不符")
         temp.replace(target)
     except Exception:
         temp.unlink(missing_ok=True); raise
@@ -1154,6 +1159,7 @@ async def upload_baby_avatar(baby_id:str,family_id:str,file:UploadFile=File(...)
     data=await file.read(MAX_PHOTO_BYTES+1)
     if not data: raise HTTPException(400,"头像文件为空")
     if len(data)>MAX_PHOTO_BYTES: raise HTTPException(413,"头像超过服务器大小限制")
+    if not data.startswith(b"\\xff\\xd8\\xff"): raise HTTPException(415,"头像文件内容不是有效的 JPEG 图片")
     folder=AVATAR_DIR/str(uuid.UUID(family_id)); folder.mkdir(parents=True,exist_ok=True)
     target=folder/f"{safe_baby_id}.jpg"; temp=target.with_suffix(".jpg.part")
     try:
