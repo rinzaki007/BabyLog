@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
+import com.rinzaki.babylog.data.BabyLogDao
+import kotlinx.coroutines.flow.flowOf
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.time.LocalDate
@@ -30,14 +32,16 @@ import java.util.Locale
 import kotlin.math.abs
 
 @Composable
-internal fun TrendsSummary(events: List<BabyEventEntity>) {
+internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     val context = LocalContext.current.applicationContext
     val visibleFeedingMethods = FeedingPreferences.enabledMethods(context)
     var range by remember { mutableStateOf("近7天") }
     var category by remember { mutableStateOf("全部") }
     val days = when (range) { "近7天" -> 7L; "近30天" -> 30L; "近90天" -> 90L; else -> Long.MAX_VALUE }
     val start = if (days == Long.MAX_VALUE) 0L else LocalDate.now().minusDays(days - 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val now = System.currentTimeMillis()
+    val now = remember(range) { System.currentTimeMillis() }
+    val eventsFlow = remember(babyId, start, now) { dao.observeNonVaccineEventsInRange(babyId, start, now) }
+    val events by eventsFlow.collectAsState(initial = emptyList())
     val ranged = events.filter { it.deletedAt == null && it.occurredAt >= start && it.occurredAt <= now }
     val recent = ranged.filter { event ->
         when (category) {
