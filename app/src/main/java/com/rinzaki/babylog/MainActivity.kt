@@ -538,7 +538,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             if (isLastEventOfDay && dayPhotos.isNotEmpty()) {
                                 TimelinePhotoStrip(dayPhotos) { photo ->
                                     selectedTimelinePhoto = photo
-                                    page = 3
+                                    selectedNav = 3
                                 }
                             }
                         }
