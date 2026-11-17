@@ -230,6 +230,11 @@ interface BabyLogDao {
     @Query("SELECT COUNT(*) FROM baby_photos WHERE babyId = :babyId AND deletedAt IS NULL")
     fun observePhotoCount(babyId: String): Flow<Int>
 
+    // A lightweight invalidation signal for timeline photo strips. Includes soft-deleted
+    // rows so edits and deletes refresh the visible date-range lookup without loading entities.
+    @Query("SELECT CAST(COUNT(*) AS TEXT) || ':' || CAST(COALESCE(MAX(updatedAt), 0) AS TEXT) FROM baby_photos WHERE babyId = :babyId")
+    fun observePhotoRevision(babyId: String): Flow<String>
+
     @Query("SELECT * FROM baby_photos WHERE babyId = :babyId AND deletedAt IS NULL ORDER BY takenAt DESC")
     fun observePhotos(babyId: String): Flow<List<BabyPhotoEntity>>
 
