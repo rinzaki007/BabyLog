@@ -13,7 +13,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class PhotoFileCleanupTest {
-    // Regression coverage for safe cleanup of superseded local photo files.
+    // Keep every @Test method inside this JUnit4 test class.
     @Test
     fun deletionRemovesEveryManagedCopyButPreservesOtherPhotosAndExternalFiles() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -73,7 +73,6 @@ class PhotoFileCleanupTest {
 
         assertTrue(external.isFile)
     }
-
 
     @Test
     fun replacementDeletesOnlySupersededManagedCopyAfterPathChanges() {
