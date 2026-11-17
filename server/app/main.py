@@ -410,21 +410,20 @@ def _check_login_rate(request:Request,identifier:str):
     key=_login_rate_key(request,identifier); now=time.monotonic()
     with _LOGIN_LOCK:
         attempts=_LOGIN_ATTEMPTS.get(key)
-        if attempts is None:
-            # Bound memory use if requests keep introducing unique account names.
-            if len(_LOGIN_ATTEMPTS)>=_LOGIN_MAX_KEYS:
-                for old_key,old_attempts in list(_LOGIN_ATTEMPTS.items()):
-                    while old_attempts and now-old_attempts[0]>=_LOGIN_WINDOW_SECONDS: old_attempts.popleft()
-                    if not old_attempts: _LOGIN_ATTEMPTS.pop(old_key,None)
-                if len(_LOGIN_ATTEMPTS)>=_LOGIN_MAX_KEYS:
-                    _LOGIN_ATTEMPTS.pop(next(iter(_LOGIN_ATTEMPTS)),None)
-            attempts=_LOGIN_ATTEMPTS[key]
-        while attempts and now-attempts[0]>=_LOGIN_WINDOW_SECONDS: attempts.popleft()
-        if not attempts:
-            _LOGIN_ATTEMPTS.pop(key,None)
-            attempts=_LOGIN_ATTEMPTS[key]
-        if len(attempts)>=_LOGIN_MAX_ATTEMPTS:
+        if attempts:
+            while attempts and now-attempts[0]>=_LOGIN_WINDOW_SECONDS: attempts.popleft()
+            if not attempts:
+                _LOGIN_ATTEMPTS.pop(key,None)
+                attempts=None
+        if attempts and len(attempts)>=_LOGIN_MAX_ATTEMPTS:
             raise HTTPException(429,"登录尝试过于频繁，请 15 分钟后再试")
+        if attempts is None and len(_LOGIN_ATTEMPTS)>=_LOGIN_MAX_KEYS:
+            # Bound memory use if requests keep introducing unique account names.
+            for old_key,old_attempts in list(_LOGIN_ATTEMPTS.items()):
+                while old_attempts and now-old_attempts[0]>=_LOGIN_WINDOW_SECONDS: old_attempts.popleft()
+                if not old_attempts: _LOGIN_ATTEMPTS.pop(old_key,None)
+            if len(_LOGIN_ATTEMPTS)>=_LOGIN_MAX_KEYS:
+                _LOGIN_ATTEMPTS.pop(next(iter(_LOGIN_ATTEMPTS)),None)
 
 def _record_login_failure(request:Request,identifier:str):
     key=_login_rate_key(request,identifier)
