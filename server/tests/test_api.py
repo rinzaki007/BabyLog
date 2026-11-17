@@ -1002,7 +1002,7 @@ def test_web_import_keeps_v1_data_only_backup_compatible_when_optional_fields_ar
                     "id": event_id,
                     "eventType": "FEEDING",
                     "occurredAt": 123456789,
-                    "payloadJson": "{\\"amountMl\\":120}",
+                    "payloadJson": json.dumps({"amountMl": 120}),
                 },
             },
         ],
