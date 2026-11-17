@@ -20,6 +20,24 @@
 6. 执行 `docker compose up -d --build` 启动服务；Dockge 中保存并启动 Compose 项目即可。
 7. 检查 `https://你的域名/health` 或 NAS 内网地址的 `/health`。
 
+### HTTPS 反向代理信任配置
+
+如果通过 Lucky、Nginx、Caddy 等反向代理访问 BabyLog，应显式配置 `BABYLOG_TRUSTED_PROXY_IPS`。该变量填写的是**BabyLog 容器实际收到 TCP 连接时看到的代理来源 IP**，不是用户访问的客户端 IP，也不一定是反向代理配置中的上游目标地址。
+
+- 只填写实际代理来源 IP；多个代理可用英文逗号分隔。
+- 不要使用 `*`，也不要因为代理上游填写了 NAS 局域网地址，就直接把该地址当作可信代理 IP。
+- 可在 NAS 上抓取 BabyLog 监听端口的连接，查看发往 BabyLog 容器 IP 的数据包来源地址；也可结合服务端访问日志核对。
+- Docker bridge 网络下，经过宿主机端口转发的连接可能显示为 Docker 网桥网关地址。网络或 Compose 项目重建后，应重新核对该地址是否变化。
+- 未配置反向代理时，保留默认值 `127.0.0.1`；不要为了让代理生效而信任整个网段。
+
+示例（仅示意，必须替换成实际抓包确认的地址）：
+
+```dotenv
+BABYLOG_TRUSTED_PROXY_IPS=172.23.0.1
+```
+
+Compose 已将该变量传递给服务端。若修改 `.env` 或 Dockge 环境变量，需重新创建容器使配置生效。
+
 容器启动时会准备挂载目录权限，随后以 UID/GID 10001 的非 root 用户运行 API。不要暴露数据库文件或 NAS 管理端口。备份数据库时应使用 SQLite 在线备份方式；照片与头像文件也应纳入 NAS 自身的备份策略。
 
 ## 账号与多设备
