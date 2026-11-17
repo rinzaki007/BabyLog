@@ -78,6 +78,7 @@ class BabyLogDaoPaginationTest {
         assertEquals(listOf("note"), page.map { it.id })
         assertEquals(1, dao.countTimelineEvents("baby", null, null, "OTHER"))
     }
+
     @Test
     fun supplementCategoryIsSeparateFromOtherRecords() = runBlocking {
         dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
@@ -97,4 +98,28 @@ class BabyLogDaoPaginationTest {
         assertEquals(1, dao.countTimelineEvents("baby", null, null, "SOLID_FOOD"))
     }
 
+    @Test
+    fun scopedEventFeedsOnlyLoadMatchingBabyTypeAndDateRange() = runBlocking {
+        dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
+        dao.upsertBaby(BabyEntity("other-baby", "family", "另一个宝宝", 1L, 1L, 1L))
+        dao.upsertEvent(BabyEventEntity("today-feed", "baby", "FEEDING", 200L, "{}", null, 200L))
+        dao.upsertEvent(BabyEventEntity("old-feed", "baby", "FEEDING", 50L, "{}", null, 50L))
+        dao.upsertEvent(BabyEventEntity("growth", "baby", "GROWTH", 180L, "{}", null, 180L))
+        dao.upsertEvent(BabyEventEntity("vaccine", "baby", "VACCINE", 190L, "{}", null, 190L))
+        dao.upsertEvent(BabyEventEntity("deleted-feed", "baby", "FEEDING", 210L, "{}", null, 210L, deletedAt = 220L))
+        dao.upsertEvent(BabyEventEntity("other-baby-feed", "other-baby", "FEEDING", 205L, "{}", null, 205L))
+
+        assertEquals(
+            listOf("today-feed", "growth"),
+            dao.observeNonVaccineEventsInRange("baby", 100L, 200L).first().map { it.id }
+        )
+        assertEquals(
+            listOf("growth"),
+            dao.observeEventsByType("baby", "GROWTH").first().map { it.id }
+        )
+        assertEquals("5:210", dao.observeEventRevision("baby").first())
+
+        dao.upsertEvent(BabyEventEntity("old-feed", "baby", "FEEDING", 50L, "{}", null, 300L))
+        assertEquals("5:300", dao.observeEventRevision("baby").first())
+    }
 }

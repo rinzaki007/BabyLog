@@ -13,6 +13,29 @@ interface BabyLogDao {
 
     @Query("SELECT * FROM baby_events WHERE babyId = :babyId AND deletedAt IS NULL ORDER BY occurredAt DESC")
     fun observeEvents(babyId: String): Flow<List<BabyEventEntity>>
+
+    @Query("""
+        SELECT * FROM baby_events
+        WHERE babyId = :babyId
+          AND deletedAt IS NULL
+          AND eventType != 'VACCINE'
+          AND occurredAt >= :startAt
+          AND occurredAt <= :endAt
+        ORDER BY occurredAt DESC, id DESC
+    """)
+    fun observeNonVaccineEventsInRange(babyId: String, startAt: Long, endAt: Long): Flow<List<BabyEventEntity>>
+
+    @Query("""
+        SELECT * FROM baby_events
+        WHERE babyId = :babyId
+          AND deletedAt IS NULL
+          AND eventType = :eventType
+        ORDER BY occurredAt DESC, id DESC
+    """)
+    fun observeEventsByType(babyId: String, eventType: String): Flow<List<BabyEventEntity>>
+
+    @Query("SELECT CAST(COUNT(*) AS TEXT) || ':' || CAST(COALESCE(MAX(updatedAt), 0) AS TEXT) FROM baby_events WHERE babyId = :babyId")
+    fun observeEventRevision(babyId: String): Flow<String>
     @Query("""
         SELECT * FROM baby_events
         WHERE babyId = :babyId
