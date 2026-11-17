@@ -193,6 +193,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val photos by photosFlow.collectAsState(initial = emptyList())
     val photoCountFlow = remember(baby?.id) { if (baby == null) flowOf(0) else dao.observePhotoCount(baby.id) }
     val photoCount by photoCountFlow.collectAsState(initial = 0)
+    val photoRevisionFlow = remember(baby?.id) { if (baby == null) flowOf("0:0") else dao.observePhotoRevision(baby.id) }
+    val photoRevision by photoRevisionFlow.collectAsState(initial = "0:0")
     var editingProfile by remember { mutableStateOf(false) }
     var showSyncSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
@@ -238,7 +240,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
             timelineLoading = false
         }
     }
-    LaunchedEffect(baby?.id, timelineEvents) {
+    LaunchedEffect(baby?.id, timelineEvents, photoRevision) {
         if (baby == null || timelineEvents.isEmpty()) {
             timelinePhotos = emptyList()
         } else {
@@ -248,6 +250,14 @@ private fun BabyLogApp(dao: BabyLogDao) {
             val endAt = days.maxOrNull()!!.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
             timelinePhotos = dao.getPhotosInRange(baby.id, startAt, endAt, 300)
         }
+    }
+    // Pre-group once per data change instead of scanning the full lists for every row.
+    val timelinePhotosByDay = remember(timelinePhotos) {
+        timelinePhotos.groupBy { java.time.Instant.ofEpochMilli(it.takenAt).atZone(ZoneId.systemDefault()).toLocalDate() }
+    }
+    val lastTimelineEventIdByDay = remember(timelineEvents) {
+        timelineEvents.groupBy { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate() }
+            .mapValues { (_, dayEvents) -> dayEvents.last().id }
     }
     LaunchedEffect(Unit) {
         if (SyncPreferences.familyId(appContext).isNotBlank()) SyncScheduler.schedule(appContext)
@@ -525,12 +535,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     } else if (page == 1) items(timelineEvents, key = { it.id }) { event ->
                         val zone = ZoneId.systemDefault()
                         val eventDay = java.time.Instant.ofEpochMilli(event.occurredAt).atZone(zone).toLocalDate()
-                        val dayPhotos = timelinePhotos.filter {
-                            java.time.Instant.ofEpochMilli(it.takenAt).atZone(zone).toLocalDate() == eventDay
-                        }
-                        val isLastEventOfDay = timelineEvents.lastOrNull {
-                            java.time.Instant.ofEpochMilli(it.occurredAt).atZone(zone).toLocalDate() == eventDay
-                        }?.id == event.id
+                        val dayPhotos = timelinePhotosByDay[eventDay].orEmpty()
+                        val isLastEventOfDay = lastTimelineEventIdByDay[eventDay] == event.id
                         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                                 EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
