@@ -97,7 +97,7 @@ def test_photo_upload_cannot_reassign_another_familys_photo_id(client):
     family_one = client.post("/api/families", headers=auth(owner_one), json={"name": "family one"}).json()["family_id"]
     family_two = client.post("/api/families", headers=auth(owner_two), json={"name": "family two"}).json()["family_id"]
     photo_id = str(uuid.uuid4())
-    original = b"\\xff\\xd8\\xfforiginal-photo"
+    original = bytes([255, 216, 255]) + b"original-photo"
     uploaded = client.post("/api/photos/upload", headers=auth(owner_one), params={
         "family_id": family_one, "photo_id": photo_id
     }, files={"file": ("photo.jpg", original, "image/jpeg")})
@@ -111,7 +111,7 @@ def test_photo_upload_cannot_reassign_another_familys_photo_id(client):
 
     collision = client.post("/api/photos/upload", headers=auth(owner_two), params={
         "family_id": family_two, "photo_id": photo_id
-    }, files={"file": ("photo.jpg", b"\\xff\\xd8\\xffattacker", "image/jpeg")})
+    }, files={"file": ("photo.jpg", bytes([255, 216, 255]) + b"attacker", "image/jpeg")})
     assert collision.status_code == 409
 
     with main.connect() as db:
