@@ -1032,6 +1032,7 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
             raise HTTPException(422,"快照包含无效的数据 ID")
         seen.add(key)
     now=int(time.time())
+    photo_files_to_delete=[]
     with connect() as db:
         require_member(db,body.family_id,uid)
         member=db.execute("SELECT role FROM family_members WHERE family_id=? AND user_id=?",(body.family_id,uid)).fetchone()
@@ -1063,6 +1064,9 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
             db.execute("""INSERT INTO records VALUES (?,?,?,?,?,?,?) ON CONFLICT(family_id,entity_type,entity_id) DO UPDATE SET payload=excluded.payload,version=excluded.version,updated_at=excluded.updated_at,deleted=excluded.deleted""",(body.family_id,item.entity_type,item.entity_id,payload,version,now,deleted))
             changes_to_append.append((item.entity_type,item.entity_id,item.operation,item.payload,version))
             if item.entity_type=="photo" and deleted:
+                photo=db.execute("SELECT relative_path FROM photos WHERE id=? AND family_id=?",(item.entity_id,body.family_id)).fetchone()
+                if photo:
+                    photo_files_to_delete.append(PHOTO_DIR/photo["relative_path"])
                 db.execute("DELETE FROM photos WHERE id=? AND family_id=?",(item.entity_id,body.family_id))
         # Any cloud-only record absent from the authoritative device is tombstoned.
         for key,old_version in old.items():
@@ -1071,6 +1075,9 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
             db.execute("UPDATE records SET payload=?,version=?,updated_at=?,deleted=1 WHERE family_id=? AND entity_type=? AND entity_id=?",(json.dumps(payload),version,now,body.family_id,entity_type,entity_id))
             changes_to_append.append((entity_type,entity_id,"delete",payload,version))
             if entity_type=="photo":
+                photo=db.execute("SELECT relative_path FROM photos WHERE id=? AND family_id=?",(entity_id,body.family_id)).fetchone()
+                if photo:
+                    photo_files_to_delete.append(PHOTO_DIR/photo["relative_path"])
                 db.execute("DELETE FROM photos WHERE id=? AND family_id=?",(entity_id,body.family_id))
         versions=[]
         for entity_type,entity_id,operation,payload,version in changes_to_append:
@@ -1079,6 +1086,12 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
             db.execute("INSERT INTO changes(family_id,entity_type,entity_id,operation_id,payload,version,created_at) VALUES (?,?,?,?,?,?,?)",(body.family_id,entity_type,entity_id,operation_id,change_payload,version,now))
             versions.append({"entity_type":entity_type,"entity_id":entity_id,"version":version,"operation":operation})
         latest=db.execute("SELECT COALESCE(MAX(seq),0) AS cursor FROM changes WHERE family_id=?",(body.family_id,)).fetchone()["cursor"]
+    # Remove NAS media only after the authoritative snapshot transaction commits.
+    # If validation or SQLite commit fails, the original files remain recoverable.
+    for photo_path in photo_files_to_delete:
+        resolved=photo_path.resolve()
+        if PHOTO_DIR.resolve() in resolved.parents:
+            resolved.unlink(missing_ok=True)
     return {"replaced":True,"items":len(body.items),"changes":len(changes_to_append),"cursor":latest,"versions":versions}
 
 @app.get("/api/sync/status")
