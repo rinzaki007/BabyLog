@@ -393,14 +393,14 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                         "此项目属于其他家庭空间。可安全退出当前账号并登录原家庭账号；匹配后系统会自动恢复该项目，不会把它上传到当前家庭。",
                                         style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                                     )
-                                } else {
+                                } else if (canRetrySyncConflict(operation.error)) {
                                     Text(
                                         "重试会保留本机内容；若只是服务器版本冲突，系统会重新核对版本后提交。",
                                         style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                                     )
                                     OutlinedButton(
                                         onClick = {
-                                            if (retryingConflictId == null && canRetrySyncConflict(operation.error)) {
+                                            if (retryingConflictId == null) {
                                                 retryingConflictId = operation.operationId
                                                 scope.launch {
                                                     message = try {
@@ -419,10 +419,16 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                             }
                                         },
                                         modifier = Modifier.fillMaxWidth(),
-                                        enabled = !busy && retryingConflictId == null && canRetrySyncConflict(operation.error)
+                                        enabled = !busy && retryingConflictId == null
                                     ) {
                                         Text(if (retryingConflictId == operation.operationId) "正在重试…" else "保留本机版本并重试")
                                     }
+                                } else {
+                                    Text(
+                                        "这是服务器明确拒绝的请求，重复提交通常无法解决问题，因此暂不提供一键重试。请先根据上方错误信息检查登录状态、记录归属或照片文件；本机内容仍会保留。",
+                                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                        color = androidx.compose.material3.MaterialTheme.colorScheme.error
+                                    )
                                 }
                             }
                         }

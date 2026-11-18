@@ -158,8 +158,18 @@ internal suspend fun enqueueUnassignedFamilyData(
 internal fun isFamilyOwnershipConflict(reason: String?): Boolean =
     reason == FAMILY_OWNERSHIP_CONFLICT_REASON
 
-internal fun canRetrySyncConflict(reason: String?): Boolean =
-    !isFamilyOwnershipConflict(reason)
+internal fun canRetrySyncConflict(reason: String?): Boolean {
+    if (isFamilyOwnershipConflict(reason)) return false
+    val normalized = reason?.trim()?.lowercase().orEmpty()
+    // The server's version_conflict is safe to retry because the local payload is
+    // rebased onto the latest server version without replacing local data.
+    if (normalized == "version_conflict" || normalized.contains("version conflict")) return true
+    // Unknown server conflict codes (for example operation_id_reused or
+    // unsupported_operation) are permanent until the underlying data/protocol is fixed.
+    val statusCode = Regex("HTTP\\s+(\\d{3})", RegexOption.IGNORE_CASE)
+        .find(reason.orEmpty())?.groupValues?.getOrNull(1)?.toIntOrNull()
+    return statusCode?.let(::shouldRetrySyncStatus) ?: false
+}
 
 internal fun canSwitchAccountWithConflicts(
     pendingCount: Int,
