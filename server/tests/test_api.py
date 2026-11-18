@@ -1258,6 +1258,9 @@ def test_sync_push_deleting_baby_removes_nas_avatar_after_commit(client):
 def test_web_import_cleans_partial_media_temp_file_after_interrupted_copy(client, monkeypatch):
     token = register(client, "web-import-partial-copy@example.test")
     family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    assert client.post("/api/web/login", json={
+        "email": "web-import-partial-copy@example.test", "password": "correct-horse-battery"
+    }).status_code == 200
     baby_id = str(uuid.uuid4())
     manifest = {
         "format": "babylog-backup",
