@@ -360,6 +360,16 @@ class SnapshotRequest(BaseModel):
     family_id:str
     items:list[Change]=Field(max_length=10000)
 
+def _fsync_directory(path:Path):
+    """Persist directory-entry changes after publishing or creating media files."""
+    flags=os.O_RDONLY|getattr(os,"O_DIRECTORY",0)
+    fd=os.open(path,flags)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def connect():
     DATA_DIR.mkdir(parents=True,exist_ok=True); PHOTO_DIR.mkdir(parents=True,exist_ok=True)
     db=sqlite3.connect(DB_PATH,timeout=30); db.row_factory=sqlite3.Row
@@ -1089,6 +1099,8 @@ async def web_import(request:Request,uid:str=Depends(current_user)):
                         if kind=="baby" and payload.get("hasAvatar"):
                             if asset and asset in assets:
                                 folder=AVATAR_DIR/str(uuid.UUID(fid)); folder.mkdir(parents=True,exist_ok=True)
+                                _fsync_directory(folder.parent.parent)
+                                _fsync_directory(folder.parent)
                                 target=folder/f"{entity_id}.jpg"; temp=target.with_suffix(".jpg.import")
                                 if target.exists(): raise HTTPException(409,"头像目标文件已存在，已停止导入以保护现有文件")
                                 temporary.append(temp)
@@ -1097,13 +1109,15 @@ async def web_import(request:Request,uid:str=Depends(current_user)):
                                     output.flush()
                                     # Do not commit metadata until imported media is durable.
                                     os.fsync(output.fileno())
-                                temp.replace(target); temporary.remove(temp); written.append(target)
+                                temp.replace(target); _fsync_directory(folder); temporary.remove(temp); written.append(target)
                             else: payload["hasAvatar"]=False
                         if kind=="photo":
                             if not asset or asset not in assets: raise HTTPException(400,"备份照片缺少原始图片文件")
                             ext=Path(asset).suffix.lower(); mime=mime_by_ext.get(ext)
                             if not mime: raise HTTPException(400,"备份照片格式不受支持")
                             folder=PHOTO_DIR/fid; folder.mkdir(parents=True,exist_ok=True)
+                            _fsync_directory(folder.parent.parent)
+                            _fsync_directory(folder.parent)
                             target=folder/f"{entity_id}{ext}"; temp=target.with_suffix(target.suffix+".import")
                             if target.exists(): raise HTTPException(409,"照片目标文件已存在，已停止导入以保护现有文件")
                             temporary.append(temp)
@@ -1112,7 +1126,7 @@ async def web_import(request:Request,uid:str=Depends(current_user)):
                                 output.flush()
                                 # Do not commit metadata until imported media is durable.
                                 os.fsync(output.fileno())
-                            temp.replace(target); temporary.remove(temp); written.append(target)
+                            temp.replace(target); _fsync_directory(folder); temporary.remove(temp); written.append(target)
                             db.execute("INSERT INTO photos VALUES (?,?,?,?,?,?)",(entity_id,fid,str(target.relative_to(PHOTO_DIR)),mime,target.stat().st_size,int(time.time())))
                             db.execute("INSERT INTO web_import_mappings VALUES (?,?,?,?)",(fid,source_entity_id,entity_id,int(time.time())))
                         payload_json=json.dumps(payload,ensure_ascii=False,separators=(",",":")); now=int(time.time())
@@ -1366,6 +1380,8 @@ async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:
     safe_family_id=str(uuid.UUID(family_id))
     with connect() as db: require_member(db,family_id,uid)
     folder=PHOTO_DIR/safe_family_id; folder.mkdir(parents=True,exist_ok=True)
+    _fsync_directory(folder.parent.parent)
+    _fsync_directory(folder.parent)
     fd,temp_name=tempfile.mkstemp(prefix=f".{safe_photo_id}-",suffix=".part",dir=folder)
     temp=Path(temp_name)
     target=folder/f"{safe_photo_id}-{uuid.uuid4().hex}{types[mime]}"
@@ -1399,6 +1415,7 @@ async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:
                 (safe_photo_id,family_id)
             ).fetchone()
             temp.replace(target)
+            _fsync_directory(folder)
             try:
                 rel=str(target.relative_to(PHOTO_DIR))
                 db.execute(
@@ -1445,6 +1462,8 @@ async def upload_baby_avatar(baby_id:str,family_id:str,file:UploadFile=File(...)
     if len(data)>MAX_PHOTO_BYTES: raise HTTPException(413,"头像超过服务器大小限制")
     if not data.startswith(b"\xff\xd8\xff"): raise HTTPException(415,"头像文件内容不是有效的 JPEG 图片")
     folder=AVATAR_DIR/safe_family_id; folder.mkdir(parents=True,exist_ok=True)
+    _fsync_directory(folder.parent.parent)
+    _fsync_directory(folder.parent)
     target=folder/f"{safe_baby_id}.jpg"
     fd,temp_name=tempfile.mkstemp(prefix=f".{safe_baby_id}-",suffix=".jpg.part",dir=folder)
     temp=Path(temp_name)
@@ -1457,6 +1476,7 @@ async def upload_baby_avatar(baby_id:str,family_id:str,file:UploadFile=File(...)
         # Same-directory replace is atomic: readers see either the previous
         # complete avatar or the new complete avatar, never a partial file.
         temp.replace(target)
+        _fsync_directory(folder)
     except Exception:
         try: temp.unlink(missing_ok=True)
         except OSError: pass

@@ -1726,12 +1726,19 @@ def test_uploaded_photo_and_avatar_are_fsynced_before_publish(client, monkeypatc
 
     original_fsync = main.os.fsync
     synced = []
+    synced_directories = []
 
     def track_fsync(fd):
         synced.append(fd)
         return original_fsync(fd)
 
+    def track_directory_sync(path):
+        synced_directories.append(main.Path(path))
+        # Keep this test focused on ordering/call coverage; the helper's actual
+        # directory-fsync behavior is verified separately below.
+
     monkeypatch.setattr(main.os, "fsync", track_fsync)
+    monkeypatch.setattr(main, "_fsync_directory", track_directory_sync)
     photo = client.post(
         "/api/photos/upload",
         headers=auth(token),
@@ -1749,6 +1756,30 @@ def test_uploaded_photo_and_avatar_are_fsynced_before_publish(client, monkeypatc
     )
     assert avatar.status_code == 200, avatar.text
     assert len(synced) == 2
+    assert main.DATA_DIR in synced_directories
+    assert main.PHOTO_DIR in synced_directories
+    assert main.PHOTO_DIR / family_id in synced_directories
+    assert main.AVATAR_DIR in synced_directories
+    assert main.AVATAR_DIR / family_id in synced_directories
+
+
+def test_directory_fsync_syncs_directory_descriptor(client, monkeypatch):
+    import app.main as main
+
+    synced_modes = []
+    original_fsync = main.os.fsync
+
+    def track_fsync(fd):
+        synced_modes.append(main.os.fstat(fd).st_mode)
+        return original_fsync(fd)
+
+    monkeypatch.setattr(main.os, "fsync", track_fsync)
+    folder = main.DATA_DIR / "directory-fsync-test"
+    folder.mkdir()
+    main._fsync_directory(folder)
+    import stat
+    assert len(synced_modes) == 1
+    assert stat.S_ISDIR(synced_modes[0])
 
 
 def test_startup_media_temp_cleanup_removes_only_recognized_stale_files(client):
