@@ -972,6 +972,25 @@ def _parse_web_backup(archive_path:Path):
                 assets.add(asset)
         bad_member=archive.testzip()
         if bad_member: raise HTTPException(400,"备份媒体文件损坏："+Path(bad_member).name)
+        # ZIP CRC only proves that the bytes match the archive checksum; it does
+        # not prove that an asset is actually an image of its declared type.
+        for item in records:
+            asset=item.get("asset_path")
+            if not asset:
+                continue
+            suffix=Path(asset).suffix.lower()
+            with archive.open(asset) as media:
+                header=media.read(32)
+            valid=(suffix in {".jpg",".jpeg"} and header.startswith(b"\\xff\\xd8\\xff")) or (
+                suffix==".png" and header.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+            ) or (
+                suffix==".webp" and len(header)>=12 and header[:4]==b"RIFF" and header[8:12]==b"WEBP"
+            ) or (
+                suffix in {".heic",".heif"} and len(header)>=12 and header[4:8]==b"ftyp"
+                and header[8:12] in {b"heic",b"heix",b"hevc",b"hevx",b"mif1",b"msf1"}
+            )
+            if not valid:
+                raise HTTPException(400,"备份媒体文件内容与图片格式不符："+Path(asset).name)
         return backup,assets
 
 async def _read_web_backup(request:Request):
