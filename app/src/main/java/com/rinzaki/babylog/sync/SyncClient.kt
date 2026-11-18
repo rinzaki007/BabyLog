@@ -387,7 +387,9 @@ private suspend fun releasePhotoOriginalIfEnabled(
     if (preview.length() >= original.length()) { preview.delete(); return }
     // Commit the preview path first. A crash before this write leaves the original intact.
     dao.upsertPhoto(photo.copy(localPath = preview.absolutePath, originalOnDevice = false, photoMimeType = mime))
-    if (original.absolutePath != preview.absolutePath) original.delete()
+    if (original.absolutePath != preview.absolutePath) {
+        deleteReplacedPhotoLocalArtifact(context, original.absolutePath, preview.absolutePath)
+    }
 }
 
 private suspend fun restorePhotoOriginalIfDisabled(context: Context, dao: BabyLogDao, photoId: String) {
@@ -404,7 +406,9 @@ private suspend fun restorePhotoOriginalIfDisabled(context: Context, dao: BabyLo
         original
     )
     dao.upsertPhoto(photo.copy(localPath = original.absolutePath, originalOnDevice = true, photoMimeType = mime))
-    File(photo.localPath).takeIf { it.absolutePath != original.absolutePath }?.delete()
+    if (photo.localPath != original.absolutePath) {
+        deleteReplacedPhotoLocalArtifact(context, photo.localPath, original.absolutePath)
+    }
 }
 
 object SyncScheduler {
