@@ -876,15 +876,27 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
         (enabledFeedingMethods + if (existing != null && existingFeedingMethod in listOf("母乳", "配方奶", "混合喂养")) listOf(existingFeedingMethod) else emptyList())
             .distinct().ifEmpty { listOf("配方奶") }
     }
+    val editorStateKey = existing?.id ?: "new"
+    val defaultFeedingMethod = remember(editorStateKey, feedingOptions) {
+        resolveDefaultFeedingMethod(
+            if (existing == null) null else existingFeedingMethod,
+            FeedingPreferences.lastMethod(context),
+            feedingOptions
+        )
+    }
     val initialTime = remember(existing?.id) {
         existing?.occurredAt?.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime() } ?: LocalDateTime.now()
     }
     var date by remember(existing?.id) { mutableStateOf(initialTime.toLocalDate()) }
     var hour by remember(existing?.id) { mutableStateOf(initialTime.hour) }
     var minute by remember(existing?.id) { mutableStateOf(initialTime.minute) }
-    var amountText by remember(existing?.id) { mutableStateOf(if (existing == null) "" else initialPayload.optInt("amountMl").takeIf { it > 0 }?.toString().orEmpty()) }
-    var feedingMethod by remember(existing?.id) { mutableStateOf(if (existingFeedingMethod in feedingOptions) existingFeedingMethod else feedingOptions.first()) }
-    var breastMinutes by remember(existing?.id) { mutableStateOf(initialPayload.optInt("breastMinutes").takeIf { it > 0 }?.toString().orEmpty()) }
+    var amountText by remember(editorStateKey, defaultFeedingMethod) {
+        mutableStateOf(if (existing == null) FeedingPreferences.lastAmountMl(context, defaultFeedingMethod) else initialPayload.optInt("amountMl").takeIf { it > 0 }?.toString().orEmpty())
+    }
+    var feedingMethod by remember(editorStateKey) { mutableStateOf(defaultFeedingMethod) }
+    var breastMinutes by remember(editorStateKey) {
+        mutableStateOf(if (existing == null) FeedingPreferences.lastBreastMinutes(context) else initialPayload.optInt("breastMinutes").takeIf { it > 0 }?.toString().orEmpty())
+    }
     var urine by remember(existing?.id) { mutableStateOf(if (existing == null) true else initialPayload.optBoolean("urine")) }
     var stool by remember(existing?.id) { mutableStateOf(initialPayload.optBoolean("stool")) }
     var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", "糊状")) }
@@ -1063,7 +1075,9 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                                 when (eventType) {
                                     "FEEDING" -> {
                                         payload = try {
-                                            buildFeedingPayload(feedingMethod, amountText, breastMinutes)
+                                            buildFeedingPayload(feedingMethod, amountText, breastMinutes).also {
+                                                FeedingPreferences.saveLastSelection(context, feedingMethod, amountText, breastMinutes)
+                                            }
                                         } catch (validation: IllegalArgumentException) {
                                             error = validation.message
                                             return
