@@ -387,6 +387,46 @@ def init_db():
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)")
 init_db()
 
+
+def _cleanup_stale_media_temps(now:int|None=None,max_age_seconds:int=24*60*60):
+    """Remove only recognized, abandoned media staging files older than one day."""
+    checked_at=time.time() if now is None else float(now)
+    uuid_pattern=r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    patterns=(
+        re.compile(rf"^\.{uuid_pattern}-[A-Za-z0-9_-]+\.part$"),
+        re.compile(rf"^\.{uuid_pattern}-[A-Za-z0-9_-]+\.jpg\.part$"),
+        re.compile(rf"^{uuid_pattern}\.(?:jpg|jpeg|png|webp|heic|heif)\.import$"),
+    )
+    removed=0
+    for root in (PHOTO_DIR,AVATAR_DIR):
+        try:
+            if not root.is_dir():
+                continue
+            safe_root=root.resolve()
+            for candidate in root.rglob("*"):
+                try:
+                    if candidate.is_symlink() or not candidate.is_file():
+                        continue
+                    if not any(pattern.fullmatch(candidate.name) for pattern in patterns):
+                        continue
+                    resolved=candidate.resolve()
+                    if safe_root not in resolved.parents:
+                        continue
+                    if checked_at-candidate.stat().st_mtime<=max_age_seconds:
+                        continue
+                    candidate.unlink()
+                    removed+=1
+                except OSError:
+                    continue
+        except OSError:
+            continue
+    return removed
+
+
+# A process may be killed while uploading or importing media. Keep recent staging
+# files untouched (an upload may still be active) and clean only known old patterns.
+_cleanup_stale_media_temps()
+
 def issue_token(uid, ttl:int|None=None):
     with connect() as db:
         user=db.execute("SELECT token_version FROM users WHERE id=?",(uid,)).fetchone()
