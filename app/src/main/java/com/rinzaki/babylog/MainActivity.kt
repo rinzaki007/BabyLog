@@ -507,6 +507,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             photos = photos,
                             photoCount = photoCount,
                             onLoadMore = { offset, limit -> dao.getPhotoPage(baby.id, limit, offset) },
+                            onLoadMonthPhotos = { startAt, endAt, limit -> dao.getPhotosInRange(baby.id, startAt, endAt, limit) },
                             onAdd = { uri, takenAt ->
                                 scope.launch {
                                     runCatching {
