@@ -1244,18 +1244,28 @@ def download_photo(photo_id:str,family_id:str,uid:str=Depends(current_user)):
 async def upload_baby_avatar(baby_id:str,family_id:str,file:UploadFile=File(...),uid:str=Depends(current_user)):
     try: safe_baby_id=str(uuid.UUID(baby_id))
     except ValueError: raise HTTPException(422,"宝宝 ID 无效")
+    try: safe_family_id=str(uuid.UUID(family_id))
+    except ValueError: raise HTTPException(422,"家庭 ID 无效")
     if file.content_type!="image/jpeg": raise HTTPException(415,"头像仅支持 JPEG 格式")
     with connect() as db: require_member(db,family_id,uid)
     data=await file.read(MAX_PHOTO_BYTES+1)
     if not data: raise HTTPException(400,"头像文件为空")
     if len(data)>MAX_PHOTO_BYTES: raise HTTPException(413,"头像超过服务器大小限制")
     if not data.startswith(b"\xff\xd8\xff"): raise HTTPException(415,"头像文件内容不是有效的 JPEG 图片")
-    folder=AVATAR_DIR/str(uuid.UUID(family_id)); folder.mkdir(parents=True,exist_ok=True)
-    target=folder/f"{safe_baby_id}.jpg"; temp=target.with_suffix(".jpg.part")
+    folder=AVATAR_DIR/safe_family_id; folder.mkdir(parents=True,exist_ok=True)
+    target=folder/f"{safe_baby_id}.jpg"
+    fd,temp_name=tempfile.mkstemp(prefix=f".{safe_baby_id}-",suffix=".jpg.part",dir=folder)
+    temp=Path(temp_name)
     try:
-        temp.write_bytes(data); temp.replace(target)
+        with os.fdopen(fd,"wb") as out:
+            out.write(data)
+        # Same-directory replace is atomic: readers see either the previous
+        # complete avatar or the new complete avatar, never a partial file.
+        temp.replace(target)
     except Exception:
-        temp.unlink(missing_ok=True); raise
+        try: temp.unlink(missing_ok=True)
+        except OSError: pass
+        raise
     return {"baby_id":safe_baby_id,"size_bytes":len(data)}
 
 @app.get("/api/babies/{baby_id}/avatar")
