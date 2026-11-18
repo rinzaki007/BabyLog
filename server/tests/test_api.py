@@ -1847,3 +1847,25 @@ def test_web_logout_rejects_cross_origin_requests(client):
     assert accepted.status_code == 200
     assert not client.cookies.get("babylog_session")
 
+
+def test_login_rate_limit_reserves_in_flight_attempts_atomically(client, monkeypatch):
+    import app.main as main
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(main, "_login_rate_key", lambda request, identifier: "shared-test-key")
+    request = object()
+
+    # Password verification is deliberately outside the global lock. All
+    # concurrent requests must nevertheless reserve a slot before hashing.
+    for _ in range(main._LOGIN_MAX_ATTEMPTS):
+        main._begin_login_attempt(request, "account")
+    with pytest.raises(HTTPException) as blocked:
+        main._begin_login_attempt(request, "account")
+    assert blocked.value.status_code == 429
+
+    for _ in range(main._LOGIN_MAX_ATTEMPTS):
+        main._finish_login_attempt(request, "account", False)
+    with pytest.raises(HTTPException) as failed_attempts_blocked:
+        main._begin_login_attempt(request, "account")
+    assert failed_attempts_blocked.value.status_code == 429
+
