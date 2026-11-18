@@ -1014,6 +1014,38 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
     assert [item["payload"]["occurredAt"] for item in filtered.json()["events"]] == [2000]
     assert filtered.json()["counts"]["events"] == 3
 
+
+@pytest.mark.parametrize(("entity_type", "asset_path", "payload"), [
+    ("photo", "photos/00000000-0000-0000-0000-000000000001.jpg",
+     {"id": "00000000-0000-0000-0000-000000000001"}),
+    ("baby", "avatars/00000000-0000-0000-0000-000000000002.jpg",
+     {"id": "00000000-0000-0000-0000-000000000002", "hasAvatar": True}),
+])
+def test_web_import_rejects_media_with_invalid_image_signature(tmp_path, entity_type, asset_path, payload):
+    from app import main
+
+    entity_id = payload["id"]
+    backup = {
+        "format": "babylog-backup",
+        "format_version": 1,
+        "records": [{
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "payload": payload,
+            "asset_path": asset_path,
+        }],
+    }
+    archive_path = tmp_path / "invalid-media.zip"
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("backup.json", json.dumps(backup))
+        # A valid ZIP entry and CRC, but not a JPEG image.
+        archive.writestr(asset_path, b"this is not a JPEG image")
+
+    with pytest.raises(main.HTTPException) as error:
+        main._parse_web_backup(archive_path)
+    assert error.value.status_code == 400
+    assert "图片格式不符" in error.value.detail
+
 def test_web_import_rejects_invalid_archive_without_changing_existing_data(client):
     token = register(client, "web-import-invalid@example.test")
     client.post("/api/web/login", json={"email": "web-import-invalid@example.test", "password": "correct-horse-battery"})
@@ -1456,7 +1488,7 @@ def test_web_import_cleans_partial_media_temp_file_after_interrupted_copy(client
     archive_bytes = io.BytesIO()
     with zipfile.ZipFile(archive_bytes, "w") as archive:
         archive.writestr("backup.json", json.dumps(manifest))
-        archive.writestr(f"avatars/{baby_id}.jpg", b"\\xff\\xd8\\xffavatar-content")
+        archive.writestr(f"avatars/{baby_id}.jpg", bytes([255, 216, 255]) + b"avatar-content")
 
     import app.main as main
 
