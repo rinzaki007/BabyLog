@@ -61,7 +61,13 @@ internal fun monthlyAlbumRecapText(
         append(babyName.ifBlank { "宝宝" }).append(" · ")
             .append(month.year).append("年").append(month.monthValue).append("月成长回顾")
         append("\n\n本月收藏了 ").append(monthPhotos.size).append(" 张照片。")
-        monthPhotos.mapNotNull { it.caption?.trim()?.takeIf(String::isNotEmpty) }
+        if (monthPhotos.isNotEmpty()) {
+            val firstDate = Instant.ofEpochMilli(monthPhotos.first().takenAt).atZone(zone).toLocalDate().format(dateFormat)
+            val lastDate = Instant.ofEpochMilli(monthPhotos.last().takenAt).atZone(zone).toLocalDate().format(dateFormat)
+            append("\n照片记录时间：").append(firstDate)
+            if (firstDate != lastDate) append(" 至 ").append(lastDate)
+        }
+        monthPhotos.mapNotNull { it.caption?.trim()?.takeIf { caption -> caption.isNotEmpty() } }
             .distinct().take(5).forEach { append("\n· ").append(it) }
         if (monthEvents.isNotEmpty()) {
             append("\n\n成长足迹（").append(monthEvents.size).append(" 条）")
