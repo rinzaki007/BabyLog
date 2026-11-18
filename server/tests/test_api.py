@@ -82,6 +82,39 @@ def test_login_attempts_are_rate_limited(client):
     assert blocked.status_code == 429
 
 
+def test_photo_id_cannot_replace_another_familys_media(client):
+    first_token = register(client, "photo-owner-a@example.test")
+    second_token = register(client, "photo-owner-b@example.test")
+    first_family = client.post("/api/families", headers=auth(first_token), json={
+        "name": "photo family A"
+    }).json()["family_id"]
+    second_family = client.post("/api/families", headers=auth(second_token), json={
+        "name": "photo family B"
+    }).json()["family_id"]
+    photo_id = str(uuid.uuid4())
+    original = b"\\xff\\xd8\\xfforiginal-family-a"
+    replacement = b"\\xff\\xd8\\xffreplacement-family-b"
+
+    uploaded = client.post("/api/photos/upload", headers=auth(first_token), params={
+        "family_id": first_family, "photo_id": photo_id
+    }, files={"file": ("original.jpg", original, "image/jpeg")})
+    assert uploaded.status_code == 200
+
+    collision = client.post("/api/photos/upload", headers=auth(second_token), params={
+        "family_id": second_family, "photo_id": photo_id
+    }, files={"file": ("replacement.jpg", replacement, "image/jpeg")})
+    assert collision.status_code == 409
+
+    original_download = client.get("/api/photos/" + photo_id, headers=auth(first_token), params={
+        "family_id": first_family
+    })
+    assert original_download.status_code == 200
+    assert original_download.content == original
+    assert client.get("/api/photos/" + photo_id, headers=auth(second_token), params={
+        "family_id": second_family
+    }).status_code == 404
+
+
 def test_photo_upload_rejects_mismatched_file_content(client):
     token = register(client, "photo-mime@example.test")
     family_id = client.post("/api/families", headers=auth(token), json={"name": "photos"}).json()["family_id"]
