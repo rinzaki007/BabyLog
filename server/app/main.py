@@ -531,7 +531,10 @@ def _check_login_rate(request:Request,identifier:str):
                 while old_attempts and now-old_attempts[0]>=_LOGIN_WINDOW_SECONDS: old_attempts.popleft()
                 if not old_attempts: _LOGIN_ATTEMPTS.pop(old_key,None)
             if len(_LOGIN_ATTEMPTS)>=_LOGIN_MAX_KEYS:
-                _LOGIN_ATTEMPTS.pop(next(iter(_LOGIN_ATTEMPTS)),None)
+                # Never evict a live account bucket to make room for attacker-
+                # controlled identifiers. Otherwise identifier spraying can
+                # erase another account's accumulated failed-login attempts.
+                raise HTTPException(429,"登录请求过多，请稍后再试")
 
 def _record_login_failure(request:Request,identifier:str):
     key=_login_rate_key(request,identifier)
