@@ -1126,14 +1126,22 @@ def join_family(body:InviteJoin,uid:str=Depends(current_user)):
 @app.post("/api/sync/push")
 def push(body:PushRequest,uid:str=Depends(current_user)):
     accepted=[]; conflicts=[]; allowed={"baby","event","photo"}; photo_files_to_delete=[]; avatar_files_to_delete=[]
+    operation_ids=[c.operation_id for c in body.changes]
+    if len(operation_ids)!=len(set(operation_ids)):
+        raise HTTPException(422,"同步请求中存在重复的操作 ID")
     with connect() as db:
         require_member(db,body.family_id,uid); db.execute("BEGIN IMMEDIATE")
         for c in body.changes:
             if c.entity_type not in allowed or c.operation not in {"upsert","delete"}:
                 conflicts.append({"operation_id":c.operation_id,"reason":"unsupported_operation"}); continue
             prior=db.execute("SELECT version FROM records WHERE family_id=? AND entity_type=? AND entity_id=?",(body.family_id,c.entity_type,c.entity_id)).fetchone()
-            duplicate=db.execute("SELECT seq FROM changes WHERE family_id=? AND operation_id=?",(body.family_id,c.operation_id)).fetchone()
+            duplicate=db.execute("SELECT entity_type,entity_id,payload FROM changes WHERE family_id=? AND operation_id=?",(body.family_id,c.operation_id)).fetchone()
             if duplicate:
+                original=json.loads(duplicate["payload"])
+                expected={"operation":c.operation,"payload":c.payload}
+                if duplicate["entity_type"]!=c.entity_type or duplicate["entity_id"]!=c.entity_id or original!=expected:
+                    conflicts.append({"operation_id":c.operation_id,"entity_id":c.entity_id,"reason":"operation_id_reused"})
+                    continue
                 current=db.execute("SELECT version FROM records WHERE family_id=? AND entity_type=? AND entity_id=?",(body.family_id,c.entity_type,c.entity_id)).fetchone()
                 accepted.append({"operation_id":c.operation_id,"duplicate":True,"version":current["version"] if current else 0})
                 continue
