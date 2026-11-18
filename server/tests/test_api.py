@@ -2040,7 +2040,7 @@ def test_two_devices_exchange_records_photos_and_recover_from_offline_version_co
 
     # Photo bytes and metadata travel through the same family sync flow.
     photo_id = str(uuid.uuid4())
-    photo_bytes = b"\\xff\\xd8\\xfftwo-device-photo"
+    photo_bytes = bytes([255, 216, 255]) + b"two-device-photo"
     uploaded = client.post(
         "/api/photos/upload", headers=auth(device_a),
         params={"family_id": family_id, "photo_id": photo_id},
