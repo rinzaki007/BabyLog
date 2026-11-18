@@ -12,7 +12,7 @@ import static org.junit.Assert.*;
 
 public class GrowthMilestoneCatalogTest {
     private BabyEventEntity event(String id, long time, String payload, Long deletedAt) {
-        return new BabyEventEntity(id, "baby-1", "MILESTONE", time, payload, null, time, deletedAt);
+        return new BabyEventEntity(id, "baby-1", "MILESTONE", time, payload, null, time, "PENDING", null, deletedAt);
     }
     @Test public void catalogHasStableUniqueIdsAndValidAgeRanges() {
         assertFalse(GrowthMilestoneCatalog.getMilestones().isEmpty());
