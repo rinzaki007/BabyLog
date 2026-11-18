@@ -2085,7 +2085,7 @@ def test_two_devices_exchange_records_photos_and_recover_from_offline_version_co
     assert event_push["accepted"][0]["version"] == 1
     event_pull_a = pull(device_a, first_pull_b["next_cursor"])
     assert [(item["entity_type"], item["entity_id"]) for item in event_pull_a["items"]] == [
-        ("event", event_id)
+        ("photo", photo_id), ("event", event_id)
     ]
 
     # Device A was offline with version 1 while device B advanced the baby to v2.
