@@ -100,7 +100,11 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     val daysCovered = dateRange.dayCount ?: calendarDaysCovered(recent, today, zone)
     val average = recent.size.toDouble() / daysCovered.coerceAtLeast(1).toDouble()
     val averageMilkPerFeed = if (feedCount > 0) milk / feedCount else 0
+    val averageMilkPerDay = milk / daysCovered.coerceAtLeast(1)
     val averageSleepMinutes = if (sleepEvents.isNotEmpty()) sleepMinutes / sleepEvents.size else 0
+    val averageSleepPerDay = sleepMinutes / daysCovered.coerceAtLeast(1)
+    fun durationLabel(minutes: Int) =
+        if (minutes >= 60) "${minutes / 60}小时${minutes % 60}分" else "${minutes}分钟"
     val chartDays = daysCovered.coerceIn(1, 366)
     val chartEndDate = dateRange.endDate ?: today
 
@@ -144,7 +148,10 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
                     }
                 }
                 if (feedCount > 0) {
-                    SummaryPill("🥛", "单次平均奶量", "${averageMilkPerFeed} ml", Modifier.fillMaxWidth())
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SummaryPill("🥛", "单次平均奶量", "${averageMilkPerFeed} ml", Modifier.weight(1f))
+                        SummaryPill("📊", "日均奶量", "${averageMilkPerDay} ml", Modifier.weight(1f))
+                    }
                 }
             }
             if (category == "全部" || category == "补充") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -157,9 +164,12 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
                 SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
             }
             if (category == "全部" || category == "睡眠") {
-                SummaryPill("🌙", "睡眠时长", if (sleepMinutes >= 60) "${sleepMinutes / 60}小时${sleepMinutes % 60}分" else "${sleepMinutes}分钟", Modifier.fillMaxWidth())
+                SummaryPill("🌙", "睡眠时长", durationLabel(sleepMinutes), Modifier.fillMaxWidth())
                 if (sleepEvents.isNotEmpty()) {
-                    SummaryPill("💤", "单次平均睡眠", if (averageSleepMinutes >= 60) "${averageSleepMinutes / 60}小时${averageSleepMinutes % 60}分" else "${averageSleepMinutes}分钟", Modifier.fillMaxWidth())
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SummaryPill("🌤️", "日均睡眠", durationLabel(averageSleepPerDay), Modifier.weight(1f))
+                        SummaryPill("💤", "单次平均睡眠", durationLabel(averageSleepMinutes), Modifier.weight(1f))
+                    }
                 }
             }
             if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
