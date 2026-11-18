@@ -1,6 +1,8 @@
 package com.rinzaki.babylog
 
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import android.util.LruCache
 import android.content.ContentValues
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -57,6 +59,8 @@ import com.rinzaki.babylog.sync.SyncHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.io.File
 import java.text.SimpleDateFormat
@@ -714,18 +718,63 @@ internal fun TimelinePhotoStrip(
     }
 }
 
-private fun decodeSampledPhoto(path: String, reqWidth: Int, reqHeight: Int): android.graphics.Bitmap? {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(path, bounds)
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-    var sampleSize = 1
-    while (bounds.outWidth / sampleSize > reqWidth * 2 || bounds.outHeight / sampleSize > reqHeight * 2) {
-        sampleSize *= 2
+/**
+ * Shared thumbnail cache for the album grid.
+ *
+ * The cache is byte-bounded (rather than item-count-bounded), and decoding is
+ * limited to two concurrent jobs so opening a large album cannot launch dozens
+ * of full disk decodes at once. Cache keys include file metadata so replacing a
+ * managed photo at the same path cannot keep showing a stale thumbnail.
+ */
+internal object AlbumPhotoThumbnailCache {
+    private const val MAX_CACHE_BYTES = 12 * 1024 * 1024
+    private val cache = object : LruCache<String, Bitmap>(MAX_CACHE_BYTES) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount.coerceAtLeast(1)
     }
-    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
-        inSampleSize = sampleSize
-        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
-    })
+    private val decodeSlots = Semaphore(2)
+
+    suspend fun load(path: String, reqWidth: Int, reqHeight: Int): Bitmap? =
+        decodeSlots.withPermit {
+            val file = File(path)
+            if (!file.isFile || file.length() <= 0L || reqWidth <= 0 || reqHeight <= 0) {
+                return@withPermit null
+            }
+            val key = listOf(
+                file.absolutePath,
+                file.length().toString(),
+                file.lastModified().toString(),
+                reqWidth.toString(),
+                reqHeight.toString()
+            ).joinToString("|")
+            synchronized(cache) { cache.get(key) }?.let { return@withPermit it }
+
+            val decoded = withContext(Dispatchers.IO) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.absolutePath, bounds)
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                    null
+                } else {
+                    var sampleSize = 1
+                    while (bounds.outWidth / sampleSize > reqWidth * 2 ||
+                        bounds.outHeight / sampleSize > reqHeight * 2
+                    ) {
+                        sampleSize *= 2
+                    }
+                    BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                    })
+                }
+            } ?: return@withPermit null
+
+            synchronized(cache) {
+                cache.get(key) ?: decoded.also { cache.put(key, it) }
+            }
+        }
+
+    internal fun clearForTests() {
+        synchronized(cache) { cache.evictAll() }
+    }
 }
 
 @Composable
@@ -740,10 +789,14 @@ private fun AlbumPhotoCard(
     val hasCachedOriginal = remember(photo.id, photo.originalOnDevice, cacheRefreshKey) {
         !photo.originalOnDevice && photoOriginalCacheFile(context.cacheDir, photo).isFile
     }
-    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, photo.localPath) {
-        value = withContext(Dispatchers.IO) {
-            runCatching { decodeSampledPhoto(photo.localPath, 360, 360) }.getOrNull()
-        }
+    val bitmap by produceState<android.graphics.Bitmap?>(
+        initialValue = null,
+        photo.localPath,
+        photo.updatedAt
+    ) {
+        value = runCatching {
+            AlbumPhotoThumbnailCache.load(photo.localPath, 360, 360)
+        }.getOrNull()
     }
     Card(
         modifier = modifier.clickable(onClick = onClick),
