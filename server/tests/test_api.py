@@ -357,6 +357,64 @@ def test_photo_metadata_sync_and_delete(client):
     assert pulled.json()["items"][-1]["operation"] == "delete"
 
 
+def test_sync_push_retries_are_idempotent_but_operation_ids_cannot_be_reused(client):
+    token = register(client, "sync-idempotency@example.test")
+    family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    baby_id = str(uuid.uuid4())
+    operation_id = str(uuid.uuid4())
+    original_payload = {"id": baby_id, "displayName": "原始名字", "hasAvatar": False}
+    original_change = {
+        "operation_id": operation_id, "entity_type": "baby", "entity_id": baby_id,
+        "operation": "upsert", "payload": original_payload, "base_version": 0
+    }
+    first = client.post("/api/sync/push", headers=auth(token), json={
+        "family_id": family_id, "changes": [original_change]
+    })
+    assert first.status_code == 200, first.text
+    assert first.json()["accepted"][0]["version"] == 1
+
+    retried = client.post("/api/sync/push", headers=auth(token), json={
+        "family_id": family_id, "changes": [original_change]
+    })
+    assert retried.status_code == 200, retried.text
+    assert retried.json()["accepted"] == [{
+        "operation_id": operation_id, "duplicate": True, "version": 1
+    }]
+
+    reused = dict(original_change)
+    reused["payload"] = {"id": baby_id, "displayName": "不应覆盖原数据", "hasAvatar": False}
+    rejected = client.post("/api/sync/push", headers=auth(token), json={
+        "family_id": family_id, "changes": [reused]
+    })
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json()["conflicts"][0]["reason"] == "operation_id_reused"
+    pulled = client.get("/api/sync/pull", headers=auth(token), params={
+        "family_id": family_id, "cursor": 0
+    })
+    assert len(pulled.json()["items"]) == 1
+    assert pulled.json()["items"][0]["payload"]["displayName"] == "原始名字"
+
+
+def test_sync_push_rejects_repeated_operation_ids_in_one_batch(client):
+    token = register(client, "sync-duplicate-batch@example.test")
+    family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    baby_id = str(uuid.uuid4())
+    change = {
+        "operation_id": str(uuid.uuid4()), "entity_type": "baby", "entity_id": baby_id,
+        "operation": "upsert", "payload": {"id": baby_id, "displayName": "宝宝", "hasAvatar": False},
+        "base_version": 0
+    }
+    response = client.post("/api/sync/push", headers=auth(token), json={
+        "family_id": family_id, "changes": [change, change]
+    })
+    assert response.status_code == 422
+    pulled = client.get("/api/sync/pull", headers=auth(token), params={
+        "family_id": family_id, "cursor": 0
+    })
+    assert pulled.status_code == 200
+    assert pulled.json()["items"] == []
+
+
 def test_pull_skips_photo_upsert_after_photo_was_deleted(client):
     token = register(client, "deleted-photo@example.test")
     family_id = client.post("/api/families", headers=auth(token), json={"name": "photos"}).json()["family_id"]
