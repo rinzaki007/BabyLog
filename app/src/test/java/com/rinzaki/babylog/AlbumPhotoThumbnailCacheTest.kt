@@ -2,7 +2,6 @@ package com.rinzaki.babylog
 
 import android.graphics.Bitmap
 import androidx.test.core.app.ApplicationProvider
-import com.rinzaki.babylog.sync.AlbumPhotoThumbnailCache
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
