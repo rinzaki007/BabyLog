@@ -527,15 +527,17 @@ def _begin_login_attempt(request:Request,identifier:str):
                 attempts=None
         if (len(attempts) if attempts else 0)+_LOGIN_IN_FLIGHT.get(key,0)>=_LOGIN_MAX_ATTEMPTS:
             raise HTTPException(429,"登录尝试过于频繁，请 15 分钟后再试")
-        if key not in _LOGIN_IN_FLIGHT and len(_LOGIN_IN_FLIGHT)>=_LOGIN_MAX_KEYS:
-            # Bound memory if requests keep introducing unique account names.
+        if key not in _LOGIN_ATTEMPTS and key not in _LOGIN_IN_FLIGHT:
+            # Bound the combined account-key state without evicting active requests.
             for old_key,old_attempts in list(_LOGIN_ATTEMPTS.items()):
                 while old_attempts and now-old_attempts[0]>=_LOGIN_WINDOW_SECONDS: old_attempts.popleft()
                 if not old_attempts: _LOGIN_ATTEMPTS.pop(old_key,None)
-            for old_key in list(_LOGIN_IN_FLIGHT):
-                if _LOGIN_IN_FLIGHT[old_key]<=0: _LOGIN_IN_FLIGHT.pop(old_key,None)
-            if len(_LOGIN_IN_FLIGHT)>=_LOGIN_MAX_KEYS:
-                raise HTTPException(429,"登录请求过于频繁，请稍后再试")
+            known_keys=set(_LOGIN_ATTEMPTS)|set(_LOGIN_IN_FLIGHT)
+            if len(known_keys)>=_LOGIN_MAX_KEYS:
+                evictable=next((old_key for old_key in _LOGIN_ATTEMPTS if old_key not in _LOGIN_IN_FLIGHT),None)
+                if evictable is None:
+                    raise HTTPException(429,"登录请求过于频繁，请稍后再试")
+                _LOGIN_ATTEMPTS.pop(evictable,None)
         _LOGIN_IN_FLIGHT[key]+=1
 
 
