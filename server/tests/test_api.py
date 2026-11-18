@@ -1425,3 +1425,62 @@ def test_web_import_cleans_partial_media_temp_file_after_interrupted_copy(client
     overview = client.get("/api/web/overview", headers=auth(token))
     assert overview.status_code == 200
     assert overview.json()["counts"] == {"babies": 0, "events": 0, "photos": 0}
+
+
+def test_startup_media_temp_cleanup_removes_only_recognized_stale_files(client):
+    from app import main
+
+    family_id = str(uuid.uuid4())
+    photo_folder = main.PHOTO_DIR / family_id
+    avatar_folder = main.AVATAR_DIR / family_id
+    photo_folder.mkdir(parents=True, exist_ok=True)
+    avatar_folder.mkdir(parents=True, exist_ok=True)
+
+    photo_part = photo_folder / f".{uuid.uuid4()}-Ab12Cd.part"
+    avatar_part = avatar_folder / f".{uuid.uuid4()}-XyZ789.jpg.part"
+    import_temp = photo_folder / f"{uuid.uuid4()}.webp.import"
+    recent_part = photo_folder / f".{uuid.uuid4()}-Recent1.part"
+    real_photo = photo_folder / f"{uuid.uuid4()}-original.jpg"
+    unknown_temp = photo_folder / "user-upload.part"
+    real_avatar = avatar_folder / f"{uuid.uuid4()}.jpg"
+
+    for path in (photo_part, avatar_part, import_temp, recent_part, real_photo, unknown_temp, real_avatar):
+        path.write_bytes(b"keep-or-clean")
+    old_time = 1_700_000_000
+    for path in (photo_part, avatar_part, import_temp, unknown_temp):
+        os.utime(path, (old_time, old_time))
+    os.utime(recent_part, (1_800_000_000, 1_800_000_000))
+
+    removed = main._cleanup_stale_media_temps(now=1_800_000_000)
+
+    assert removed == 3
+    assert not photo_part.exists()
+    assert not avatar_part.exists()
+    assert not import_temp.exists()
+    assert recent_part.is_file()
+    assert real_photo.is_file()
+    assert unknown_temp.is_file()
+    assert real_avatar.is_file()
+
+
+def test_media_temp_cleanup_preserves_recent_import_and_symlink(client):
+    from app import main
+
+    folder = main.PHOTO_DIR / str(uuid.uuid4())
+    folder.mkdir(parents=True, exist_ok=True)
+    recent_import = folder / f"{uuid.uuid4()}.jpg.import"
+    target = folder / "outside-data.bin"
+    link = folder / f".{uuid.uuid4()}-Link123.part"
+    recent_import.write_bytes(b"recent")
+    target.write_bytes(b"important")
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError):
+        link = None
+
+    main._cleanup_stale_media_temps(now=1_800_000_000)
+
+    assert recent_import.is_file()
+    assert target.read_bytes() == b"important"
+    if link is not None:
+        assert link.is_symlink()
