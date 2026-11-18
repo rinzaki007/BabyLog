@@ -1111,7 +1111,7 @@ def test_authoritative_snapshot_removes_deleted_photo_file_only_after_commit(cli
         "/api/photos/upload",
         headers=auth(token),
         params={"family_id": family_id, "photo_id": photo_id},
-        files={"file": ("photo.jpg", b"\\xff\\xd8\\xffphoto-data", "image/jpeg")},
+        files={"file": ("photo.jpg", b"\xff\xd8\xffphoto-data", "image/jpeg")},
     )
     assert uploaded.status_code == 200, uploaded.text
 
