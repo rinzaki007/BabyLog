@@ -1488,3 +1488,79 @@ def test_media_temp_cleanup_preserves_recent_import_and_symlink(client):
     assert target.read_bytes() == b"important"
     if link is not None:
         assert link.is_symlink()
+
+
+def test_orphan_media_cleanup_removes_only_old_unreferenced_known_media(client):
+    from app import main
+
+    family_id = str(uuid.uuid4())
+    referenced_baby_id = str(uuid.uuid4())
+    orphan_baby_id = str(uuid.uuid4())
+    photo_folder = main.PHOTO_DIR / family_id
+    avatar_folder = main.AVATAR_DIR / family_id
+    photo_folder.mkdir(parents=True, exist_ok=True)
+    avatar_folder.mkdir(parents=True, exist_ok=True)
+
+    referenced_photo_id = str(uuid.uuid4())
+    orphan_photo_id = str(uuid.uuid4())
+    referenced_photo = photo_folder / f"{referenced_photo_id}-{uuid.uuid4().hex}.jpg"
+    orphan_photo = photo_folder / f"{orphan_photo_id}-{uuid.uuid4().hex}.jpg"
+    imported_orphan = photo_folder / f"{uuid.uuid4()}.webp"
+    recent_orphan = photo_folder / f"{uuid.uuid4()}.png"
+    unknown_file = photo_folder / "user-photo.jpg"
+    referenced_avatar = avatar_folder / f"{referenced_baby_id}.jpg"
+    orphan_avatar = avatar_folder / f"{orphan_baby_id}.jpg"
+
+    for path in (referenced_photo, orphan_photo, imported_orphan, recent_orphan,
+                 unknown_file, referenced_avatar, orphan_avatar):
+        path.write_bytes(b"media")
+    now = int(time.time())
+    old_time = now - 48 * 60 * 60
+    for path in (referenced_photo, orphan_photo, imported_orphan, unknown_file,
+                 referenced_avatar, orphan_avatar):
+        os.utime(path, (old_time, old_time))
+    os.utime(recent_orphan, (now, now))
+
+    with main.connect() as db:
+        db.execute("INSERT INTO photos VALUES (?,?,?,?,?,?)", (
+            referenced_photo_id, family_id,
+            str(referenced_photo.relative_to(main.PHOTO_DIR)),
+            "image/jpeg", referenced_photo.stat().st_size, now
+        ))
+        db.execute("INSERT INTO records VALUES (?,?,?,?,?,?,0)", (
+            family_id, "baby", referenced_baby_id,
+            json.dumps({"id": referenced_baby_id, "hasAvatar": True}), 1, now
+        ))
+
+    removed = main._cleanup_orphan_media_files(now=now)
+
+    assert removed == {"photos": 2, "avatars": 1}
+    assert referenced_photo.is_file()
+    assert referenced_avatar.is_file()
+    assert not orphan_photo.exists()
+    assert not imported_orphan.exists()
+    assert not orphan_avatar.exists()
+    assert recent_orphan.is_file()
+    assert unknown_file.is_file()
+
+
+def test_orphan_avatar_cleanup_fails_closed_on_unreadable_baby_record(client):
+    from app import main
+
+    family_id = str(uuid.uuid4())
+    baby_id = str(uuid.uuid4())
+    folder = main.AVATAR_DIR / family_id
+    folder.mkdir(parents=True, exist_ok=True)
+    avatar = folder / f"{baby_id}.jpg"
+    avatar.write_bytes(b"keep")
+    old_time = int(time.time()) - 48 * 60 * 60
+    os.utime(avatar, (old_time, old_time))
+
+    with main.connect() as db:
+        db.execute("INSERT INTO records VALUES (?,?,?,?,?,?,0)", (
+            family_id, "baby", baby_id, "{invalid-json", 1, old_time
+        ))
+
+    main._cleanup_orphan_media_files(now=int(time.time()))
+
+    assert avatar.is_file()
