@@ -147,7 +147,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
                         SummaryPill(icon, method, "${feedingMethods[method] ?: 0} 次", Modifier.weight(1f))
                     }
                 }
-                if (feedCount > 0) {
+                if (milk > 0) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SummaryPill("🥛", "单次平均奶量", "${averageMilkPerFeed} ml", Modifier.weight(1f))
                         SummaryPill("📊", "日均奶量", "${averageMilkPerDay} ml", Modifier.weight(1f))
