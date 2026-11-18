@@ -1149,3 +1149,58 @@ def test_authoritative_snapshot_removes_deleted_photo_file_only_after_commit(cli
     assert client.get(
         f"/api/photos/{photo_id}", headers=auth(token), params={"family_id": family_id}
     ).status_code == 404
+
+
+@pytest.mark.parametrize("snapshot_mode", ["omitted", "explicit_delete"])
+def test_authoritative_snapshot_removes_deleted_avatar_file(client, snapshot_mode):
+    from app import main as server_main
+
+    token = register(client, f"snapshot-avatar-{snapshot_mode}@example.test")
+    family_id = client.post(
+        "/api/families", headers=auth(token), json={"name": "snapshot avatar"}
+    ).json()["family_id"]
+    baby_id = str(uuid.uuid4())
+    uploaded = client.post(
+        f"/api/babies/{baby_id}/avatar",
+        headers=auth(token),
+        params={"family_id": family_id},
+        files={"file": ("avatar.jpg", b"\xff\xd8\xffavatar-data", "image/jpeg")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+
+    pushed = client.post("/api/sync/push", headers=auth(token), json={
+        "family_id": family_id,
+        "changes": [{
+            "operation_id": str(uuid.uuid4()),
+            "entity_type": "baby",
+            "entity_id": baby_id,
+            "operation": "upsert",
+            "payload": {"id": baby_id, "displayName": "宝宝", "hasAvatar": True},
+            "base_version": 0,
+        }],
+    })
+    assert pushed.status_code == 200
+    avatar_path = server_main.AVATAR_DIR / family_id / f"{baby_id}.jpg"
+    assert avatar_path.is_file()
+
+    items = []
+    if snapshot_mode == "explicit_delete":
+        items = [{
+            "operation_id": str(uuid.uuid4()),
+            "entity_type": "baby",
+            "entity_id": baby_id,
+            "operation": "delete",
+            "payload": {"id": baby_id},
+        }]
+
+    replaced = client.post("/api/sync/authoritative-snapshot", headers=auth(token), json={
+        "family_id": family_id,
+        "items": items,
+    })
+    assert replaced.status_code == 200, replaced.text
+    assert not avatar_path.exists()
+    assert client.get(
+        f"/api/babies/{baby_id}/avatar",
+        headers=auth(token),
+        params={"family_id": family_id},
+    ).status_code == 404
