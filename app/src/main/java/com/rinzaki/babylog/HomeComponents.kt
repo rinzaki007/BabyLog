@@ -1,6 +1,7 @@
 package com.rinzaki.babylog
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +29,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 @Composable
-internal fun TodaySummary(events: List<BabyEventEntity>) {
+internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> Unit = {}) {
     val todayDate = LocalDate.now()
     val start = todayDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
     val end = todayDate.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -79,28 +80,29 @@ internal fun TodaySummary(events: List<BabyEventEntity>) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                SummaryPill("🍼", "喂养", "${feeding.size} 次", Modifier.weight(1f))
-                SummaryPill("🥛", "记录奶量", "${milk} ml", Modifier.weight(1f))
-                SummaryPill("🌙", "睡眠", sleepLabel, Modifier.weight(1f))
+                SummaryPill("🍼", "喂养", "${feeding.size} 次", Modifier.weight(1f)) { onSelect("喂养") }
+                SummaryPill("🥛", "记录奶量", "${milk} ml", Modifier.weight(1f)) { onSelect("喂养") }
+                SummaryPill("🌙", "睡眠", sleepLabel, Modifier.weight(1f)) { onSelect("睡眠") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                SummaryPill("💧", "小便", "${pee} 次", Modifier.weight(1f))
-                SummaryPill("🌿", "大便", "${stool} 次", Modifier.weight(1f))
-                SummaryPill("📏", "成长测量", "${today.count { it.eventType == "GROWTH" }} 次", Modifier.weight(1f))
+                SummaryPill("💧", "小便", "${pee} 次", Modifier.weight(1f)) { onSelect("大小便") }
+                SummaryPill("🌿", "大便", "${stool} 次", Modifier.weight(1f)) { onSelect("大小便") }
+                SummaryPill("📏", "成长测量", "${today.count { it.eventType == "GROWTH" }} 次", Modifier.weight(1f)) { onSelect("成长测量") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                SummaryPill("🧴", "补充记录", "${supplements.size} 次", Modifier.weight(1f))
-                SummaryPill("🚰", "饮水", "${waterMl} ml", Modifier.weight(1f))
-                SummaryPill("🥣", "辅食", "${solidFoods.size} 次", Modifier.weight(1f))
+                SummaryPill("🧴", "补充记录", "${supplements.size} 次", Modifier.weight(1f)) { onSelect("补充记录") }
+                SummaryPill("🚰", "饮水", "${waterMl} ml", Modifier.weight(1f)) { onSelect("补充记录") }
+                SummaryPill("🥣", "辅食", "${solidFoods.size} 次", Modifier.weight(1f)) { onSelect("辅食记录") }
             }
         }
     }
 }
 
 @Composable
-internal fun SummaryPill(emoji: String, label: String, value: String, modifier: Modifier = Modifier) {
+internal fun SummaryPill(emoji: String, label: String, value: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     Column(
         modifier.fillMaxWidth().heightIn(min = 72.dp)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .background(Color(0xFFFFF6F1), RoundedCornerShape(14.dp))
             .padding(horizontal = 4.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
