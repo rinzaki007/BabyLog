@@ -90,42 +90,35 @@ fun solidFoodDescription(payloadJson: String): String {
 
 @Composable
 internal fun SolidFoodJourneySection(events: List<BabyEventEntity>) {
-    val entries = remember(events) { solidFoodJourney(events) }
-    val totalAttempts = remember(entries) { entries.sumOf { it.attempts } }
+    val entries = solidFoodJourney(events)
+    val totalAttempts = entries.sumOf { it.attempts }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("辅食探索记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("记录尝试过的食物与观察情况", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text("${entries.size} 种 · $totalAttempts 次", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-            }
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("辅食探索记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "${entries.size} 种食物 · $totalAttempts 次尝试",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             if (entries.isEmpty()) {
                 Text("还没有辅食尝试记录。添加第一条后，这里会逐步形成宝宝的食物探索清单。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 entries.take(6).forEach { entry ->
                     val firstDate = Instant.ofEpochMilli(entry.firstTriedAt).atZone(ZoneId.systemDefault())
                         .toLocalDate().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(entry.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "${entry.category} · 首次尝试 $firstDate · ${entry.attempts} 次",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text(
-                            entry.latestReaction,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (entry.latestReaction == "出现不适") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    val detail = "${entry.category} · 首次尝试 $firstDate · ${entry.attempts} 次 · ${entry.latestReaction}"
+                    Text(
+                        "${entry.name}  ·  $detail",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (entry.latestReaction == "出现不适") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                    )
                 }
                 if (entries.size > 6) {
                     Text("最近展示 6 种，完整记录可在「记录」时间线中查看。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
