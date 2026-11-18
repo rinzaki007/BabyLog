@@ -160,11 +160,15 @@ internal fun isFamilyOwnershipConflict(reason: String?): Boolean =
 
 internal fun canRetrySyncConflict(reason: String?): Boolean {
     if (isFamilyOwnershipConflict(reason)) return false
-    // Permanent HTTP 4xx responses must not be offered as a blind retry.
-    // Version conflicts and transient/rate-limit responses remain manually retryable.
+    val normalized = reason?.trim()?.lowercase().orEmpty()
+    // The server's version_conflict is safe to retry because the local payload is
+    // rebased onto the latest server version without replacing local data.
+    if (normalized == "version_conflict" || normalized.contains("version conflict")) return true
+    // Unknown server conflict codes (for example operation_id_reused or
+    // unsupported_operation) are permanent until the underlying data/protocol is fixed.
     val statusCode = Regex("HTTP\\s+(\\d{3})", RegexOption.IGNORE_CASE)
         .find(reason.orEmpty())?.groupValues?.getOrNull(1)?.toIntOrNull()
-    return statusCode?.let(::shouldRetrySyncStatus) ?: true
+    return statusCode?.let(::shouldRetrySyncStatus) ?: false
 }
 
 internal fun canSwitchAccountWithConflicts(
@@ -179,7 +183,7 @@ internal fun canSubmitAuthoritativeSnapshot(
     babyFamilyIds.all { it == activeFamilyId }
 
 internal fun shouldRetrySyncStatus(statusCode: Int): Boolean =
-    statusCode !in 400..499 || statusCode in setOf(408, 409, 425, 429)
+    statusCode !in 400..499 || statusCode in setOf(408, 425, 429)
 
 private object SyncExecutionMutex {
     val mutex = Mutex()
