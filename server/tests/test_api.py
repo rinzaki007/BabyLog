@@ -1488,7 +1488,7 @@ def test_web_import_cleans_partial_media_temp_file_after_interrupted_copy(client
     archive_bytes = io.BytesIO()
     with zipfile.ZipFile(archive_bytes, "w") as archive:
         archive.writestr("backup.json", json.dumps(manifest))
-        archive.writestr(f"avatars/{baby_id}.jpg", b"\\xff\\xd8\\xffavatar-content")
+        archive.writestr(f"avatars/{baby_id}.jpg", bytes([255, 216, 255]) + b"avatar-content")
 
     import app.main as main
 
