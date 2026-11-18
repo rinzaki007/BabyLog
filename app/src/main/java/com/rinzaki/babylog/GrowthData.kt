@@ -40,3 +40,22 @@ internal fun growthMetricPoints(
             }
     }.sortedBy { it.first }
 }
+
+internal data class GrowthRateSummary(
+    val intervalDays: Int,
+    val changePer30Days: Float
+)
+
+/** Calculates a descriptive rate from the two latest measurements, without clinical interpretation. */
+internal fun growthRateSummary(points: List<Pair<Long, Float>>): GrowthRateSummary? {
+    if (points.size < 2) return null
+    val ordered = points.sortedBy { it.first }
+    val previous = ordered[ordered.lastIndex - 1]
+    val latest = ordered.last()
+    val elapsedMillis = latest.first - previous.first
+    if (elapsedMillis <= 0L) return null
+    val elapsedDays = elapsedMillis.toDouble() / 86_400_000.0
+    val rate = (latest.second - previous.second) * 30.0 / elapsedDays
+    if (!rate.isFinite()) return null
+    return GrowthRateSummary(elapsedDays.toInt().coerceAtLeast(1), rate.toFloat())
+}
