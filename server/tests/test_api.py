@@ -2078,7 +2078,7 @@ def test_two_devices_exchange_records_photos_and_recover_from_offline_version_co
         "entity_id": event_id, "operation": "upsert",
         "payload": {
             "id": event_id, "babyId": baby_id, "eventType": "FEEDING",
-            "occurredAt": 1_700_000_100_000, "payloadJson": "{\\"amountMl\\":120}",
+            "occurredAt": 1_700_000_100_000, "payloadJson": '{"amountMl":120}',
         },
         "base_version": 0,
     }])
