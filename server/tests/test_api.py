@@ -189,6 +189,55 @@ def test_baby_avatar_upload_download_and_delete(client):
     assert client.get(f"/api/babies/{baby_id}/avatar", headers=auth(token), params={"family_id": family_id}).status_code == 404
 
 
+def test_baby_avatar_replacement_preserves_previous_file_when_atomic_publish_fails(client, monkeypatch):
+    from app import main
+
+    token = register(client, "avatar-replacement-atomic@example.test")
+    family_id = client.post(
+        "/api/families", headers=auth(token), json={"name": "avatar replacement"}
+    ).json()["family_id"]
+    baby_id = str(uuid.uuid4())
+    params = {"family_id": family_id}
+    endpoint = f"/api/babies/{baby_id}/avatar"
+    original_bytes = b"\xff\xd8\xfforiginal-avatar"
+    first = client.post(
+        endpoint, headers=auth(token), params=params,
+        files={"file": ("avatar.jpg", original_bytes, "image/jpeg")},
+    )
+    assert first.status_code == 200, first.text
+    avatar_path = main.AVATAR_DIR / family_id / f"{baby_id}.jpg"
+    assert avatar_path.read_bytes() == original_bytes
+
+    original_replace = main.Path.replace
+
+    def fail_publish(self, target):
+        if self.parent == avatar_path.parent and self.name.endswith(".jpg.part"):
+            raise OSError("simulated atomic avatar publish failure")
+        return original_replace(self, target)
+
+    monkeypatch.setattr(main.Path, "replace", fail_publish)
+    with pytest.raises(OSError, match="simulated atomic avatar publish failure"):
+        client.post(
+            endpoint, headers=auth(token), params=params,
+            files={"file": ("avatar-new.jpg", b"\xff\xd8\xffreplacement-avatar", "image/jpeg")},
+        )
+
+    assert avatar_path.read_bytes() == original_bytes
+    assert not list(avatar_path.parent.glob("*.part"))
+    assert not list(avatar_path.parent.glob(".*.jpg.part"))
+
+    monkeypatch.setattr(main.Path, "replace", original_replace)
+    replacement_bytes = b"\xff\xd8\xffreplacement-avatar"
+    replaced = client.post(
+        endpoint, headers=auth(token), params=params,
+        files={"file": ("avatar-new.jpg", replacement_bytes, "image/jpeg")},
+    )
+    assert replaced.status_code == 200, replaced.text
+    assert avatar_path.read_bytes() == replacement_bytes
+    assert not list(avatar_path.parent.glob("*.part"))
+    assert not list(avatar_path.parent.glob(".*.jpg.part"))
+
+
 def test_photo_upload_and_download(client):
     token = register(client, "photos@example.test")
     family_id = client.post("/api/families", headers=auth(token), json={"name": "photos"}).json()["family_id"]
