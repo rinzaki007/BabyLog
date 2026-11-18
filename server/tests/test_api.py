@@ -1197,7 +1197,12 @@ def test_authoritative_snapshot_removes_deleted_photo_file_only_after_commit(cli
         }],
     })
     assert pushed.status_code == 200
-    photo_path = server_main.PHOTO_DIR / family_id / f"{photo_id}.jpg"
+    with server_main.connect() as db:
+        photo_meta = db.execute(
+            "SELECT relative_path FROM photos WHERE id=? AND family_id=?",
+            (photo_id, family_id),
+        ).fetchone()
+    photo_path = server_main.PHOTO_DIR / photo_meta["relative_path"]
     assert photo_path.is_file()
 
     items = []
