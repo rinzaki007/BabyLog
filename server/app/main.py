@@ -1089,7 +1089,11 @@ async def web_import(request:Request,uid:str=Depends(current_user)):
                                 target=folder/f"{entity_id}.jpg"; temp=target.with_suffix(".jpg.import")
                                 if target.exists(): raise HTTPException(409,"头像目标文件已存在，已停止导入以保护现有文件")
                                 temporary.append(temp)
-                                with archive.open(asset) as source, temp.open("wb") as output: shutil.copyfileobj(source,output,1024*1024)
+                                with archive.open(asset) as source, temp.open("wb") as output:
+                                    shutil.copyfileobj(source,output,1024*1024)
+                                    output.flush()
+                                    # Do not commit metadata until imported media is durable.
+                                    os.fsync(output.fileno())
                                 temp.replace(target); temporary.remove(temp); written.append(target)
                             else: payload["hasAvatar"]=False
                         if kind=="photo":
@@ -1100,7 +1104,11 @@ async def web_import(request:Request,uid:str=Depends(current_user)):
                             target=folder/f"{entity_id}{ext}"; temp=target.with_suffix(target.suffix+".import")
                             if target.exists(): raise HTTPException(409,"照片目标文件已存在，已停止导入以保护现有文件")
                             temporary.append(temp)
-                            with archive.open(asset) as source, temp.open("wb") as output: shutil.copyfileobj(source,output,1024*1024)
+                            with archive.open(asset) as source, temp.open("wb") as output:
+                                shutil.copyfileobj(source,output,1024*1024)
+                                output.flush()
+                                # Do not commit metadata until imported media is durable.
+                                os.fsync(output.fileno())
                             temp.replace(target); temporary.remove(temp); written.append(target)
                             db.execute("INSERT INTO photos VALUES (?,?,?,?,?,?)",(entity_id,fid,str(target.relative_to(PHOTO_DIR)),mime,target.stat().st_size,int(time.time())))
                             db.execute("INSERT INTO web_import_mappings VALUES (?,?,?,?)",(fid,source_entity_id,entity_id,int(time.time())))
@@ -1366,6 +1374,9 @@ async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:
                 if total>MAX_PHOTO_BYTES: raise HTTPException(413,"照片超过服务器大小限制")
                 if len(header)<32: header.extend(chunk[:32-len(header)])
                 out.write(chunk)
+            out.flush()
+            # Persist image bytes before publishing a database reference to them.
+            os.fsync(out.fileno())
         valid=(mime=="image/jpeg" and header.startswith(b"\xff\xd8\xff")) or (mime=="image/png" and header.startswith(b"\x89PNG\r\n\x1a\n")) or (mime=="image/webp" and len(header)>=12 and header[:4]==b"RIFF" and header[8:12]==b"WEBP") or (mime in {"image/heic","image/heif"} and len(header)>=12 and header[4:8]==b"ftyp" and header[8:12] in {b"heic",b"heix",b"hevc",b"hevx",b"mif1",b"msf1"})
         if not valid: raise HTTPException(415,"图片文件内容与声明格式不符")
 
@@ -1437,6 +1448,9 @@ async def upload_baby_avatar(baby_id:str,family_id:str,file:UploadFile=File(...)
     try:
         with os.fdopen(fd,"wb") as out:
             out.write(data)
+            out.flush()
+            # Ensure the complete image reaches stable storage before publication.
+            os.fsync(out.fileno())
         # Same-directory replace is atomic: readers see either the previous
         # complete avatar or the new complete avatar, never a partial file.
         temp.replace(target)

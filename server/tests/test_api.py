@@ -1692,6 +1692,38 @@ def test_web_import_cleans_partial_media_temp_file_after_interrupted_copy(client
     assert overview.json()["counts"] == {"babies": 0, "events": 0, "photos": 0}
 
 
+def test_uploaded_photo_and_avatar_are_fsynced_before_publish(client, monkeypatch):
+    token = register(client, "media-fsync@example.test")
+    family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    import app.main as main
+
+    original_fsync = main.os.fsync
+    synced = []
+
+    def track_fsync(fd):
+        synced.append(fd)
+        return original_fsync(fd)
+
+    monkeypatch.setattr(main.os, "fsync", track_fsync)
+    photo = client.post(
+        "/api/photos/upload",
+        headers=auth(token),
+        params={"family_id": family_id, "photo_id": str(uuid.uuid4())},
+        files={"file": ("photo.jpg", bytes([255, 216, 255]) + b"photo", "image/jpeg")},
+    )
+    assert photo.status_code == 200, photo.text
+
+    avatar_id = str(uuid.uuid4())
+    avatar = client.post(
+        f"/api/babies/{avatar_id}/avatar",
+        headers=auth(token),
+        params={"family_id": family_id},
+        files={"file": ("avatar.jpg", bytes([255, 216, 255]) + b"avatar", "image/jpeg")},
+    )
+    assert avatar.status_code == 200, avatar.text
+    assert len(synced) == 2
+
+
 def test_startup_media_temp_cleanup_removes_only_recognized_stale_files(client):
     from app import main
 
