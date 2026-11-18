@@ -78,6 +78,7 @@ internal fun BabyAlbumSection(
     photos: List<BabyPhotoEntity>,
     photoCount: Int,
     onLoadMore: suspend (offset: Int, limit: Int) -> List<BabyPhotoEntity>,
+    onLoadMonthPhotos: suspend (startAt: Long, endAt: Long, limit: Int) -> List<BabyPhotoEntity>,
     onAdd: (android.net.Uri, Long) -> Unit,
     onCaption: (BabyPhotoEntity, String) -> Unit,
     onDelete: (BabyPhotoEntity) -> Unit,
@@ -108,6 +109,14 @@ internal fun BabyAlbumSection(
     val loadedPhotos = remember(photos, extraPhotos, initialPhoto) {
         (photos + extraPhotos + listOfNotNull(initialPhoto)).distinctBy { it.id }
             .sortedWith(compareByDescending<BabyPhotoEntity> { it.takenAt }.thenByDescending { it.id })
+    }
+    val currentMonth = LocalDate.now().withDayOfMonth(1)
+    var monthPhotos by remember(baby.id) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
+    LaunchedEffect(baby.id, currentMonth) {
+        val zone = ZoneId.systemDefault()
+        val startAt = currentMonth.atStartOfDay(zone).toInstant().toEpochMilli()
+        val endAt = currentMonth.plusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        monthPhotos = onLoadMonthPhotos(startAt, endAt, 120)
     }
     LaunchedEffect(photos) { extraPhotos = emptyList() }
     LaunchedEffect(initialPhoto?.id) {
@@ -161,6 +170,57 @@ internal fun BabyAlbumSection(
         SelectionRow(listOf("全部", "近7天", "近30天", "本月", "指定日期"), albumFilter) { selected ->
             albumFilter = selected
             if (selected == "指定日期") showPhotoDatePicker = true
+        }
+        if (monthPhotos.isNotEmpty()) {
+            val zone = ZoneId.systemDefault()
+            val newest = monthPhotos.maxByOrNull { it.takenAt }!!
+            val oldest = monthPhotos.minByOrNull { it.takenAt }!!
+            val dayCount = monthPhotos.map {
+                java.time.Instant.ofEpochMilli(it.takenAt).atZone(zone).toLocalDate()
+            }.distinct().size
+            val reviewPhotos = remember(monthPhotos) {
+                listOfNotNull(
+                    monthPhotos.firstOrNull(),
+                    monthPhotos.getOrNull(monthPhotos.size / 2),
+                    monthPhotos.lastOrNull()
+                ).distinctBy { it.id }
+            }
+            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("本月回顾", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(
+                                "${monthPhotos.size}${if (monthPhotos.size == 120) " 张（最近120张）" else " 张"} · 覆盖 $dayCount 天",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text("查看本月", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Text(
+                        "${java.time.Instant.ofEpochMilli(oldest.takenAt).atZone(zone).toLocalDate().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))} — ${java.time.Instant.ofEpochMilli(newest.takenAt).atZone(zone).toLocalDate().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        reviewPhotos.forEach { photo ->
+                            AlbumPhotoCard(
+                                photo = photo,
+                                cacheRefreshKey = photoCacheRefreshKey,
+                                onClick = {
+                                    extraPhotos = (extraPhotos + photo).distinctBy { it.id }
+                                    albumFilter = "全部"
+                                    selectedPhotoDate = null
+                                    viewingPhoto = photo
+                                },
+                                modifier = Modifier.weight(1f),
+                                height = 92.dp
+                            )
+                        }
+                    }
+                }
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
