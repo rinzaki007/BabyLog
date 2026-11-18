@@ -3,6 +3,7 @@ import io
 import json
 import os
 import sqlite3
+import time
 import uuid
 import zipfile
 
@@ -1473,12 +1474,15 @@ def test_media_temp_cleanup_preserves_recent_import_and_symlink(client):
     link = folder / f".{uuid.uuid4()}-Link123.part"
     recent_import.write_bytes(b"recent")
     target.write_bytes(b"important")
+    now = int(time.time())
+    os.utime(recent_import, (now, now))
     try:
         link.symlink_to(target)
+        os.utime(link, (now - 48 * 60 * 60, now - 48 * 60 * 60), follow_symlinks=False)
     except (OSError, NotImplementedError):
         link = None
 
-    main._cleanup_stale_media_temps(now=1_800_000_000)
+    main._cleanup_stale_media_temps(now=now)
 
     assert recent_import.is_file()
     assert target.read_bytes() == b"important"
