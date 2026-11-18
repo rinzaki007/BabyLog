@@ -904,6 +904,58 @@ def test_web_export_can_exclude_or_include_photo_assets(client):
         assert "photos/" + photo_id + ".jpg" in archive.namelist()
         assert "avatars/" + baby_id + ".jpg" in archive.namelist()
 
+
+def test_web_export_fails_closed_when_referenced_media_is_missing(client):
+    from app import main
+
+    token = register(client, "web-export-missing-media@example.test")
+    family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    baby_id = str(uuid.uuid4())
+    photo_id = str(uuid.uuid4())
+
+    avatar = client.post(
+        f"/api/babies/{baby_id}/avatar", headers=auth(token),
+        params={"family_id": family_id},
+        files={"file": ("avatar.jpg", bytes([255, 216, 255]) + b"avatar", "image/jpeg")}
+    )
+    assert avatar.status_code == 200, avatar.text
+    photo = client.post(
+        "/api/photos/upload", headers=auth(token),
+        params={"family_id": family_id, "photo_id": photo_id},
+        files={"file": ("photo.jpg", bytes([255, 216, 255]) + b"photo", "image/jpeg")}
+    )
+    assert photo.status_code == 200, photo.text
+    pushed = client.post("/api/sync/push", headers=auth(token), json={"family_id": family_id, "changes": [
+        {"operation_id": str(uuid.uuid4()), "entity_type": "baby", "entity_id": baby_id,
+         "operation": "upsert", "payload": {"id": baby_id, "displayName": "小宝", "hasAvatar": True}, "base_version": 0},
+        {"operation_id": str(uuid.uuid4()), "entity_type": "photo", "entity_id": photo_id,
+         "operation": "upsert", "payload": {"id": photo_id, "babyId": baby_id, "caption": "照片",
+                                             "takenAt": 123456789, "createdAt": 123456789,
+                                             "updatedAt": 123456789, "mimeType": "image/jpeg"}, "base_version": 0},
+    ]})
+    assert pushed.status_code == 200, pushed.text
+    login = client.post("/api/web/login", json={
+        "email": "web-export-missing-media@example.test", "password": "correct-horse-battery"
+    })
+    assert login.status_code == 200
+
+    with main.connect() as db:
+        photo_row = db.execute("SELECT relative_path FROM photos WHERE id=?", (photo_id,)).fetchone()
+    photo_path = main.PHOTO_DIR / photo_row["relative_path"]
+    avatar_path = main.AVATAR_DIR / family_id / f"{baby_id}.jpg"
+
+    photo_path.unlink()
+    missing_photo = client.get("/api/web/export?include_photos=true")
+    assert missing_photo.status_code == 409
+    assert "照片文件缺失" in missing_photo.json()["detail"]
+
+    photo_path.parent.mkdir(parents=True, exist_ok=True)
+    photo_path.write_bytes(bytes([255, 216, 255]) + b"restored")
+    avatar_path.unlink()
+    missing_avatar = client.get("/api/web/export?include_photos=true")
+    assert missing_avatar.status_code == 409
+    assert "头像文件缺失" in missing_avatar.json()["detail"]
+
 def test_web_dashboard_pagination_date_filters_and_safe_import(client):
     source_token = register(client, "web-import-source@example.test")
     family_id = client.get("/api/me", headers=auth(source_token)).json()["families"][0]["id"]

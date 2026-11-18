@@ -881,18 +881,24 @@ def web_export(include_photos:bool=False,uid:str=Depends(current_user)):
                "version":row["version"],"updated_at":row["updated_at"]}
         if row["entity_type"]=="photo":
             meta=photo_files.get(row["entity_id"])
-            if meta:
+            if not meta:
+                raise HTTPException(409,"照片记录缺少媒体索引，备份未生成；请先完成同步修复")
+            try:
                 path=(PHOTO_DIR/meta["relative_path"]).resolve()
-                if PHOTO_DIR.resolve() in path.parents and path.is_file():
-                    asset=f"photos/{row['entity_id']}{path.suffix.lower()}"
-                    assets.append((asset,path)); entry["asset_path"]=asset
+            except (OSError,TypeError,ValueError):
+                path=None
+            if not path or PHOTO_DIR.resolve() not in path.parents or not path.is_file():
+                raise HTTPException(409,"照片文件缺失或路径无效，备份未生成；请先恢复照片")
+            asset=f"photos/{row['entity_id']}{path.suffix.lower()}"
+            assets.append((asset,path)); entry["asset_path"]=asset
         elif row["entity_type"]=="baby" and payload.get("hasAvatar"):
             if include_photos:
                 try: avatar=(AVATAR_DIR/str(uuid.UUID(fid))/f"{uuid.UUID(row['entity_id'])}.jpg").resolve()
-                except ValueError: avatar=None
-                if avatar and AVATAR_DIR.resolve() in avatar.parents and avatar.is_file():
-                    asset=f"avatars/{row['entity_id']}.jpg"
-                    assets.append((asset,avatar)); entry["asset_path"]=asset
+                except (ValueError,OSError): avatar=None
+                if not avatar or AVATAR_DIR.resolve() not in avatar.parents or not avatar.is_file():
+                    raise HTTPException(409,"宝宝头像文件缺失或路径无效，备份未生成；请先恢复头像")
+                asset=f"avatars/{row['entity_id']}.jpg"
+                assets.append((asset,avatar)); entry["asset_path"]=asset
             else:
                 payload["hasAvatar"]=False
         entries.append(entry)
