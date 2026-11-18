@@ -4,6 +4,8 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 internal data class StatisticsDateRange(
     val startDate: LocalDate?,
@@ -14,10 +16,13 @@ internal data class StatisticsDateRange(
         else (ChronoUnit.DAYS.between(startDate, endDate) + 1).toInt().coerceAtLeast(1)
 
     val label: String
-        get() = when {
-            startDate == null || endDate == null -> "全部记录"
-            startDate == endDate -> startDate.toString()
-            else -> "${startDate} 至 ${endDate}"
+        get() {
+            val formatter = DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA)
+            return when {
+                startDate == null || endDate == null -> "全部记录"
+                startDate == endDate -> startDate.format(formatter)
+                else -> "${startDate.format(formatter)} 至 ${endDate.format(formatter)}"
+            }
         }
 }
 
@@ -34,11 +39,11 @@ internal fun statisticsDateRange(
         "本周" -> today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         "本月" -> today.withDayOfMonth(1)
         "本季度" -> today.withMonth(((today.monthValue - 1) / 3) * 3 + 1).withDayOfMonth(1)
-        "自定义" -> customStart
+        "自定义" -> customStart?.coerceAtMost(today)
         else -> null
     }
     val end = when (preset) {
-        "自定义" -> customEnd
+        "自定义" -> customEnd?.coerceAtMost(today)
         "全部" -> null
         else -> today
     }
