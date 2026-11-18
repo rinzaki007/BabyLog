@@ -67,7 +67,7 @@ class AlbumPhotoThumbnailCacheTest {
             val first = AlbumPhotoThumbnailCache.load(file.absolutePath, 360, 360)
             assertNotNull(first)
 
-            writeImage(900, 600)
+            writeImage(360, 240)
             file.setLastModified(firstModified + 10_000L)
             val second = AlbumPhotoThumbnailCache.load(file.absolutePath, 360, 360)
             assertNotNull(second)
