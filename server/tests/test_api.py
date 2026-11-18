@@ -107,6 +107,33 @@ def test_login_attempts_are_rate_limited(client):
     })
     assert blocked.status_code == 429
 
+def test_login_bucket_capacity_never_evicts_active_account_limits(client, monkeypatch):
+    import app.main as main
+
+    main._LOGIN_ATTEMPTS.clear()
+    now = time.monotonic()
+    target_key = "192.0.2.10:protected-account"
+    target_attempts = main.deque([now - 1] * main._LOGIN_MAX_ATTEMPTS)
+    main._LOGIN_ATTEMPTS[target_key] = target_attempts
+
+    for index in range(main._LOGIN_MAX_KEYS - 1):
+        main._LOGIN_ATTEMPTS[f"192.0.2.20:attacker-{index}"] = main.deque([now - 1])
+
+    request = type("Request", (), {"client": type("Client", (), {"host": "192.0.2.10"})()})()
+    with pytest.raises(main.HTTPException) as blocked:
+        main._check_login_rate(request, "protected-account")
+    assert blocked.value.status_code == 429
+    assert main._LOGIN_ATTEMPTS[target_key] is target_attempts
+    assert len(main._LOGIN_ATTEMPTS) == main._LOGIN_MAX_KEYS
+
+    new_request = type("Request", (), {"client": type("Client", (), {"host": "192.0.2.30"})()})()
+    with pytest.raises(main.HTTPException) as capacity_blocked:
+        main._check_login_rate(new_request, "new-identifier")
+    assert capacity_blocked.value.status_code == 429
+    assert main._LOGIN_ATTEMPTS[target_key] is target_attempts
+    main._LOGIN_ATTEMPTS.clear()
+
+
 def test_login_rate_limit_is_shared_across_username_and_email_aliases(client):
     created = client.post("/api/auth/register", json={
         "username": "alias-user",
