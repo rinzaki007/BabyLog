@@ -1097,3 +1097,55 @@ def test_web_import_rejects_unsupported_backup_version_without_mutating_data(cli
     overview = client.get("/api/web/overview")
     assert overview.status_code == 200
     assert overview.json()["counts"] == {"babies": 0, "events": 0, "photos": 0}
+
+@pytest.mark.parametrize("snapshot_mode", ["omitted", "explicit_delete"])
+def test_authoritative_snapshot_removes_deleted_photo_file_only_after_commit(client, snapshot_mode):
+    from app import main as server_main
+
+    token = register(client, f"snapshot-photo-{snapshot_mode}@example.test")
+    family_id = client.post(
+        "/api/families", headers=auth(token), json={"name": "snapshot photo"}
+    ).json()["family_id"]
+    photo_id = str(uuid.uuid4())
+    uploaded = client.post(
+        "/api/photos/upload",
+        headers=auth(token),
+        params={"family_id": family_id, "photo_id": photo_id},
+        files={"file": ("photo.jpg", b"\\xff\\xd8\\xffphoto-data", "image/jpeg")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+
+    pushed = client.post("/api/sync/push", headers=auth(token), json={
+        "family_id": family_id,
+        "changes": [{
+            "operation_id": str(uuid.uuid4()),
+            "entity_type": "photo",
+            "entity_id": photo_id,
+            "operation": "upsert",
+            "payload": {"id": photo_id, "takenAt": 123456789},
+            "base_version": 0,
+        }],
+    })
+    assert pushed.status_code == 200
+    photo_path = server_main.PHOTO_DIR / family_id / f"{photo_id}.jpg"
+    assert photo_path.is_file()
+
+    items = []
+    if snapshot_mode == "explicit_delete":
+        items = [{
+            "operation_id": str(uuid.uuid4()),
+            "entity_type": "photo",
+            "entity_id": photo_id,
+            "operation": "delete",
+            "payload": {"id": photo_id},
+        }]
+
+    replaced = client.post("/api/sync/authoritative-snapshot", headers=auth(token), json={
+        "family_id": family_id,
+        "items": items,
+    })
+    assert replaced.status_code == 200, replaced.text
+    assert not photo_path.exists()
+    assert client.get(
+        f"/api/photos/{photo_id}", headers=auth(token), params={"family_id": family_id}
+    ).status_code == 404
