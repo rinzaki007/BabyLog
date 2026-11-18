@@ -549,9 +549,12 @@ def current_user(request:Request,creds:HTTPAuthorizationCredentials|None=Depends
     token=creds.credentials if creds else cookie_token
     if not token: raise HTTPException(401,"需要登录")
     if not creds and cookie_token and request.method not in {"GET","HEAD","OPTIONS"}:
-        origin=request.headers.get("origin","")
+        origin=request.headers.get("origin","").strip()
         host=request.headers.get("x-forwarded-host") or request.headers.get("host","")
-        if not origin or not host or origin.split("://",1)[-1].rstrip("/").lower()!=host.lower():
+        # Origin includes scheme as well as host/port. Comparing only the
+        # authority would incorrectly treat HTTP and HTTPS as the same origin.
+        expected_origin=f"{request.url.scheme}://{host}".rstrip("/")
+        if not origin or not host or origin.rstrip("/").lower()!=expected_origin.lower():
             raise HTTPException(403,"网页请求来源校验失败")
     try:
         claims=jwt.decode(token,JWT_SECRET,algorithms=["HS256"],issuer=JWT_ISSUER,options={"require":["exp","iat","sub","iss"]})
