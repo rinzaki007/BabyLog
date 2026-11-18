@@ -166,6 +166,39 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+private suspend fun recordGrowthMilestone(
+    dao: BabyLogDao,
+    appContext: android.content.Context,
+    babyId: String,
+    milestone: GrowthMilestone
+) {
+    val timestamp = System.currentTimeMillis()
+    val payload = JSONObject()
+    payload.put("milestoneId", milestone.id)
+    payload.put("milestoneTitle", milestone.title)
+    payload.put("category", milestone.category)
+    val eventId = UUID.randomUUID().toString()
+    val event = BabyEventEntity(
+        eventId, babyId, "MILESTONE", timestamp, payload.toString(), null, timestamp
+    )
+    dao.upsertEvent(event)
+    val familyId = SyncPreferences.familyId(appContext)
+    if (familyId.isNotBlank()) {
+        val operation = SyncOperationEntity(
+            UUID.randomUUID().toString(),
+            "event",
+            event.id,
+            "upsert",
+            eventSyncPayload(event).toString(),
+            event.serverVersion,
+            timestamp
+        )
+        dao.enqueueOperation(operation)
+        SyncScheduler.enqueue(appContext)
+    }
+}
+
 @Composable
 private fun BabyLogApp(dao: BabyLogDao) {
     val appContext = LocalContext.current.applicationContext
@@ -441,25 +474,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     if (page == 2) item {
                         GrowthMilestonesSection(baby, milestoneEvents) { milestone ->
                             scope.launch {
-                                val now = System.currentTimeMillis()
-                                val payload = JSONObject()
-                                    .put("milestoneId", milestone.id)
-                                    .put("milestoneTitle", milestone.title)
-                                    .put("category", milestone.category)
-                                val event = BabyEventEntity(
-                                    UUID.randomUUID().toString(), baby.id, "MILESTONE",
-                                    now, payload.toString(), null, now
-                                )
-                                dao.upsertEvent(event)
-                                if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                                    dao.enqueueOperation(
-                                        SyncOperationEntity(
-                                            UUID.randomUUID().toString(), "event", event.id, "upsert",
-                                            eventSyncPayload(event).toString(), event.serverVersion, now
-                                        )
-                                    )
-                                    SyncScheduler.enqueue(appContext)
-                                }
+                                recordGrowthMilestone(dao, appContext, baby.id, milestone)
                             }
                         }
                     }
