@@ -719,8 +719,13 @@ def change_password(body:PasswordChange,uid:str=Depends(current_user)):
 
 def _web_family(uid:str):
     profile=me(uid)
-    if not profile["families"]: raise HTTPException(404,"尚未创建数据空间")
-    return profile,profile["families"][0]
+    families=profile["families"]
+    if not families: raise HTTPException(404,"尚未创建数据空间")
+    # The web console currently has no family selector. Never silently read,
+    # export, or import the first family when this account belongs to several.
+    if len(families)>1:
+        raise HTTPException(409,"当前账号加入了多个家庭，网页管理后台暂不支持切换家庭；请先使用仅加入一个家庭的账号，避免误操作其他家庭数据")
+    return profile,families[0]
 
 def _web_event_details(payload):
     try:

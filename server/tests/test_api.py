@@ -958,6 +958,31 @@ def test_web_dashboard_login_overview_and_complete_export(client):
 
 
 
+def test_web_console_refuses_to_guess_when_account_belongs_to_multiple_families(client):
+    token = register(client, "web-multi-family@example.test")
+    first_family = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    second = client.post("/api/families", headers=auth(token), json={"name": "第二个家庭"})
+    assert second.status_code == 200, second.text
+    second_family = second.json()["family_id"]
+    assert second_family != first_family
+
+    login = client.post("/api/web/login", json={
+        "email": "web-multi-family@example.test", "password": "correct-horse-battery"
+    })
+    assert login.status_code == 200
+
+    # The web console has no family selector yet. It must fail closed rather
+    # than silently export, import, or display whichever family sorts first.
+    for path in ("/api/web/overview", "/api/web/statistics", "/api/web/export"):
+        response = client.get(path)
+        assert response.status_code == 409, (path, response.text)
+        assert "多个家庭" in response.json()["detail"]
+
+    # Explicitly scoped sync APIs remain available for both memberships.
+    assert client.get("/api/sync/status", headers=auth(token), params={"family_id": first_family}).status_code == 200
+    assert client.get("/api/sync/status", headers=auth(token), params={"family_id": second_family}).status_code == 200
+
+
 def test_web_export_can_exclude_or_include_photo_assets(client):
     token = register(client, "web-export-options@example.test")
     family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
