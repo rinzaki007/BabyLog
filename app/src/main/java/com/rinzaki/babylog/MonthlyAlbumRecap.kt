@@ -26,7 +26,7 @@ internal fun monthlyAlbumRecaps(
         it.deletedAt == null && it.eventType in setOf("GROWTH", "MILESTONE")
     }
     val photosByMonth = activePhotos.groupBy {
-        Instant.ofEpochMilli(it.takenAt).atZone(zone).toLocalDate().let(YearMonth::from)
+        Instant.ofEpochMilli(it.takenAt).atZone(zone).toLocalDate().let { YearMonth.from(it) }
     }
     val eventsByMonth = activeGrowthEvents.groupBy {
         Instant.ofEpochMilli(it.occurredAt).atZone(zone).toLocalDate().let(YearMonth::from)
