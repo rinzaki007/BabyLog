@@ -1756,6 +1756,7 @@ def test_uploaded_photo_and_avatar_are_fsynced_before_publish(client, monkeypatc
     )
     assert avatar.status_code == 200, avatar.text
     assert len(synced) == 2
+    assert main.DATA_DIR in synced_directories
     assert main.PHOTO_DIR in synced_directories
     assert main.PHOTO_DIR / family_id in synced_directories
     assert main.AVATAR_DIR in synced_directories
