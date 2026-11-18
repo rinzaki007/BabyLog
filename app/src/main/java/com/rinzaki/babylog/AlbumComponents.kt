@@ -112,7 +112,7 @@ internal fun BabyAlbumSection(
     }
     val currentMonth = LocalDate.now().withDayOfMonth(1)
     var monthPhotos by remember(baby.id) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
-    LaunchedEffect(baby.id, currentMonth) {
+    LaunchedEffect(baby.id, currentMonth, photoCount) {
         val zone = ZoneId.systemDefault()
         val startAt = currentMonth.atStartOfDay(zone).toInstant().toEpochMilli()
         val endAt = currentMonth.plusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli()
@@ -196,7 +196,10 @@ internal fun BabyAlbumSection(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        TextButton(onClick = { albumFilter = "本月" }) { Text("查看本月") }
+                        TextButton(onClick = {
+                            extraPhotos = (extraPhotos + monthPhotos).distinctBy { it.id }
+                            albumFilter = "本月"
+                        }) { Text("查看本月") }
                     }
                     Text(
                         "${java.time.Instant.ofEpochMilli(oldest.takenAt).atZone(zone).toLocalDate().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))} — ${java.time.Instant.ofEpochMilli(newest.takenAt).atZone(zone).toLocalDate().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))}",
