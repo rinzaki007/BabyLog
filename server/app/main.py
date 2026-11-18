@@ -986,7 +986,7 @@ def join_family(body:InviteJoin,uid:str=Depends(current_user)):
     return {"family_id":invite["family_id"],"joined":True}
 @app.post("/api/sync/push")
 def push(body:PushRequest,uid:str=Depends(current_user)):
-    accepted=[]; conflicts=[]; allowed={"baby","event","photo"}; photo_files_to_delete=[]
+    accepted=[]; conflicts=[]; allowed={"baby","event","photo"}; photo_files_to_delete=[]; avatar_files_to_delete=[]
     with connect() as db:
         require_member(db,body.family_id,uid); db.execute("BEGIN IMMEDIATE")
         for c in body.changes:
@@ -1008,10 +1008,21 @@ def push(body:PushRequest,uid:str=Depends(current_user)):
                 photo=db.execute("SELECT relative_path FROM photos WHERE id=? AND family_id=?",(c.entity_id,body.family_id)).fetchone()
                 if photo: photo_files_to_delete.append(PHOTO_DIR/photo["relative_path"])
                 db.execute("DELETE FROM photos WHERE id=? AND family_id=?",(c.entity_id,body.family_id))
+            elif c.entity_type=="baby" and c.operation=="delete":
+                try:
+                    avatar_id=str(uuid.UUID(c.entity_id))
+                    family_uuid=str(uuid.UUID(body.family_id))
+                    avatar_files_to_delete.append(AVATAR_DIR/family_uuid/f"{avatar_id}.jpg")
+                except ValueError:
+                    pass
             accepted.append({"operation_id":c.operation_id,"version":new_version,"seq":cur.lastrowid})
     for photo_path in photo_files_to_delete:
         resolved=photo_path.resolve()
         if PHOTO_DIR.resolve() in resolved.parents:
+            resolved.unlink(missing_ok=True)
+    for avatar_path in avatar_files_to_delete:
+        resolved=avatar_path.resolve()
+        if AVATAR_DIR.resolve() in resolved.parents:
             resolved.unlink(missing_ok=True)
     return {"accepted":accepted,"conflicts":conflicts}
 

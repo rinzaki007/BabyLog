@@ -1204,3 +1204,52 @@ def test_authoritative_snapshot_removes_deleted_avatar_file(client, snapshot_mod
         headers=auth(token),
         params={"family_id": family_id},
     ).status_code == 404
+
+
+def test_sync_push_deleting_baby_removes_nas_avatar_after_commit(client):
+    from app import main as server_main
+
+    token = register(client, "sync-delete-avatar@example.test")
+    family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    baby_id = str(uuid.uuid4())
+    uploaded = client.post(
+        f"/api/babies/{baby_id}/avatar?family_id={family_id}",
+        headers=auth(token),
+        files={"file": ("avatar.jpg", b"\xff\xd8\xffsynced-avatar", "image/jpeg")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+
+    created = client.post("/api/sync/push", headers=auth(token), json={
+        "family_id": family_id,
+        "changes": [{
+            "operation_id": str(uuid.uuid4()),
+            "entity_type": "baby",
+            "entity_id": baby_id,
+            "operation": "upsert",
+            "payload": {"id": baby_id, "displayName": "宝宝", "hasAvatar": True},
+            "base_version": 0,
+        }],
+    })
+    assert created.status_code == 200, created.text
+    avatar_path = server_main.AVATAR_DIR / family_id / f"{baby_id}.jpg"
+    assert avatar_path.is_file()
+
+    deleted = client.post("/api/sync/push", headers=auth(token), json={
+        "family_id": family_id,
+        "changes": [{
+            "operation_id": str(uuid.uuid4()),
+            "entity_type": "baby",
+            "entity_id": baby_id,
+            "operation": "delete",
+            "payload": {"id": baby_id},
+            "base_version": 1,
+        }],
+    })
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["accepted"]
+    assert not avatar_path.exists()
+    assert client.get(
+        f"/api/babies/{baby_id}/avatar",
+        headers=auth(token),
+        params={"family_id": family_id},
+    ).status_code == 404
