@@ -1180,10 +1180,15 @@ async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:
     if mime not in types: raise HTTPException(415,"仅支持 JPEG、PNG、WebP 或 HEIC 图片")
     try: safe_photo_id=str(uuid.UUID(photo_id))
     except ValueError: raise HTTPException(422,"照片 ID 无效")
+    safe_family_id=str(uuid.UUID(family_id))
     with connect() as db: require_member(db,family_id,uid)
-    folder=PHOTO_DIR/str(uuid.UUID(family_id)); folder.mkdir(parents=True,exist_ok=True); target=folder/f"{safe_photo_id}{types[mime]}"; temp=target.with_suffix(target.suffix+".part"); total=0; header=bytearray()
+    folder=PHOTO_DIR/safe_family_id; folder.mkdir(parents=True,exist_ok=True)
+    fd,temp_name=tempfile.mkstemp(prefix=f".{safe_photo_id}-",suffix=".part",dir=folder)
+    temp=Path(temp_name)
+    target=folder/f"{safe_photo_id}-{uuid.uuid4().hex}{types[mime]}"
+    total=0; header=bytearray()
     try:
-        with temp.open("wb") as out:
+        with os.fdopen(fd,"wb") as out:
             while chunk:=await file.read(1024*1024):
                 total+=len(chunk)
                 if total>MAX_PHOTO_BYTES: raise HTTPException(413,"照片超过服务器大小限制")
@@ -1191,12 +1196,41 @@ async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:
                 out.write(chunk)
         valid=(mime=="image/jpeg" and header.startswith(b"\xff\xd8\xff")) or (mime=="image/png" and header.startswith(b"\x89PNG\r\n\x1a\n")) or (mime=="image/webp" and len(header)>=12 and header[:4]==b"RIFF" and header[8:12]==b"WEBP") or (mime in {"image/heic","image/heif"} and len(header)>=12 and header[4:8]==b"ftyp" and header[8:12] in {b"heic",b"heix",b"hevc",b"hevx",b"mif1",b"msf1"})
         if not valid: raise HTTPException(415,"图片文件内容与声明格式不符")
-        temp.replace(target)
+
+        # Serialize replacements for the same photo ID. Keep the previous immutable
+        # file until the new file and its metadata have both been committed.
+        previous=None
+        with connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            previous=db.execute(
+                "SELECT relative_path FROM photos WHERE id=? AND family_id=?",
+                (safe_photo_id,family_id)
+            ).fetchone()
+            temp.replace(target)
+            try:
+                rel=str(target.relative_to(PHOTO_DIR))
+                db.execute(
+                    "INSERT OR REPLACE INTO photos VALUES (?,?,?,?,?,?)",
+                    (safe_photo_id,family_id,rel,mime,total,int(time.time()))
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                try: target.unlink(missing_ok=True)
+                except OSError: pass
+                raise
+
+        # A committed replacement is now authoritative; only then remove the old file.
+        if previous:
+            previous_path=(PHOTO_DIR/previous["relative_path"]).resolve()
+            if PHOTO_DIR.resolve() in previous_path.parents and previous_path != target.resolve():
+                try: previous_path.unlink(missing_ok=True)
+                except OSError: pass
     except Exception:
-        temp.unlink(missing_ok=True); raise
-    rel=str(target.relative_to(PHOTO_DIR))
-    with connect() as db: db.execute("INSERT OR REPLACE INTO photos VALUES (?,?,?,?,?,?)",(str(uuid.UUID(photo_id)),family_id,rel,mime,total,int(time.time())))
-    return {"photo_id":photo_id,"size_bytes":total,"mime_type":mime}
+        try: temp.unlink(missing_ok=True)
+        except OSError: pass
+        raise
+    return {"photo_id":safe_photo_id,"size_bytes":total,"mime_type":mime}
 @app.get("/api/photos/{photo_id}")
 def download_photo(photo_id:str,family_id:str,uid:str=Depends(current_user)):
     from fastapi.responses import FileResponse

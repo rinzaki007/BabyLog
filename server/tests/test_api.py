@@ -2,6 +2,7 @@ import importlib
 import io
 import json
 import os
+import sqlite3
 import uuid
 import zipfile
 
@@ -201,6 +202,75 @@ def test_photo_upload_and_download(client):
     downloaded = client.get(f"/api/photos/{photo_id}", headers=auth(token), params={"family_id": family_id})
     assert downloaded.status_code == 200
     assert downloaded.content == b"\xff\xd8\xfftest-image"
+
+def test_photo_upload_replacement_preserves_previous_file_when_metadata_commit_fails(client):
+    from app import main
+
+    token = register(client, "photo-replacement-atomic@example.test")
+    family_id = client.post("/api/families", headers=auth(token), json={"name": "photos"}).json()["family_id"]
+    photo_id = str(uuid.uuid4())
+    params = {"family_id": family_id, "photo_id": photo_id}
+    original_bytes = b"\xff\xd8\xfforiginal-photo"
+    first = client.post(
+        "/api/photos/upload", headers=auth(token), params=params,
+        files={"file": ("original.jpg", original_bytes, "image/jpeg")},
+    )
+    assert first.status_code == 200, first.text
+
+    with main.connect() as db:
+        original_row = db.execute(
+            "SELECT relative_path FROM photos WHERE id=? AND family_id=?",
+            (photo_id, family_id),
+        ).fetchone()
+        db.execute("""
+            CREATE TRIGGER reject_photo_metadata_replacement
+            BEFORE INSERT ON photos
+            BEGIN
+                SELECT RAISE(ABORT, 'simulated metadata write failure');
+            END
+        """)
+    original_path = main.PHOTO_DIR / original_row["relative_path"]
+    assert original_path.is_file()
+
+    with pytest.raises(sqlite3.IntegrityError, match="simulated metadata write failure"):
+        client.post(
+            "/api/photos/upload", headers=auth(token), params=params,
+            files={"file": ("replacement.jpg", b"\xff\xd8\xffreplacement-photo", "image/jpeg")},
+        )
+
+    assert original_path.is_file()
+    assert client.get(
+        f"/api/photos/{photo_id}", headers=auth(token), params={"family_id": family_id}
+    ).content == original_bytes
+    with main.connect() as db:
+        unchanged = db.execute(
+            "SELECT relative_path FROM photos WHERE id=? AND family_id=?",
+            (photo_id, family_id),
+        ).fetchone()
+        db.execute("DROP TRIGGER reject_photo_metadata_replacement")
+    assert unchanged["relative_path"] == original_row["relative_path"]
+    assert not list((main.PHOTO_DIR / family_id).glob("*.part"))
+
+    replacement_bytes = b"\xff\xd8\xffreplacement-photo"
+    replaced = client.post(
+        "/api/photos/upload", headers=auth(token), params=params,
+        files={"file": ("replacement.jpg", replacement_bytes, "image/jpeg")},
+    )
+    assert replaced.status_code == 200, replaced.text
+    with main.connect() as db:
+        current = db.execute(
+            "SELECT relative_path FROM photos WHERE id=? AND family_id=?",
+            (photo_id, family_id),
+        ).fetchone()
+    current_path = main.PHOTO_DIR / current["relative_path"]
+    assert current_path.is_file()
+    assert current_path != original_path
+    assert not original_path.exists()
+    assert client.get(
+        f"/api/photos/{photo_id}", headers=auth(token), params={"family_id": family_id}
+    ).content == replacement_bytes
+    assert not list((main.PHOTO_DIR / family_id).glob("*.part"))
+
 
 def test_photo_metadata_sync_and_delete(client):
     token = register(client, "photo-sync@example.test")
@@ -1127,7 +1197,12 @@ def test_authoritative_snapshot_removes_deleted_photo_file_only_after_commit(cli
         }],
     })
     assert pushed.status_code == 200
-    photo_path = server_main.PHOTO_DIR / family_id / f"{photo_id}.jpg"
+    with server_main.connect() as db:
+        photo_meta = db.execute(
+            "SELECT relative_path FROM photos WHERE id=? AND family_id=?",
+            (photo_id, family_id),
+        ).fetchone()
+    photo_path = server_main.PHOTO_DIR / photo_meta["relative_path"]
     assert photo_path.is_file()
 
     items = []
