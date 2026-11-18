@@ -514,6 +514,7 @@ def issue_token(uid, ttl:int|None=None):
 
 # Lightweight per-process throttling; no Redis or extra service required.
 _LOGIN_ATTEMPTS=defaultdict(deque)
+_LOGIN_IN_FLIGHT=defaultdict(int)
 _LOGIN_LOCK=threading.Lock()
 _LOGIN_WINDOW_SECONDS=15*60
 _LOGIN_MAX_ATTEMPTS=8
@@ -525,6 +526,7 @@ def _login_rate_key(request:Request,identifier:str):
 _LOGIN_MAX_KEYS=10000
 
 def _check_login_rate(request:Request,identifier:str):
+    """Atomically reserve a slot before password hashing to prevent parallel bypass."""
     key=_login_rate_key(request,identifier); now=time.monotonic()
     with _LOGIN_LOCK:
         attempts=_LOGIN_ATTEMPTS.get(key)
@@ -533,30 +535,39 @@ def _check_login_rate(request:Request,identifier:str):
             if not attempts:
                 _LOGIN_ATTEMPTS.pop(key,None)
                 attempts=None
-        if attempts and len(attempts)>=_LOGIN_MAX_ATTEMPTS:
+        in_flight=_LOGIN_IN_FLIGHT.get(key,0)
+        if (len(attempts) if attempts else 0)+in_flight>=_LOGIN_MAX_ATTEMPTS:
             raise HTTPException(429,"登录尝试过于频繁，请 15 分钟后再试")
-        if attempts is None and len(_LOGIN_ATTEMPTS)>=_LOGIN_MAX_KEYS:
-            # Bound memory use if requests keep introducing unique account names.
+        if key not in _LOGIN_ATTEMPTS and key not in _LOGIN_IN_FLIGHT:
             for old_key,old_attempts in list(_LOGIN_ATTEMPTS.items()):
-                while old_attempts and now-old_attempts[0]>=_LOGIN_WINDOW_SECONDS: old_attempts.popleft()
-                if not old_attempts: _LOGIN_ATTEMPTS.pop(old_key,None)
-            if len(_LOGIN_ATTEMPTS)>=_LOGIN_MAX_KEYS:
-                # Never evict a live account bucket to make room for attacker-
-                # controlled identifiers. Otherwise identifier spraying can
-                # erase another account's accumulated failed-login attempts.
+                while old_attempts and now-old_attempts[0]>=_LOGIN_WINDOW_SECONDS:
+                    old_attempts.popleft()
+                if not old_attempts:
+                    _LOGIN_ATTEMPTS.pop(old_key,None)
+            if len(set(_LOGIN_ATTEMPTS)|set(_LOGIN_IN_FLIGHT))>=_LOGIN_MAX_KEYS:
+                # Never evict live account buckets or active requests: identifier
+                # spraying must not erase another account's accumulated failures.
                 raise HTTPException(429,"登录请求过多，请稍后再试")
+        _LOGIN_IN_FLIGHT[key]+=1
 
-def _record_login_failure(request:Request,identifier:str):
-    key=_login_rate_key(request,identifier)
+def _finish_login_attempt(request:Request,identifier:str,success:bool|None):
+    """Release a reservation; record failure or clear the bucket after verification."""
+    key=_login_rate_key(request,identifier); now=time.monotonic()
     with _LOGIN_LOCK:
-        attempts=_LOGIN_ATTEMPTS[key]; now=time.monotonic()
-        while attempts and now-attempts[0]>=_LOGIN_WINDOW_SECONDS: attempts.popleft()
-        attempts.append(now)
-
-def _clear_login_failures(request:Request,identifier:str):
-    with _LOGIN_LOCK:
-        _LOGIN_ATTEMPTS.pop(_login_rate_key(request,identifier),None)
-
+        in_flight=_LOGIN_IN_FLIGHT.get(key,0)
+        if in_flight<=1:
+            _LOGIN_IN_FLIGHT.pop(key,None)
+        else:
+            _LOGIN_IN_FLIGHT[key]=in_flight-1
+        if success is True:
+            _LOGIN_ATTEMPTS.pop(key,None)
+        elif success is False:
+            attempts=_LOGIN_ATTEMPTS[key]
+            while attempts and now-attempts[0]>=_LOGIN_WINDOW_SECONDS:
+                attempts.popleft()
+            attempts.append(now)
+        # None releases a reservation after an internal verification error
+        # without counting it as an incorrect password.
 
 def _require_same_origin(request:Request):
     origin=request.headers.get("origin","").strip()
@@ -675,10 +686,14 @@ def login(body:Credentials,request:Request):
     # failed-attempt counter.
     rate_identifier=user["id"] if user else identifier
     _check_login_rate(request,rate_identifier)
-    if not user or not password_hash.verify(body.password,user["password_hash"]):
-        _record_login_failure(request,rate_identifier)
+    try:
+        valid=bool(user and password_hash.verify(body.password,user["password_hash"]))
+    except Exception:
+        _finish_login_attempt(request,rate_identifier,None)
+        raise
+    _finish_login_attempt(request,rate_identifier,valid)
+    if not valid:
         raise HTTPException(401,"账号名/邮箱或密码错误")
-    _clear_login_failures(request,rate_identifier)
     return {"access_token":issue_token(user["id"]),"token_type":"bearer","user_id":user["id"],"username":user["username"]}
 
 @app.post("/api/web/login")
@@ -688,10 +703,14 @@ def web_login(body:Credentials,request:Request,response:Response):
         user=db.execute("SELECT * FROM users WHERE username=? OR email=?",(identifier,clean_email(identifier))).fetchone()
     rate_identifier=user["id"] if user else identifier
     _check_login_rate(request,rate_identifier)
-    if not user or not password_hash.verify(body.password,user["password_hash"]):
-        _record_login_failure(request,rate_identifier)
+    try:
+        valid=bool(user and password_hash.verify(body.password,user["password_hash"]))
+    except Exception:
+        _finish_login_attempt(request,rate_identifier,None)
+        raise
+    _finish_login_attempt(request,rate_identifier,valid)
+    if not valid:
         raise HTTPException(401,"账号名/邮箱或密码错误")
-    _clear_login_failures(request,rate_identifier)
     secure=(request.headers.get("x-forwarded-proto","").split(",")[0].strip().lower()=="https" or request.url.scheme=="https")
     web_ttl=min(TOKEN_TTL,12*3600)
     response.set_cookie("babylog_session",issue_token(user["id"],web_ttl),max_age=web_ttl,
