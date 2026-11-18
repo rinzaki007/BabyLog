@@ -40,11 +40,11 @@ jobs:
           BABYLOG_KEY_ALIAS: ${{ secrets.BABYLOG_KEY_ALIAS }}
           BABYLOG_KEY_PASSWORD: ${{ secrets.BABYLOG_KEY_PASSWORD }}
         run: |
-          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8/' gradle.properties
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx5g -Dfile.encoding=UTF-8/' gradle.properties
           sed -i 's/^org.gradle.parallel=.*/org.gradle.parallel=false/' gradle.properties
           {
-            echo 'kotlin.compiler.execution.strategy=daemon'
-            echo 'kotlin.daemon.jvmargs=-Xmx6g'
+            echo 'kotlin.compiler.execution.strategy=in-process'
+            echo 'kotlin.incremental=false'
           } >> gradle.properties
           gradle --no-daemon testDebugUnitTest assembleDebug
       - name: Verify launcher icon is packaged in the APK
