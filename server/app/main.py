@@ -1119,9 +1119,19 @@ def create_invite(fid:str,uid:str=Depends(current_user)):
 def join_family(body:InviteJoin,uid:str=Depends(current_user)):
     now=int(time.time()); digest=hashlib.sha256(body.code.encode()).hexdigest()
     with connect() as db:
+        # Serialize invite redemption so two accounts cannot both consume a
+        # nominally single-use code after reading the same unused row.
+        db.execute("BEGIN IMMEDIATE")
         invite=db.execute("SELECT * FROM invites WHERE code_hash=?",(digest,)).fetchone()
-        if not invite or invite["used_at"] is not None or invite["expires_at"]<now: raise HTTPException(400,"邀请码无效、已使用或已过期")
-        db.execute("INSERT OR IGNORE INTO family_members VALUES (?,?,?,?)",(invite["family_id"],uid,"member",now)); db.execute("UPDATE invites SET used_at=? WHERE id=?",(now,invite["id"]))
+        if not invite or invite["used_at"] is not None or invite["expires_at"]<now:
+            raise HTTPException(400,"邀请码无效、已使用或已过期")
+        consumed=db.execute(
+            "UPDATE invites SET used_at=? WHERE id=? AND used_at IS NULL AND expires_at>=?",
+            (now,invite["id"],now)
+        )
+        if consumed.rowcount!=1:
+            raise HTTPException(400,"邀请码无效、已使用或已过期")
+        db.execute("INSERT OR IGNORE INTO family_members VALUES (?,?,?,?)",(invite["family_id"],uid,"member",now))
     return {"family_id":invite["family_id"],"joined":True}
 @app.post("/api/sync/push")
 def push(body:PushRequest,uid:str=Depends(current_user)):
