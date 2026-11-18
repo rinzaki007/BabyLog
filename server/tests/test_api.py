@@ -91,6 +91,38 @@ def test_photo_upload_rejects_mismatched_file_content(client):
     assert response.status_code == 415
 
 
+def test_photo_upload_cannot_reassign_another_familys_photo_id(client):
+    owner_one = register(client, "photo-family-one@example.test")
+    owner_two = register(client, "photo-family-two@example.test")
+    family_one = client.post("/api/families", headers=auth(owner_one), json={"name": "family one"}).json()["family_id"]
+    family_two = client.post("/api/families", headers=auth(owner_two), json={"name": "family two"}).json()["family_id"]
+    photo_id = str(uuid.uuid4())
+    original = bytes([255, 216, 255]) + b"original-photo"
+    uploaded = client.post("/api/photos/upload", headers=auth(owner_one), params={
+        "family_id": family_one, "photo_id": photo_id
+    }, files={"file": ("photo.jpg", original, "image/jpeg")})
+    assert uploaded.status_code == 200, uploaded.text
+
+    import app.main as main
+    with main.connect() as db:
+        original_meta = db.execute("SELECT family_id,relative_path FROM photos WHERE id=?", (photo_id,)).fetchone()
+    original_path = main.PHOTO_DIR / original_meta["relative_path"]
+    assert original_path.read_bytes() == original
+
+    collision = client.post("/api/photos/upload", headers=auth(owner_two), params={
+        "family_id": family_two, "photo_id": photo_id
+    }, files={"file": ("photo.jpg", bytes([255, 216, 255]) + b"attacker", "image/jpeg")})
+    assert collision.status_code == 409
+
+    with main.connect() as db:
+        after = db.execute("SELECT family_id,relative_path FROM photos WHERE id=?", (photo_id,)).fetchone()
+    assert after["family_id"] == family_one
+    assert after["relative_path"] == original_meta["relative_path"]
+    assert original_path.read_bytes() == original
+    assert client.get(f"/api/photos/{photo_id}", headers=auth(owner_one), params={"family_id": family_one}).content == original
+    assert client.get(f"/api/photos/{photo_id}", headers=auth(owner_two), params={"family_id": family_two}).status_code == 404
+
+
 def test_health_and_auth(client):
     assert client.get("/health").json()["status"] == "ok"
     token = register(client, "parent1@example.test")

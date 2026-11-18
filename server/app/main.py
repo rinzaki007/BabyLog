@@ -1353,6 +1353,12 @@ async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:
         previous=None
         with connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            existing=db.execute(
+                "SELECT family_id FROM photos WHERE id=?",
+                (safe_photo_id,)
+            ).fetchone()
+            if existing and existing["family_id"]!=family_id:
+                raise HTTPException(409,"照片 ID 已属于其他家庭，不能覆盖")
             previous=db.execute(
                 "SELECT relative_path FROM photos WHERE id=? AND family_id=?",
                 (safe_photo_id,family_id)
