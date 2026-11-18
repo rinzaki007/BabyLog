@@ -83,6 +83,8 @@ fun solidFoodDescription(payloadJson: String): String {
         if (status.isNotBlank() && status != "正常") append(" · ").append(status)
         if (stage.isNotBlank() && stage != "未标记") append(" · ").append(stage)
         if (reaction.isNotBlank() && reaction != "未记录") append(" · ").append(reaction)
+        val reactionNote = payload.optString("foodReactionNote").trim()
+        if (reactionNote.isNotBlank()) append(" · ").append(reactionNote)
     }
 }
 
