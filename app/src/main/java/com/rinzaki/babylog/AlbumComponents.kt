@@ -345,7 +345,7 @@ internal fun BabyAlbumSection(
                 SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(it.takenAt))
             }
             if (filteredPhotos.isEmpty()) Text(
-                if (loadedPhotos.size < photoCount) "当前已加载的照片中暂无匹配结果，可以继续加载更早的照片。" else "这个日期范围内还没有照片。",
+                if (growthOnly) "目前还没有与成长事件同日的照片。" else if (loadedPhotos.size < photoCount) "当前已加载的照片中暂无匹配结果，可以继续加载更早的照片。" else "这个日期范围内还没有照片。",
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
