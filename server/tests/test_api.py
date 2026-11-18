@@ -1984,3 +1984,155 @@ def test_login_rate_limit_capacity_never_evicts_active_buckets(client, monkeypat
         main._check_login_rate(request, "attacker-controlled-new-id")
     assert blocked.value.status_code == 429
     assert len(main._LOGIN_ATTEMPTS["protected-account"]) == main._LOGIN_MAX_ATTEMPTS
+
+
+def test_two_devices_exchange_records_photos_and_recover_from_offline_version_conflict(client):
+    # Two independently authenticated devices/users share one family space.
+    device_a = register(client, "two-device-a@example.test")
+    device_b = register(client, "two-device-b@example.test")
+    family_id = client.post(
+        "/api/families", headers=auth(device_a), json={"name": "two device acceptance"}
+    ).json()["family_id"]
+    invite = client.post(
+        f"/api/families/{family_id}/invites", headers=auth(device_a)
+    )
+    assert invite.status_code == 200
+    joined = client.post(
+        "/api/families/join", headers=auth(device_b),
+        json={"code": invite.json()["invite_code"]},
+    )
+    assert joined.status_code == 200
+
+    def push(token, changes):
+        response = client.post(
+            "/api/sync/push", headers=auth(token),
+            json={"family_id": family_id, "changes": changes},
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def pull(token, cursor):
+        response = client.get(
+            "/api/sync/pull", headers=auth(token),
+            params={"family_id": family_id, "cursor": cursor},
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    baby_id = str(uuid.uuid4())
+    baby_payload = {
+        "id": baby_id, "displayName": "设备 A 创建的宝宝",
+        "birthTime": 1_700_000_000_000, "createdAt": 1_700_000_000_000,
+        "updatedAt": 1_700_000_000_000, "hasAvatar": False,
+    }
+    created = push(device_a, [{
+        "operation_id": str(uuid.uuid4()), "entity_type": "baby",
+        "entity_id": baby_id, "operation": "upsert",
+        "payload": baby_payload, "base_version": 0,
+    }])
+    assert created["accepted"][0]["version"] == 1
+
+    # Device B receives the first device's record and stores its own cursor.
+    first_pull_b = pull(device_b, 0)
+    assert len(first_pull_b["items"]) == 1
+    assert first_pull_b["items"][0]["payload"]["displayName"] == "设备 A 创建的宝宝"
+    cursor_b = first_pull_b["next_cursor"]
+
+    # Photo bytes and metadata travel through the same family sync flow.
+    photo_id = str(uuid.uuid4())
+    photo_bytes = b"\\xff\\xd8\\xfftwo-device-photo"
+    uploaded = client.post(
+        "/api/photos/upload", headers=auth(device_a),
+        params={"family_id": family_id, "photo_id": photo_id},
+        files={"file": ("baby.jpg", photo_bytes, "image/jpeg")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    photo_payload = {
+        "id": photo_id, "babyId": baby_id, "caption": "双设备照片",
+        "takenAt": 1_700_000_000_000, "createdAt": 1_700_000_000_000,
+        "updatedAt": 1_700_000_000_000, "mimeType": "image/jpeg",
+    }
+    photo_push = push(device_a, [{
+        "operation_id": str(uuid.uuid4()), "entity_type": "photo",
+        "entity_id": photo_id, "operation": "upsert",
+        "payload": photo_payload, "base_version": 0,
+    }])
+    assert photo_push["accepted"][0]["version"] == 1
+
+    photo_pull_b = pull(device_b, cursor_b)
+    assert [(item["entity_type"], item["entity_id"]) for item in photo_pull_b["items"]] == [
+        ("photo", photo_id)
+    ]
+    downloaded = client.get(
+        f"/api/photos/{photo_id}", headers=auth(device_b),
+        params={"family_id": family_id},
+    )
+    assert downloaded.status_code == 200
+    assert downloaded.content == photo_bytes
+    cursor_b = photo_pull_b["next_cursor"]
+
+    # Device B records an event; device A receives only changes after its cursor.
+    event_id = str(uuid.uuid4())
+    event_push = push(device_b, [{
+        "operation_id": str(uuid.uuid4()), "entity_type": "event",
+        "entity_id": event_id, "operation": "upsert",
+        "payload": {
+            "id": event_id, "babyId": baby_id, "eventType": "FEEDING",
+            "occurredAt": 1_700_000_100_000, "payloadJson": "{\\"amountMl\\":120}",
+        },
+        "base_version": 0,
+    }])
+    assert event_push["accepted"][0]["version"] == 1
+    event_pull_a = pull(device_a, first_pull_b["next_cursor"])
+    assert [(item["entity_type"], item["entity_id"]) for item in event_pull_a["items"]] == [
+        ("event", event_id)
+    ]
+
+    # Device A was offline with version 1 while device B advanced the baby to v2.
+    device_b_payload = {**baby_payload, "displayName": "设备 B 在线修改"}
+    update_b = push(device_b, [{
+        "operation_id": str(uuid.uuid4()), "entity_type": "baby",
+        "entity_id": baby_id, "operation": "upsert",
+        "payload": device_b_payload, "base_version": 1,
+    }])
+    assert update_b["accepted"][0]["version"] == 2
+
+    offline_payload = {**baby_payload, "displayName": "设备 A 离线期间的修改"}
+    offline_operation = {
+        "operation_id": str(uuid.uuid4()), "entity_type": "baby",
+        "entity_id": baby_id, "operation": "upsert",
+        "payload": offline_payload, "base_version": 1,
+    }
+    conflict = push(device_a, [offline_operation])
+    assert conflict["conflicts"] == [{
+        "operation_id": offline_operation["operation_id"],
+        "entity_id": baby_id, "server_version": 2, "reason": "version_conflict",
+    }]
+
+    # Rebase keeps device A's local payload; retry is idempotent and creates v3.
+    rebased = {
+        **offline_operation,
+        "base_version": conflict["conflicts"][0]["server_version"],
+    }
+    accepted = push(device_a, [rebased])
+    assert accepted["accepted"][0]["version"] == 3
+    duplicate = push(device_a, [rebased])
+    assert duplicate["accepted"] == [{
+        "operation_id": offline_operation["operation_id"],
+        "duplicate": True, "version": 3,
+    }]
+
+    # Device B catches up incrementally and observes the final authoritative version.
+    final_pull_b = pull(device_b, cursor_b)
+    baby_updates = [
+        item for item in final_pull_b["items"]
+        if item["entity_type"] == "baby" and item["entity_id"] == baby_id
+    ]
+    assert [item["version"] for item in baby_updates] == [2, 3]
+    assert baby_updates[-1]["payload"]["displayName"] == "设备 A 离线期间的修改"
+    assert final_pull_b["next_cursor"] > cursor_b
+
+    # Re-reading from the saved cursor must not replay already acknowledged changes.
+    empty_pull_b = pull(device_b, final_pull_b["next_cursor"])
+    assert empty_pull_b["items"] == []
+    assert empty_pull_b["next_cursor"] == final_pull_b["next_cursor"]
