@@ -1062,7 +1062,10 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                         Text("进食情况", fontWeight = FontWeight.SemiBold)
                         SelectionRow(solidFoodStatuses, foodStatus) { foodStatus = it }
                         Text("观察情况", fontWeight = FontWeight.SemiBold)
-                        SelectionRow(solidFoodReactions, foodReaction) { foodReaction = it }
+                        SelectionRow(solidFoodReactions, foodReaction) {
+                            foodReaction = it
+                            if (it != "出现不适") foodReactionNote = ""
+                        }
                         if (foodReaction == "出现不适") {
                             OutlinedTextField(
                                 value = foodReactionNote,
@@ -1177,7 +1180,9 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                                             .put("foodStage", foodStage)
                                             .put("eatingStatus", foodStatus)
                                             .put("foodReaction", foodReaction)
-                                        if (foodReactionNote.isNotBlank()) payload.put("foodReactionNote", foodReactionNote.trim())
+                                        if (foodReaction == "出现不适" && foodReactionNote.isNotBlank()) {
+                                            payload.put("foodReactionNote", foodReactionNote.trim())
+                                        }
                                         if (amount != null) payload.put("amount", amount).put("unit", foodUnit)
                                     }
                                     "SUPPLEMENT" -> {
