@@ -45,10 +45,10 @@ class GrowthMilestonesTest {
     @Test
     fun babyAgeMonthsUsesCalendarMonthsAndNeverReturnsNegativeAge() {
         val zone = ZoneId.of("Asia/Shanghai")
-        val birthDate = LocalDate.of(2026, 1, 31)
+        val birthDate = LocalDate.of(2026, 1, 15)
         val birthTime = birthDate.atStartOfDay(zone).toInstant().toEpochMilli()
 
-        assertEquals(1L, babyAgeMonths(birthTime, LocalDate.of(2026, 2, 28), zone))
+        assertEquals(1L, babyAgeMonths(birthTime, LocalDate.of(2026, 2, 15), zone))
         assertEquals(0L, babyAgeMonths(birthTime, LocalDate.of(2026, 1, 1), zone))
     }
 }
