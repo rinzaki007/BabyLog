@@ -128,3 +128,73 @@ internal fun SolidFoodJourneySection(events: List<BabyEventEntity>) {
         }
     }
 }
+
+
+@Composable
+internal fun SolidFoodEditorFields(
+    foodName: String,
+    onFoodNameChange: (String) -> Unit,
+    customFoodName: String,
+    onCustomFoodNameChange: (String) -> Unit,
+    foodAmount: String,
+    onFoodAmountChange: (String) -> Unit,
+    foodUnit: String,
+    onFoodUnitChange: (String) -> Unit,
+    foodCategory: String,
+    onFoodCategoryChange: (String) -> Unit,
+    foodStage: String,
+    onFoodStageChange: (String) -> Unit,
+    foodStatus: String,
+    onFoodStatusChange: (String) -> Unit,
+    foodReaction: String,
+    onFoodReactionChange: (String) -> Unit,
+    foodReactionNote: String,
+    onFoodReactionNoteChange: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("食物名称", fontWeight = FontWeight.SemiBold)
+        SelectionRow(solidFoodPresets, foodName, onFoodNameChange)
+        if (foodName == "其他") {
+            androidx.compose.material3.OutlinedTextField(
+                value = customFoodName,
+                onValueChange = onCustomFoodNameChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("食物名称") },
+                singleLine = true
+            )
+        }
+        Text("食用量（可选）", fontWeight = FontWeight.SemiBold)
+        androidx.compose.material3.OutlinedTextField(
+            value = foodAmount,
+            onValueChange = { raw -> onFoodAmountChange(raw.filter { it.isDigit() || it == '.' }.take(8)) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("数量") },
+            singleLine = true
+        )
+        Text("单位", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SelectionRow(solidFoodUnits, foodUnit, onFoodUnitChange)
+        Text("食物类别", fontWeight = FontWeight.SemiBold)
+        SelectionRow(solidFoodCategories, foodCategory, onFoodCategoryChange)
+        Text("尝试阶段", fontWeight = FontWeight.SemiBold)
+        SelectionRow(solidFoodStages, foodStage, onFoodStageChange)
+        Text("进食情况", fontWeight = FontWeight.SemiBold)
+        SelectionRow(solidFoodStatuses, foodStatus, onFoodStatusChange)
+        Text("观察情况", fontWeight = FontWeight.SemiBold)
+        SelectionRow(solidFoodReactions, foodReaction, onFoodReactionChange)
+        if (foodReaction == "出现不适") {
+            androidx.compose.material3.OutlinedTextField(
+                value = foodReactionNote,
+                onValueChange = { onFoodReactionNoteChange(it.take(120)) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("观察到的情况（可选）") },
+                minLines = 1,
+                maxLines = 2
+            )
+        }
+        Text(
+            "这里只记录实际尝试和家庭观察，不作过敏或营养诊断；添加种类、时间及份量请按宝宝情况和专业建议安排。",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
