@@ -33,6 +33,25 @@ def auth(token):
 
 
 
+def test_family_invite_can_only_be_redeemed_by_one_account(client):
+    owner = register(client, "invite-owner@example.test")
+    first_guest = register(client, "invite-first@example.test")
+    second_guest = register(client, "invite-second@example.test")
+    family_id = client.post("/api/families", headers=auth(owner), json={
+        "name": "invite single use"
+    }).json()["family_id"]
+    invite = client.post(f"/api/families/{family_id}/invites", headers=auth(owner))
+    assert invite.status_code == 200
+    code = invite.json()["invite_code"]
+
+    first_join = client.post("/api/families/join", headers=auth(first_guest), json={"code": code})
+    assert first_join.status_code == 200
+    second_join = client.post("/api/families/join", headers=auth(second_guest), json={"code": code})
+    assert second_join.status_code == 400
+    second_profile = client.get("/api/me", headers=auth(second_guest)).json()
+    assert all(family["id"] != family_id for family in second_profile["families"])
+
+
 def test_password_change_revokes_existing_access_tokens(client):
     token = register(client, "token-revoke@example.test")
     assert client.get("/api/me", headers=auth(token)).status_code == 200
