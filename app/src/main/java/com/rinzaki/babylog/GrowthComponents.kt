@@ -219,6 +219,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val latest = points.lastOrNull()
     val previous = points.dropLast(1).lastOrNull()
     val delta = if (latest != null && previous != null) latest.second - previous.second else null
+    val rateSummary = remember(points) { growthRateSummary(points) }
     val minValue = points.minOfOrNull { it.second }
     val maxValue = points.maxOfOrNull { it.second }
     val min = ((minValue ?: 0f) - if (metric == "体重") 0.25f else 1f).coerceAtLeast(0f)
@@ -238,6 +239,16 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     if (delta != null) {
                         val sign = if (delta > 0) "+" else ""
                         Text("较上次 $sign${"%.2f".format(Locale.getDefault(), delta)} $unit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    rateSummary?.let { summary ->
+                        val rate = if (metric == "体重") summary.changePer30Days * 1000f else summary.changePer30Days
+                        val rateUnit = if (metric == "体重") "g" else "cm"
+                        val sign = if (rate > 0f) "+" else ""
+                        Text(
+                            "间隔 ${summary.intervalDays} 天 · 折算每30天 $sign${"%.1f".format(Locale.CHINA, rate)} $rateUnit",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
