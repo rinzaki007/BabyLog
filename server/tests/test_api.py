@@ -1253,3 +1253,48 @@ def test_sync_push_deleting_baby_removes_nas_avatar_after_commit(client):
         headers=auth(token),
         params={"family_id": family_id},
     ).status_code == 404
+
+
+def test_web_import_cleans_partial_media_temp_file_after_interrupted_copy(client, monkeypatch):
+    token = register(client, "web-import-partial-copy@example.test")
+    family_id = client.get("/api/me", headers=auth(token)).json()["families"][0]["id"]
+    baby_id = str(uuid.uuid4())
+    manifest = {
+        "format": "babylog-backup",
+        "format_version": 1,
+        "exported_at": 1,
+        "family_name": "测试家庭",
+        "records": [{
+            "entity_type": "baby",
+            "entity_id": baby_id,
+            "payload": {"id": baby_id, "displayName": "测试宝宝", "hasAvatar": True},
+            "version": 1,
+            "updated_at": 1,
+            "asset_path": f"avatars/{baby_id}.jpg",
+        }],
+    }
+    archive_bytes = io.BytesIO()
+    with zipfile.ZipFile(archive_bytes, "w") as archive:
+        archive.writestr("backup.json", json.dumps(manifest))
+        archive.writestr(f"avatars/{baby_id}.jpg", b"\\xff\\xd8\\xffavatar-content")
+
+    import app.main as main
+
+    def interrupted_copy(source, output, length=0):
+        output.write(b"partial-avatar")
+        raise OSError("simulated interrupted media copy")
+
+    monkeypatch.setattr(main.shutil, "copyfileobj", interrupted_copy)
+    with pytest.raises(OSError, match="simulated interrupted media copy"):
+        client.post(
+            "/api/web/import",
+            headers={"Origin": "http://testserver", "Content-Type": "application/zip"},
+            content=archive_bytes.getvalue(),
+        )
+
+    avatar_folder = main.AVATAR_DIR / family_id
+    assert not (avatar_folder / f"{baby_id}.jpg").exists()
+    assert not list(avatar_folder.glob("*.import"))
+    overview = client.get("/api/web/overview", headers=auth(token))
+    assert overview.status_code == 200
+    assert overview.json()["counts"] == {"babies": 0, "events": 0, "photos": 0}
