@@ -531,6 +531,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             },
                             initialPhoto = selectedTimelinePhoto,
                             onInitialPhotoConsumed = { selectedTimelinePhoto = null },
+                            growthEvents = growthEvents + milestoneEvents,
+                            onLoadMonthPhotos = { startAt, endAt ->
+                                dao.getPhotosInRange(baby.id, startAt, endAt, 5000)
+                            },
                             onCaption = { photo, caption ->
                                 scope.launch {
                                     val updated = photo.copy(caption = caption, updatedAt = System.currentTimeMillis(), syncStatus = "PENDING")
