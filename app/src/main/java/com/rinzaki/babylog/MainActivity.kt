@@ -187,6 +187,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
         if (baby == null) flowOf(emptyList()) else dao.observeEventsByType(baby.id, "GROWTH")
     }
     val growthEvents by growthEventsFlow.collectAsState(initial = emptyList())
+    val milestoneEventsFlow = remember(baby?.id) {
+        if (baby == null) flowOf(emptyList()) else dao.observeEventsByType(baby.id, "MILESTONE")
+    }
+    val milestoneEvents by milestoneEventsFlow.collectAsState(initial = emptyList())
     val vaccineEventsFlow = remember(baby?.id) {
         if (baby == null) flowOf(emptyList()) else dao.observeEventsByType(baby.id, "VACCINE")
     }
@@ -230,6 +234,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
         "补充记录" -> "SUPPLEMENT"
         "辅食记录" -> "SOLID_FOOD"
         "成长测量" -> "GROWTH"
+        "成长里程碑" -> "MILESTONE"
         "其他" -> "OTHER"
         else -> null
     }
@@ -465,6 +470,31 @@ private fun BabyLogApp(dao: BabyLogDao) {
 
                     if (page == 2) item { TrendsSummary(baby.id, dao) }
                     if (page == 2) item { GrowthSection(baby, growthEvents) }
+                    if (page == 2) item {
+                        GrowthMilestonesSection(baby, milestoneEvents) { milestone ->
+                            val now = System.currentTimeMillis()
+                            val payload = JSONObject()
+                                .put("milestoneId", milestone.id)
+                                .put("milestoneTitle", milestone.title)
+                                .put("category", milestone.category)
+                            val event = BabyEventEntity(
+                                UUID.randomUUID().toString(), baby.id, "MILESTONE",
+                                now, payload.toString(), null, now
+                            )
+                            scope.launch {
+                                dao.upsertEvent(event)
+                                if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                    dao.enqueueOperation(
+                                        SyncOperationEntity(
+                                            UUID.randomUUID().toString(), "event", event.id, "upsert",
+                                            eventSyncPayload(event).toString(), event.serverVersion, now
+                                        )
+                                    )
+                                    SyncScheduler.enqueue(appContext)
+                                }
+                            }
+                        }
+                    }
                     if (page == 3) item {
                         BabyAlbumSection(
                             baby = baby,
@@ -544,7 +574,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 TextButton(onClick = { selectedStartDate = null; selectedEndDate = null }) { Text("全部") }
                             }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "成长测量", "其他")) { category ->
+                            items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "成长测量", "成长里程碑", "其他")) { category ->
                                 if (selectedEventFilter == category) {
                                     FilledTonalButton(onClick = { selectedEventFilter = category }) { Text(category) }
                                 } else {
@@ -918,9 +948,11 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var foodUnit by remember(existing?.id) { mutableStateOf(initialPayload.optString("unit", "g")) }
     var foodStatus by remember(existing?.id) { mutableStateOf(initialPayload.optString("eatingStatus", "正常")) }
     var note by remember(existing?.id) { mutableStateOf(initialPayload.optString("note")) }
+    var milestoneTitle by remember(existing?.id) { mutableStateOf(initialPayload.optString("milestoneTitle")) }
+    val milestoneId = remember(existing?.id) { initialPayload.optString("milestoneId") }
     var error by remember { mutableStateOf<String?>(null) }
     var showEventTimePicker by remember { mutableStateOf(false) }
-    val title = when (eventType) { "FEEDING" -> "喂养记录"; "SOLID_FOOD" -> "辅食记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; "SUPPLEMENT" -> "补充记录"; else -> "成长记录" }
+    val title = when (eventType) { "FEEDING" -> "喂养记录"; "SOLID_FOOD" -> "辅食记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; "SUPPLEMENT" -> "补充记录"; "MILESTONE" -> "成长里程碑"; else -> "成长记录" }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1045,6 +1077,16 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                         SelectionRow(supplementUnits, supplementUnit) { supplementUnit = it }
                         Text("这里只记录实际补充情况，不提供剂量建议；具体用量请遵照医生或产品说明。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    "MILESTONE" -> {
+                        OutlinedTextField(
+                            value = milestoneTitle,
+                            onValueChange = { milestoneTitle = it.take(60) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("里程碑名称") },
+                            singleLine = true
+                        )
+                        Text("记录宝宝第一次做到这件事的日期，也可以补充备注。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     "GROWTH" -> {
                         OutlinedTextField(
                             value = weightKg,
@@ -1118,6 +1160,12 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                                         payload.put("supplementName", name)
                                         if (amount != null) payload.put("amount", amount)
                                         if (supplementAmount.isNotBlank()) payload.put("unit", supplementUnit)
+                                    }
+                                    "MILESTONE" -> {
+                                        val title = milestoneTitle.trim()
+                                        if (title.isBlank()) { error = "请输入里程碑名称"; return }
+                                        payload.put("milestoneTitle", title)
+                                        if (milestoneId.isNotBlank()) payload.put("milestoneId", milestoneId)
                                     }
                                     "GROWTH" -> {
                                         val weight = weightKg.toDoubleOrNull()
@@ -1249,6 +1297,7 @@ private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onE
         }
         "SUPPLEMENT" -> Triple("🧴", "补充记录", supplementDescription(event.payloadJson))
         "SOLID_FOOD" -> Triple("🥣", "辅食记录", solidFoodDescription(event.payloadJson))
+        "MILESTONE" -> Triple("🌱", "成长里程碑", payload.optString("milestoneTitle").ifBlank { "成长记录" })
         "GROWTH" -> Triple("📏", "成长测量", listOfNotNull(
             payload.optInt("weightGrams").takeIf { it > 0 }?.let { "${"%.2f".format(Locale.getDefault(), it / 1000.0)} kg" },
             payload.optDouble("lengthCm").takeIf { it > 0 }?.let { "${"%.1f".format(Locale.getDefault(), it)} cm 身长" },
