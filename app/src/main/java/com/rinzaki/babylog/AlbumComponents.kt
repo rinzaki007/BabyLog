@@ -196,7 +196,7 @@ internal fun BabyAlbumSection(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Text("查看本月", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        TextButton(onClick = { albumFilter = "本月" }) { Text("查看本月") }
                     }
                     Text(
                         "${java.time.Instant.ofEpochMilli(oldest.takenAt).atZone(zone).toLocalDate().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))} — ${java.time.Instant.ofEpochMilli(newest.takenAt).atZone(zone).toLocalDate().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))}",
