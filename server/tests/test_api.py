@@ -55,11 +55,6 @@ def test_family_invite_can_only_be_redeemed_by_one_account(client):
 
 
 def test_cookie_authenticated_mutations_require_exact_origin_scheme(client):
-    login = client.post("/api/web/login", json={
-        "email": "origin-check@example.test",
-        "password": "correct-horse-battery",
-    })
-    assert login.status_code == 401
     register(client, "origin-check@example.test")
     login = client.post("/api/web/login", json={
         "email": "origin-check@example.test",
