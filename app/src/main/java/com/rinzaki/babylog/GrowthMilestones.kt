@@ -12,6 +12,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
+import com.rinzaki.babylog.data.BabyLogDao
+import kotlinx.coroutines.flow.flowOf
 import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
@@ -94,9 +98,13 @@ private fun milestoneRecordedDate(event: BabyEventEntity, formatter: DateTimeFor
 @Composable
 internal fun GrowthMilestonesSection(
     baby: BabyEntity,
-    events: List<BabyEventEntity>,
+    dao: BabyLogDao,
     onRecord: (GrowthMilestone) -> Unit
 ) {
+    val eventsFlow = remember(baby.id) {
+        dao.observeEventsByType(baby.id, "MILESTONE")
+    }
+    val events by eventsFlow.collectAsState(initial = emptyList())
     val completed = remember(events) { completedGrowthMilestones(events) }
     val ageMonths = remember(baby.birthTime) { babyAgeMonths(baby.birthTime) }
     val ageLabel = if (ageMonths < 1) "未满 1 个月" else "$ageMonths 个月"
