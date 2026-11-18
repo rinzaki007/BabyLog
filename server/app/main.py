@@ -981,8 +981,8 @@ def _parse_web_backup(archive_path:Path):
             suffix=Path(asset).suffix.lower()
             with archive.open(asset) as media:
                 header=media.read(32)
-            valid=(suffix in {".jpg",".jpeg"} and header.startswith(b"\\xff\\xd8\\xff")) or (
-                suffix==".png" and header.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+            valid=(suffix in {".jpg",".jpeg"} and header.startswith(b"\xff\xd8\xff")) or (
+                suffix==".png" and header.startswith(b"\x89PNG\r\n\x1a\n")
             ) or (
                 suffix==".webp" and len(header)>=12 and header[:4]==b"RIFF" and header[8:12]==b"WEBP"
             ) or (
