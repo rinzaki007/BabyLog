@@ -31,12 +31,23 @@ class StatisticsPeriodTest {
     fun customRangeNormalizesReversedDates() {
         val range = statisticsDateRange(
             "自定义", today,
-            customStart = LocalDate.of(2026, 11, 20),
+            customStart = LocalDate.of(2026, 11, 15),
             customEnd = LocalDate.of(2026, 11, 10)
         )
         assertEquals(LocalDate.of(2026, 11, 10), range.startDate)
-        assertEquals(LocalDate.of(2026, 11, 20), range.endDate)
-        assertEquals(11, range.dayCount)
+        assertEquals(LocalDate.of(2026, 11, 15), range.endDate)
+        assertEquals(6, range.dayCount)
+    }
+
+    @Test
+    fun customRangeDoesNotIncludeFutureDates() {
+        val range = statisticsDateRange(
+            "自定义", today,
+            customStart = LocalDate.of(2026, 11, 20),
+            customEnd = LocalDate.of(2026, 11, 25)
+        )
+        assertEquals(today, range.startDate)
+        assertEquals(today, range.endDate)
     }
 
     @Test
