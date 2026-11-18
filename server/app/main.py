@@ -427,6 +427,74 @@ def _cleanup_stale_media_temps(now:int|None=None,max_age_seconds:int=24*60*60):
 # files untouched (an upload may still be active) and clean only known old patterns.
 _cleanup_stale_media_temps()
 
+def _cleanup_orphan_media_files(now:int|None=None,max_age_seconds:int=24*60*60):
+    """Remove old, recognized final media files that the database no longer references."""
+    checked_at=time.time() if now is None else float(now)
+    photo_name=re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:-[0-9a-f]{32})?\.(?:jpg|jpeg|png|webp|heic|heif)$")
+    avatar_name=re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jpg$")
+    try:
+        with connect() as db:
+            photo_rows=db.execute("SELECT relative_path FROM photos").fetchall()
+            baby_rows=db.execute("SELECT family_id,entity_id,payload FROM records WHERE entity_type='baby' AND deleted=0").fetchall()
+        photo_refs=set()
+        for row in photo_rows:
+            try:
+                resolved=(PHOTO_DIR/row["relative_path"]).resolve()
+                if PHOTO_DIR.resolve() in resolved.parents:
+                    photo_refs.add(resolved)
+            except (OSError,TypeError,ValueError):
+                continue
+        avatar_refs=set()
+        avatar_scan_safe=True
+        for row in baby_rows:
+            try:
+                payload=json.loads(row["payload"])
+                if payload.get("hasAvatar"):
+                    family_id=str(uuid.UUID(row["family_id"]))
+                    baby_id=str(uuid.UUID(row["entity_id"]))
+                    avatar_refs.add((AVATAR_DIR/family_id/f"{baby_id}.jpg").resolve())
+            except (TypeError,ValueError,AttributeError):
+                avatar_scan_safe=False
+                break
+    except (sqlite3.Error,OSError):
+        return {"photos":0,"avatars":0}
+
+    removed={"photos":0,"avatars":0}
+    roots=((PHOTO_DIR,photo_name,photo_refs,"photos"),(AVATAR_DIR,avatar_name,avatar_refs,"avatars"))
+    for root,pattern,references,label in roots:
+        try:
+            if not root.is_dir():
+                continue
+            safe_root=root.resolve()
+            for candidate in root.rglob("*"):
+                try:
+                    if candidate.is_symlink() or not candidate.is_file():
+                        continue
+                    relative=candidate.relative_to(root)
+                    if len(relative.parts)!=2 or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",relative.parts[0]):
+                        continue
+                    if not pattern.fullmatch(candidate.name):
+                        continue
+                    resolved=candidate.resolve()
+                    if safe_root not in resolved.parents or resolved in references:
+                        continue
+                    if label=="avatars" and not avatar_scan_safe:
+                        continue
+                    if checked_at-candidate.stat().st_mtime<=max_age_seconds:
+                        continue
+                    candidate.unlink()
+                    removed[label]+=1
+                except (OSError,ValueError):
+                    continue
+        except OSError:
+            continue
+    return removed
+
+
+# Recover files left behind if a process died after publishing media but before
+# the matching database commit (or after a committed delete but before unlink).
+_cleanup_orphan_media_files()
+
 def issue_token(uid, ttl:int|None=None):
     with connect() as db:
         user=db.execute("SELECT token_version FROM users WHERE id=?",(uid,)).fetchone()
