@@ -899,7 +899,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var milestoneTitle by remember(existing?.id) { mutableStateOf(initialPayload.optString("milestoneTitle")) }
     var error by remember { mutableStateOf<String?>(null) }
     var showEventTimePicker by remember { mutableStateOf(false) }
-    val title = when (eventType) { "FEEDING" -> "喂养记录"; "SOLID_FOOD" -> "辅食记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; "SUPPLEMENT" -> "补充记录"; else -> "成长记录" }
+    val title = when (eventType) { "FEEDING" -> "喂养记录"; "SOLID_FOOD" -> "辅食记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; "SUPPLEMENT" -> "补充记录"; "MILESTONE" -> "成长里程碑"; else -> "成长记录" }
 
     AlertDialog(
         onDismissRequest = onDismiss,
