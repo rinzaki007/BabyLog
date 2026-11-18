@@ -33,13 +33,16 @@ class SyncOwnershipTest {
         assertTrue(canRetrySyncConflict("HTTP 409: version conflict"))
         assertTrue(canRetrySyncConflict("HTTP 408: request timeout"))
         assertTrue(canRetrySyncConflict("HTTP 429: too many requests"))
+        assertTrue(canRetrySyncConflict("version_conflict"))
+        assertFalse(canRetrySyncConflict("unsupported_operation"))
+        assertFalse(canRetrySyncConflict("operation_id_reused"))
         assertFalse(canRetrySyncConflict("HTTP 400: invalid payload"))
         assertFalse(canRetrySyncConflict("HTTP 401: unauthorized"))
         assertFalse(canRetrySyncConflict("HTTP 403: forbidden"))
         assertFalse(canRetrySyncConflict("HTTP 404: not found"))
         assertFalse(canRetrySyncConflict("照片上传失败 HTTP 413: file too large"))
-        assertTrue(canRetrySyncConflict("本地照片暂时无法读取"))
-        assertTrue(canRetrySyncConflict(null))
+        assertFalse(canRetrySyncConflict("本地照片暂时无法读取"))
+        assertFalse(canRetrySyncConflict(null))
     }
 
     @Test
@@ -59,7 +62,7 @@ class SyncOwnershipTest {
         assertTrue(shouldRetrySyncStatus(429))
         assertTrue(shouldRetrySyncStatus(500))
         assertTrue(shouldRetrySyncStatus(503))
-        assertTrue(shouldRetrySyncStatus(409))
+        assertFalse(shouldRetrySyncStatus(409))
         assertFalse(shouldRetrySyncStatus(400))
         assertFalse(shouldRetrySyncStatus(401))
         assertFalse(shouldRetrySyncStatus(403))
