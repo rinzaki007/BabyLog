@@ -235,6 +235,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
         "辅食记录" -> "SOLID_FOOD"
         "成长测量" -> "GROWTH"
         "成长里程碑" -> "MILESTONE"
+        "成长足迹" -> "GROWTH_JOURNEY"
         "其他" -> "OTHER"
         else -> null
     }
@@ -574,7 +575,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 TextButton(onClick = { selectedStartDate = null; selectedEndDate = null }) { Text("全部") }
                             }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "成长测量", "成长里程碑", "其他")) { category ->
+                            items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "成长测量", "成长里程碑", "成长足迹", "其他")) { category ->
                                 if (selectedEventFilter == category) {
                                     FilledTonalButton(onClick = { selectedEventFilter = category }) { Text(category) }
                                 } else {
