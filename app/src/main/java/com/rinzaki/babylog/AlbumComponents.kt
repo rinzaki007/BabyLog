@@ -1,6 +1,7 @@
 package com.rinzaki.babylog
 
 import android.graphics.BitmapFactory
+import android.content.Intent
 import android.graphics.Bitmap
 import android.util.LruCache
 import android.content.ContentValues
@@ -17,6 +18,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -53,6 +56,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyPhotoEntity
+import com.rinzaki.babylog.data.BabyEventEntity
 import com.rinzaki.babylog.sync.mimeTypeForPath
 import com.rinzaki.babylog.sync.SyncPreferences
 import com.rinzaki.babylog.sync.SyncHttp
@@ -82,7 +86,9 @@ internal fun BabyAlbumSection(
     onCaption: (BabyPhotoEntity, String) -> Unit,
     onDelete: (BabyPhotoEntity) -> Unit,
     initialPhoto: BabyPhotoEntity? = null,
-    onInitialPhotoConsumed: () -> Unit = {}
+    onInitialPhotoConsumed: () -> Unit = {},
+    growthEvents: List<BabyEventEntity> = emptyList(),
+    onLoadMonthPhotos: suspend (Long, Long) -> List<BabyPhotoEntity> = { _, _ -> emptyList() }
 ) {
     var deletingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var viewingPhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
@@ -103,6 +109,8 @@ internal fun BabyAlbumSection(
     var albumFilter by remember { mutableStateOf("全部") }
     var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
     var showPhotoDatePicker by remember { mutableStateOf(false) }
+    var selectedMonth by remember { mutableStateOf<java.time.YearMonth?>(null) }
+    var growthOnly by remember { mutableStateOf(false) }
     var extraPhotos by remember(baby.id, photoCount) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
     var loadingMorePhotos by remember { mutableStateOf(false) }
     val loadedPhotos = remember(photos, extraPhotos, initialPhoto) {
@@ -119,15 +127,28 @@ internal fun BabyAlbumSection(
             onInitialPhotoConsumed()
         }
     }
+    val zone = ZoneId.systemDefault()
+    val growthEventDates = remember(growthEvents) {
+        growthEvents.asSequence()
+            .filter { it.deletedAt == null && it.eventType in setOf("GROWTH", "MILESTONE") }
+            .map { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(zone).toLocalDate() }
+            .toSet()
+    }
+    val monthlyRecaps = remember(loadedPhotos, growthEvents) {
+        monthlyAlbumRecaps(loadedPhotos, growthEvents, zone)
+    }
     val filteredPhotos = loadedPhotos.filter { photo ->
-        val date = java.time.Instant.ofEpochMilli(photo.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
-        when (albumFilter) {
+        val date = java.time.Instant.ofEpochMilli(photo.takenAt).atZone(zone).toLocalDate()
+        val matchesPreset = when (albumFilter) {
             "近7天" -> photo.takenAt >= System.currentTimeMillis() - 7L * 86400000L
             "近30天" -> photo.takenAt >= System.currentTimeMillis() - 30L * 86400000L
             "本月" -> date.year == LocalDate.now().year && date.month == LocalDate.now().month
             "指定日期" -> selectedPhotoDate == date
             else -> true
         }
+        matchesPreset &&
+            (selectedMonth == null || java.time.YearMonth.from(date) == selectedMonth) &&
+            (!growthOnly || date in growthEventDates)
     }
     val sortedFilteredPhotos = remember(filteredPhotos) { filteredPhotos.sortedByDescending { it.takenAt } }
     val picker = rememberLauncherForActivityResult(
@@ -161,6 +182,114 @@ internal fun BabyAlbumSection(
         SelectionRow(listOf("全部", "近7天", "近30天", "本月", "指定日期"), albumFilter) { selected ->
             albumFilter = selected
             if (selected == "指定日期") showPhotoDatePicker = true
+        }
+        SelectionRow(
+            listOf("全部照片", "成长事件日"),
+            if (growthOnly) "成长事件日" else "全部照片"
+        ) { growthOnly = it == "成长事件日" }
+        if (selectedMonth != null || growthOnly) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    buildString {
+                        selectedMonth?.let { append(it.year).append("年").append(it.monthValue).append("月") }
+                        if (growthOnly) append(if (isNotEmpty()) " · " else "").append("仅显示成长事件日")
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { selectedMonth = null; growthOnly = false }) { Text("清除筛选") }
+            }
+        }
+        if (monthlyRecaps.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("月度回顾", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("按月份自动整理", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                monthlyRecaps.forEach { recap ->
+                    Card(
+                        modifier = Modifier.width(224.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "${recap.month.year}年${recap.month.monthValue}月",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text("${recap.photos.size} 张", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                recap.photos.take(3).forEach { cover ->
+                                    AlbumPhotoCard(
+                                        photo = cover,
+                                        cacheRefreshKey = photoCacheRefreshKey,
+                                        onClick = { viewingPhoto = cover; galleryMessage = null },
+                                        modifier = Modifier.weight(1f),
+                                        height = 68.dp
+                                    )
+                                }
+                                repeat((3 - recap.photos.size.coerceAtMost(3)).coerceAtLeast(0)) {
+                                    Spacer(Modifier.weight(1f).height(68.dp))
+                                }
+                            }
+                            Text(
+                                "${recap.growthEventCount} 条成长事件",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                TextButton(
+                                    onClick = {
+                                        selectedMonth = recap.month
+                                        albumFilter = "全部"
+                                        growthOnly = false
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("查看照片") }
+                                TextButton(
+                                    onClick = {
+                                        albumScope.launch {
+                                            val startAt = recap.month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                                            val endAt = recap.month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                                            runCatching { onLoadMonthPhotos(startAt, endAt) }
+                                                .onSuccess { monthPhotos ->
+                                                    val recapText = monthlyAlbumRecapText(
+                                                        baby.displayName, recap.month, monthPhotos, growthEvents, zone
+                                                    )
+                                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                        type = "text/plain"
+                                                        putExtra(Intent.EXTRA_TEXT, recapText)
+                                                    }
+                                                    context.startActivity(Intent.createChooser(shareIntent, "分享月度成长回顾"))
+                                                }
+                                                .onFailure { galleryMessage = "生成月度回顾失败：${it.message ?: "请重试"}" }
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("生成回顾") }
+                            }
+                        }
+                    }
+                }
+            }
+            if (loadedPhotos.size < photoCount) {
+                Text(
+                    "月度卡片根据当前已加载照片展示；生成回顾时会读取整月照片，继续加载可浏览更早月份。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
