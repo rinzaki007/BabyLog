@@ -1937,3 +1937,50 @@ def test_web_logout_rejects_cross_origin_requests(client):
     assert accepted.status_code == 200
     assert not client.cookies.get("babylog_session")
 
+
+
+def test_login_rate_limit_reserves_in_flight_attempts_atomically(client, monkeypatch):
+    import app.main as main
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(main, "_login_rate_key", lambda request, identifier: "shared-test-key")
+    request = object()
+
+    for _ in range(main._LOGIN_MAX_ATTEMPTS):
+        main._check_login_rate(request, "account")
+    with pytest.raises(HTTPException) as blocked:
+        main._check_login_rate(request, "account")
+    assert blocked.value.status_code == 429
+
+    for _ in range(main._LOGIN_MAX_ATTEMPTS):
+        main._finish_login_attempt(request, "account", False)
+    with pytest.raises(HTTPException) as failed_attempts_blocked:
+        main._check_login_rate(request, "account")
+    assert failed_attempts_blocked.value.status_code == 429
+
+
+def test_login_rate_limit_releases_reservation_without_counting_internal_error(client, monkeypatch):
+    import app.main as main
+
+    monkeypatch.setattr(main, "_login_rate_key", lambda request, identifier: "internal-error-key")
+    request = object()
+    main._check_login_rate(request, "account")
+    main._finish_login_attempt(request, "account", None)
+    assert main._LOGIN_IN_FLIGHT.get("internal-error-key", 0) == 0
+    assert not main._LOGIN_ATTEMPTS.get("internal-error-key")
+
+
+def test_login_rate_limit_capacity_never_evicts_active_buckets(client, monkeypatch):
+    import app.main as main
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(main, "_login_rate_key", lambda request, identifier: identifier)
+    request = object()
+    main._LOGIN_ATTEMPTS["protected-account"].extend([time.monotonic()] * main._LOGIN_MAX_ATTEMPTS)
+    for index in range(main._LOGIN_MAX_KEYS - 1):
+        main._LOGIN_ATTEMPTS[f"filler-{index}"].append(time.monotonic())
+
+    with pytest.raises(HTTPException) as blocked:
+        main._check_login_rate(request, "attacker-controlled-new-id")
+    assert blocked.value.status_code == 429
+    assert len(main._LOGIN_ATTEMPTS["protected-account"]) == main._LOGIN_MAX_ATTEMPTS
