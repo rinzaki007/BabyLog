@@ -81,6 +81,26 @@ def test_login_attempts_are_rate_limited(client):
     })
     assert blocked.status_code == 429
 
+def test_login_rate_limit_is_shared_across_username_and_email_aliases(client):
+    created = client.post("/api/auth/register", json={
+        "username": "alias-user",
+        "email": "alias-user@example.test",
+        "password": "correct-horse-battery",
+    })
+    assert created.status_code == 200, created.text
+
+    for _ in range(8):
+        response = client.post("/api/auth/login", json={
+            "username": "alias-user", "password": "wrong-password"
+        })
+        assert response.status_code == 401
+
+    # The web login endpoint and email alias must use the same account bucket.
+    blocked = client.post("/api/web/login", json={
+        "email": "alias-user@example.test", "password": "correct-horse-battery"
+    })
+    assert blocked.status_code == 429
+
 
 def test_photo_upload_rejects_mismatched_file_content(client):
     token = register(client, "photo-mime@example.test")
