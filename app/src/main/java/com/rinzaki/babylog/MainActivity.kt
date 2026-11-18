@@ -1031,52 +1031,29 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                         SelectionRow(listOf("30", "60", "90", "120", "180", "240"), sleepMinutesText) { sleepMinutesText = it }
                     }
                     "SOLID_FOOD" -> {
-                        Text("食物名称", fontWeight = FontWeight.SemiBold)
-                        SelectionRow(solidFoodPresets, foodName) {
-                            foodName = it
-                            if (it != "其他") customFoodName = ""
-                        }
-                        if (foodName == "其他") {
-                            OutlinedTextField(
-                                value = customFoodName,
-                                onValueChange = { customFoodName = it.take(40) },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("食物名称") },
-                                singleLine = true
-                            )
-                        }
-                        Text("食用量（可选）", fontWeight = FontWeight.SemiBold)
-                        OutlinedTextField(
-                            value = foodAmount,
-                            onValueChange = { raw -> foodAmount = raw.filter { it.isDigit() || it == '.' }.take(8) },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("数量") },
-                            singleLine = true
+                        SolidFoodEditorFields(
+                            foodName = foodName,
+                            onFoodNameChange = { foodName = it; if (it != "其他") customFoodName = "" },
+                            customFoodName = customFoodName,
+                            onCustomFoodNameChange = { customFoodName = it },
+                            foodAmount = foodAmount,
+                            onFoodAmountChange = { foodAmount = it },
+                            foodUnit = foodUnit,
+                            onFoodUnitChange = { foodUnit = it },
+                            foodCategory = foodCategory,
+                            onFoodCategoryChange = { foodCategory = it },
+                            foodStage = foodStage,
+                            onFoodStageChange = { foodStage = it },
+                            foodStatus = foodStatus,
+                            onFoodStatusChange = { foodStatus = it },
+                            foodReaction = foodReaction,
+                            onFoodReactionChange = {
+                                foodReaction = it
+                                if (it != "出现不适") foodReactionNote = ""
+                            },
+                            foodReactionNote = foodReactionNote,
+                            onFoodReactionNoteChange = { foodReactionNote = it }
                         )
-                        Text("单位", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        SelectionRow(solidFoodUnits, foodUnit) { foodUnit = it }
-                        Text("食物类别", fontWeight = FontWeight.SemiBold)
-                        SelectionRow(solidFoodCategories, foodCategory) { foodCategory = it }
-                        Text("尝试阶段", fontWeight = FontWeight.SemiBold)
-                        SelectionRow(solidFoodStages, foodStage) { foodStage = it }
-                        Text("进食情况", fontWeight = FontWeight.SemiBold)
-                        SelectionRow(solidFoodStatuses, foodStatus) { foodStatus = it }
-                        Text("观察情况", fontWeight = FontWeight.SemiBold)
-                        SelectionRow(solidFoodReactions, foodReaction) {
-                            foodReaction = it
-                            if (it != "出现不适") foodReactionNote = ""
-                        }
-                        if (foodReaction == "出现不适") {
-                            OutlinedTextField(
-                                value = foodReactionNote,
-                                onValueChange = { foodReactionNote = it.take(120) },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("观察到的情况（可选）") },
-                                minLines = 1,
-                                maxLines = 2
-                            )
-                        }
-                        Text("这里只记录实际尝试和家庭观察，不作过敏或营养诊断；添加种类、时间及份量请按宝宝情况和专业建议安排。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     "SUPPLEMENT" -> {
                         Text("补充项目", fontWeight = FontWeight.SemiBold)
