@@ -647,25 +647,30 @@ def register(body:Credentials):
 @app.post("/api/auth/login")
 def login(body:Credentials,request:Request):
     identifier=clean_username(body.username or body.email or "")
-    _check_login_rate(request,identifier)
     with connect() as db:
         user=db.execute("SELECT * FROM users WHERE username=? OR email=?",(identifier,clean_email(identifier))).fetchone()
+    # Username and email are interchangeable login identifiers. Throttle by
+    # the canonical account ID so switching between aliases cannot reset the
+    # failed-attempt counter.
+    rate_identifier=user["id"] if user else identifier
+    _check_login_rate(request,rate_identifier)
     if not user or not password_hash.verify(body.password,user["password_hash"]):
-        _record_login_failure(request,identifier)
+        _record_login_failure(request,rate_identifier)
         raise HTTPException(401,"账号名/邮箱或密码错误")
-    _clear_login_failures(request,identifier)
+    _clear_login_failures(request,rate_identifier)
     return {"access_token":issue_token(user["id"]),"token_type":"bearer","user_id":user["id"],"username":user["username"]}
 
 @app.post("/api/web/login")
 def web_login(body:Credentials,request:Request,response:Response):
     identifier=clean_username(body.username or body.email or "")
-    _check_login_rate(request,identifier)
     with connect() as db:
         user=db.execute("SELECT * FROM users WHERE username=? OR email=?",(identifier,clean_email(identifier))).fetchone()
+    rate_identifier=user["id"] if user else identifier
+    _check_login_rate(request,rate_identifier)
     if not user or not password_hash.verify(body.password,user["password_hash"]):
-        _record_login_failure(request,identifier)
+        _record_login_failure(request,rate_identifier)
         raise HTTPException(401,"账号名/邮箱或密码错误")
-    _clear_login_failures(request,identifier)
+    _clear_login_failures(request,rate_identifier)
     secure=(request.headers.get("x-forwarded-proto","").split(",")[0].strip().lower()=="https" or request.url.scheme=="https")
     web_ttl=min(TOKEN_TTL,12*3600)
     response.set_cookie("babylog_session",issue_token(user["id"],web_ttl),max_age=web_ttl,
