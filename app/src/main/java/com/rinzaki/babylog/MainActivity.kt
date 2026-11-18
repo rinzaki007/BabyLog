@@ -215,10 +215,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
         if (baby == null) flowOf(emptyList()) else dao.observeEventsByType(baby.id, "GROWTH")
     }
     val growthEvents by growthEventsFlow.collectAsState(initial = emptyList())
-    val milestoneEventsFlow = remember(baby?.id) {
-        if (baby == null) flowOf(emptyList()) else dao.observeEventsByType(baby.id, "MILESTONE")
-    }
-    val milestoneEvents by milestoneEventsFlow.collectAsState(initial = emptyList())
     val vaccineEventsFlow = remember(baby?.id) {
         if (baby == null) flowOf(emptyList()) else dao.observeEventsByType(baby.id, "VACCINE")
     }
@@ -472,7 +468,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     if (page == 2) item { TrendsSummary(baby.id, dao) }
                     if (page == 2) item { GrowthSection(baby, growthEvents) }
                     if (page == 2) item {
-                        GrowthMilestonesSection(baby, milestoneEvents) { milestone ->
+                        GrowthMilestonesSection(baby, dao) { milestone ->
                             scope.launch {
                                 recordGrowthMilestone(dao, appContext, baby.id, milestone)
                             }
