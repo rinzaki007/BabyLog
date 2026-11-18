@@ -916,13 +916,13 @@ def test_web_export_fails_closed_when_referenced_media_is_missing(client):
     avatar = client.post(
         f"/api/babies/{baby_id}/avatar", headers=auth(token),
         params={"family_id": family_id},
-        files={"file": ("avatar.jpg", b"\\xff\\xd8\\xffavatar", "image/jpeg")}
+        files={"file": ("avatar.jpg", bytes([255, 216, 255]) + b"avatar", "image/jpeg")}
     )
     assert avatar.status_code == 200, avatar.text
     photo = client.post(
         "/api/photos/upload", headers=auth(token),
         params={"family_id": family_id, "photo_id": photo_id},
-        files={"file": ("photo.jpg", b"\\xff\\xd8\\xffphoto", "image/jpeg")}
+        files={"file": ("photo.jpg", bytes([255, 216, 255]) + b"photo", "image/jpeg")}
     )
     assert photo.status_code == 200, photo.text
     pushed = client.post("/api/sync/push", headers=auth(token), json={"family_id": family_id, "changes": [
@@ -950,7 +950,7 @@ def test_web_export_fails_closed_when_referenced_media_is_missing(client):
     assert "照片文件缺失" in missing_photo.json()["detail"]
 
     photo_path.parent.mkdir(parents=True, exist_ok=True)
-    photo_path.write_bytes(b"\\xff\\xd8\\xffrestored")
+    photo_path.write_bytes(bytes([255, 216, 255]) + b"restored")
     avatar_path.unlink()
     missing_avatar = client.get("/api/web/export?include_photos=true")
     assert missing_avatar.status_code == 409
