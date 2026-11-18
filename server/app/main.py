@@ -1099,6 +1099,7 @@ async def web_import(request:Request,uid:str=Depends(current_user)):
                         if kind=="baby" and payload.get("hasAvatar"):
                             if asset and asset in assets:
                                 folder=AVATAR_DIR/str(uuid.UUID(fid)); folder.mkdir(parents=True,exist_ok=True)
+                                _fsync_directory(folder.parent.parent)
                                 _fsync_directory(folder.parent)
                                 target=folder/f"{entity_id}.jpg"; temp=target.with_suffix(".jpg.import")
                                 if target.exists(): raise HTTPException(409,"头像目标文件已存在，已停止导入以保护现有文件")
@@ -1115,7 +1116,8 @@ async def web_import(request:Request,uid:str=Depends(current_user)):
                             ext=Path(asset).suffix.lower(); mime=mime_by_ext.get(ext)
                             if not mime: raise HTTPException(400,"备份照片格式不受支持")
                             folder=PHOTO_DIR/fid; folder.mkdir(parents=True,exist_ok=True)
-                            _fsync_directory(folder.parent)
+                            _fsync_directory(folder.parent.parent)
+                                _fsync_directory(folder.parent)
                             target=folder/f"{entity_id}{ext}"; temp=target.with_suffix(target.suffix+".import")
                             if target.exists(): raise HTTPException(409,"照片目标文件已存在，已停止导入以保护现有文件")
                             temporary.append(temp)
@@ -1378,7 +1380,8 @@ async def upload_photo(family_id:str,photo_id:str,file:UploadFile=File(...),uid:
     safe_family_id=str(uuid.UUID(family_id))
     with connect() as db: require_member(db,family_id,uid)
     folder=PHOTO_DIR/safe_family_id; folder.mkdir(parents=True,exist_ok=True)
-    _fsync_directory(folder.parent)
+    _fsync_directory(folder.parent.parent)
+                                _fsync_directory(folder.parent)
     fd,temp_name=tempfile.mkstemp(prefix=f".{safe_photo_id}-",suffix=".part",dir=folder)
     temp=Path(temp_name)
     target=folder/f"{safe_photo_id}-{uuid.uuid4().hex}{types[mime]}"
@@ -1459,7 +1462,8 @@ async def upload_baby_avatar(baby_id:str,family_id:str,file:UploadFile=File(...)
     if len(data)>MAX_PHOTO_BYTES: raise HTTPException(413,"头像超过服务器大小限制")
     if not data.startswith(b"\xff\xd8\xff"): raise HTTPException(415,"头像文件内容不是有效的 JPEG 图片")
     folder=AVATAR_DIR/safe_family_id; folder.mkdir(parents=True,exist_ok=True)
-    _fsync_directory(folder.parent)
+    _fsync_directory(folder.parent.parent)
+                                _fsync_directory(folder.parent)
     target=folder/f"{safe_baby_id}.jpg"
     fd,temp_name=tempfile.mkstemp(prefix=f".{safe_baby_id}-",suffix=".jpg.part",dir=folder)
     temp=Path(temp_name)
