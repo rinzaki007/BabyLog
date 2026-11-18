@@ -69,4 +69,26 @@ class GrowthDataTest {
         assertEquals(50.0f, growthMetricPoints(baby(), emptyList(), "lengthCm").single().second, 0.001f)
         assertEquals(34.0f, growthMetricPoints(baby(), emptyList(), "headCircumferenceCm").single().second, 0.001f)
     }
+
+    @Test
+    fun growthRateUsesTheTwoLatestMeasurementsAndRealElapsedDays() {
+        val summary = growthRateSummary(
+            listOf(
+                1_720_000_000_000L to 5.0f,
+                1_700_000_000_000L to 4.6f,
+                1_710_000_000_000L to 4.8f
+            )
+        )
+        assertEquals(11, summary?.intervalDays)
+        assertEquals(0.6f, summary?.changePer30Days ?: 0f, 0.02f)
+    }
+
+    @Test
+    fun growthRateIsUnavailableWithoutTwoDistinctDates() {
+        assertEquals(null, growthRateSummary(listOf(1_700_000_000_000L to 3.0f)))
+        assertEquals(null, growthRateSummary(listOf(
+            1_700_000_000_000L to 3.0f,
+            1_700_000_000_000L to 3.2f
+        )))
+    }
 }
