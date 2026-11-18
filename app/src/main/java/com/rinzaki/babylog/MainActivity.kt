@@ -1142,7 +1142,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                 Button(onClick = { submit(false) }) { Text("保存记录") }
             }
         }
-    )
+    }
     if (showEventTimePicker) DateTimeOptionDialog(
         initial = date.atTime(hour, minute), includeTime = true,
         onDismiss = { showEventTimePicker = false },
