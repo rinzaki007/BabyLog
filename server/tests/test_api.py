@@ -1828,3 +1828,22 @@ def test_orphan_avatar_cleanup_fails_closed_on_unreadable_baby_record(client):
     main._cleanup_orphan_media_files(now=int(time.time()))
 
     assert avatar.is_file()
+
+
+def test_web_logout_rejects_cross_origin_requests(client):
+    register(client, "logout-origin@example.test")
+    login = client.post("/api/web/login", json={
+        "email": "logout-origin@example.test",
+        "password": "correct-horse-battery",
+    })
+    assert login.status_code == 200
+    assert client.cookies.get("babylog_session")
+
+    rejected = client.post("/api/web/logout", headers={"Origin": "https://attacker.example"})
+    assert rejected.status_code == 403
+    assert client.cookies.get("babylog_session")
+
+    accepted = client.post("/api/web/logout", headers={"Origin": "http://testserver"})
+    assert accepted.status_code == 200
+    assert not client.cookies.get("babylog_session")
+
