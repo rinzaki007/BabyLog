@@ -123,6 +123,8 @@ internal fun BabyAlbumSection(
             extraPhotos = (extraPhotos + target).distinctBy { it.id }
             albumFilter = "全部"
             selectedPhotoDate = null
+            selectedMonth = null
+            growthOnly = false
             viewingPhoto = target
             onInitialPhotoConsumed()
         }
@@ -234,7 +236,13 @@ internal fun BabyAlbumSection(
                                     AlbumPhotoCard(
                                         photo = cover,
                                         cacheRefreshKey = photoCacheRefreshKey,
-                                        onClick = { viewingPhoto = cover; galleryMessage = null },
+                                        onClick = {
+                                            selectedMonth = recap.month
+                                            albumFilter = "全部"
+                                            growthOnly = false
+                                            viewingPhoto = cover
+                                            galleryMessage = null
+                                        },
                                         modifier = Modifier.weight(1f),
                                         height = 68.dp
                                     )
