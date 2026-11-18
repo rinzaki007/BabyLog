@@ -543,19 +543,24 @@ def _record_login_failure(request:Request,identifier:str):
 def _clear_login_failures(request:Request,identifier:str):
     with _LOGIN_LOCK:
         _LOGIN_ATTEMPTS.pop(_login_rate_key(request,identifier),None)
+
+
+def _require_same_origin(request:Request):
+    origin=request.headers.get("origin","").strip()
+    host=request.headers.get("x-forwarded-host") or request.headers.get("host","")
+    # Origin includes scheme as well as host/port; reject missing and cross-origin values.
+    expected_origin=f"{request.url.scheme}://{host}".rstrip("/")
+    if not origin or not host or origin.rstrip("/").lower()!=expected_origin.lower():
+        raise HTTPException(403,"网页请求来源校验失败")
+
+
 def current_user(request:Request,creds:HTTPAuthorizationCredentials|None=Depends(bearer)):
     if not JWT_SECRET or len(JWT_SECRET)<32: raise HTTPException(503,"服务器未配置有效的 BABYLOG_JWT_SECRET")
     cookie_token=request.cookies.get("babylog_session")
     token=creds.credentials if creds else cookie_token
     if not token: raise HTTPException(401,"需要登录")
     if not creds and cookie_token and request.method not in {"GET","HEAD","OPTIONS"}:
-        origin=request.headers.get("origin","").strip()
-        host=request.headers.get("x-forwarded-host") or request.headers.get("host","")
-        # Origin includes scheme as well as host/port. Comparing only the
-        # authority would incorrectly treat HTTP and HTTPS as the same origin.
-        expected_origin=f"{request.url.scheme}://{host}".rstrip("/")
-        if not origin or not host or origin.rstrip("/").lower()!=expected_origin.lower():
-            raise HTTPException(403,"网页请求来源校验失败")
+        _require_same_origin(request)
     try:
         claims=jwt.decode(token,JWT_SECRET,algorithms=["HS256"],issuer=JWT_ISSUER,options={"require":["exp","iat","sub","iss"]})
         uid=claims["sub"]
@@ -682,6 +687,9 @@ def web_login(body:Credentials,request:Request,response:Response):
 
 @app.post("/api/web/logout")
 def web_logout(request:Request,response:Response):
+    # Logout changes browser session state too; do not let a third-party site
+    # force a cookie-authenticated browser session to be signed out.
+    _require_same_origin(request)
     response.delete_cookie("babylog_session",path="/",httponly=True,
         secure=(request.headers.get("x-forwarded-proto","").split(",")[0].strip().lower()=="https" or request.url.scheme=="https"),
         samesite="strict")
