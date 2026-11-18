@@ -909,7 +909,7 @@ async def web_import_preview(request:Request,uid:str=Depends(current_user)):
 @app.post("/api/web/import")
 async def web_import(request:Request,uid:str=Depends(current_user)):
     temp_path,backup,assets=await _read_web_backup(request)
-    written=[]; imported=0; skipped=0
+    written=[]; temporary=[]; imported=0; skipped=0
     mime_by_ext={".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp",".heic":"image/heic",".heif":"image/heif"}
     try:
         profile,family=_web_family(uid); fid=family["id"]
@@ -934,8 +934,9 @@ async def web_import(request:Request,uid:str=Depends(current_user)):
                                 folder=AVATAR_DIR/str(uuid.UUID(fid)); folder.mkdir(parents=True,exist_ok=True)
                                 target=folder/f"{entity_id}.jpg"; temp=target.with_suffix(".jpg.import")
                                 if target.exists(): raise HTTPException(409,"头像目标文件已存在，已停止导入以保护现有文件")
+                                temporary.append(temp)
                                 with archive.open(asset) as source, temp.open("wb") as output: shutil.copyfileobj(source,output,1024*1024)
-                                temp.replace(target); written.append(target)
+                                temp.replace(target); temporary.remove(temp); written.append(target)
                             else: payload["hasAvatar"]=False
                         if kind=="photo":
                             if not asset or asset not in assets: raise HTTPException(400,"备份照片缺少原始图片文件")
@@ -944,8 +945,9 @@ async def web_import(request:Request,uid:str=Depends(current_user)):
                             folder=PHOTO_DIR/fid; folder.mkdir(parents=True,exist_ok=True)
                             target=folder/f"{entity_id}{ext}"; temp=target.with_suffix(target.suffix+".import")
                             if target.exists(): raise HTTPException(409,"照片目标文件已存在，已停止导入以保护现有文件")
+                            temporary.append(temp)
                             with archive.open(asset) as source, temp.open("wb") as output: shutil.copyfileobj(source,output,1024*1024)
-                            temp.replace(target); written.append(target)
+                            temp.replace(target); temporary.remove(temp); written.append(target)
                             db.execute("INSERT INTO photos VALUES (?,?,?,?,?,?)",(entity_id,fid,str(target.relative_to(PHOTO_DIR)),mime,target.stat().st_size,int(time.time())))
                             db.execute("INSERT INTO web_import_mappings VALUES (?,?,?,?)",(fid,source_entity_id,entity_id,int(time.time())))
                         payload_json=json.dumps(payload,ensure_ascii=False,separators=(",",":")); now=int(time.time())
@@ -954,7 +956,11 @@ async def web_import(request:Request,uid:str=Depends(current_user)):
                             (fid,kind,entity_id,str(uuid.uuid4()),json.dumps({"operation":"upsert","payload":payload},ensure_ascii=False),1,now))
                         imported+=1
             except Exception:
-                for path in written:
+                # A failed media copy may leave a partial .import file that was
+                # never promoted into the written list. Remove both staged and
+                # already-promoted files so the DB transaction and filesystem
+                # roll back together.
+                for path in temporary+written:
                     try: path.unlink(missing_ok=True)
                     except OSError: pass
                 raise
