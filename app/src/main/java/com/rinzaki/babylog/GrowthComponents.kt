@@ -9,6 +9,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,18 +36,35 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     val context = LocalContext.current.applicationContext
     val visibleFeedingMethods = FeedingPreferences.enabledMethods(context)
+    val today = LocalDate.now()
     var range by remember { mutableStateOf("近7天") }
     var category by remember { mutableStateOf("全部") }
-    val days = when (range) { "近7天" -> 7L; "近30天" -> 30L; "近90天" -> 90L; else -> Long.MAX_VALUE }
-    val start = if (days == Long.MAX_VALUE) 0L else LocalDate.now().minusDays(days - 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val eventsFlow = remember(babyId, start) { dao.observeNonVaccineEventsInRange(babyId, start, Long.MAX_VALUE) }
+    var customStartDate by remember { mutableStateOf<LocalDate?>(null) }
+    var customEndDate by remember { mutableStateOf<LocalDate?>(null) }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+
+    val dateRange = remember(range, today, customStartDate, customEndDate) {
+        statisticsDateRange(range, today, customStartDate, customEndDate)
+    }
+    val zone = ZoneId.systemDefault()
+    val startAt = dateRange.startDate?.atStartOfDay(zone)?.toInstant()?.toEpochMilli()
+    val endAt = dateRange.endDate?.plusDays(1)?.atStartOfDay(zone)?.toInstant()?.toEpochMilli()?.minus(1L)
+    val eventsFlow = remember(babyId, startAt, endAt) {
+        dao.observeNonVaccineEventsInRange(babyId, startAt ?: 0L, endAt ?: Long.MAX_VALUE)
+    }
     val events by eventsFlow.collectAsState(initial = emptyList())
     val now = System.currentTimeMillis()
-    val ranged = events.filter { it.deletedAt == null && it.occurredAt >= start && it.occurredAt <= now }
+    val ranged = events.filter {
+        it.deletedAt == null &&
+            (startAt == null || it.occurredAt >= startAt) &&
+            it.occurredAt <= minOf(endAt ?: now, now)
+    }
     val recent = ranged.filter { event ->
         when (category) {
             "喂养" -> event.eventType == "FEEDING"
@@ -65,7 +87,8 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     }
     val peeCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("urine") }.getOrDefault(false) }
     val stoolCount = recent.count { it.eventType == "DIAPER" && runCatching { JSONObject(it.payloadJson).optBoolean("stool") }.getOrDefault(false) }
-    val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0) }
+    val sleepEvents = recent.filter { it.eventType == "SLEEP" }
+    val sleepMinutes = sleepEvents.sumOf { runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0) }
     val supplementEvents = recent.filter { it.eventType == "SUPPLEMENT" }
     val solidFoodEvents = recent.filter { it.eventType == "SOLID_FOOD" }
     val waterMl = supplementEvents.filter {
@@ -74,10 +97,13 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             payload.optString("supplementName") == "水" && payload.optString("unit") == "ml"
         }.getOrDefault(false)
     }.sumOf { runCatching { JSONObject(it.payloadJson).optDouble("amount").toInt() }.getOrDefault(0) }
-    val daysCovered = if (days == Long.MAX_VALUE) {
-        calendarDaysCovered(recent, LocalDate.now(), ZoneId.systemDefault())
-    } else days
-    val average = recent.size.toDouble() / daysCovered.toDouble()
+    val daysCovered = dateRange.dayCount ?: calendarDaysCovered(recent, today, zone)
+    val average = recent.size.toDouble() / daysCovered.coerceAtLeast(1).toDouble()
+    val averageMilkPerFeed = if (feedCount > 0) milk / feedCount else 0
+    val averageSleepMinutes = if (sleepEvents.isNotEmpty()) sleepMinutes / sleepEvents.size else 0
+    val chartDays = daysCovered.coerceIn(1, 366)
+    val chartEndDate = dateRange.endDate ?: today
+
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -85,7 +111,18 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
                 Text("${recent.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text("统计周期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-            SelectionRow(listOf("近7天", "近30天", "近90天", "全部"), range) { range = it }
+            SelectionRow(listOf("近7天", "近30天", "近90天", "本周", "本月", "本季度", "自定义", "全部"), range) {
+                if (it == "自定义") {
+                    showStartDatePicker = true
+                } else {
+                    range = it
+                }
+            }
+            Text(
+                "日期范围：${dateRange.label}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Text("记录类型", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("全部", "喂养", "辅食", "补充", "护理", "睡眠", "成长"), category) { category = it }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -106,6 +143,9 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
                         SummaryPill(icon, method, "${feedingMethods[method] ?: 0} 次", Modifier.weight(1f))
                     }
                 }
+                if (feedCount > 0) {
+                    SummaryPill("🥛", "单次平均奶量", "${averageMilkPerFeed} ml", Modifier.fillMaxWidth())
+                }
             }
             if (category == "全部" || category == "补充") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("🧴", "补充次数", "${supplementEvents.size} 次", Modifier.weight(1f))
@@ -116,26 +156,75 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
                 SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
                 SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
             }
-            if (category == "全部" || category == "睡眠") SummaryPill("🌙", "睡眠时长", if (sleepMinutes >= 60) "${sleepMinutes / 60}小时${sleepMinutes % 60}分" else "${sleepMinutes}分钟", Modifier.fillMaxWidth())
+            if (category == "全部" || category == "睡眠") {
+                SummaryPill("🌙", "睡眠时长", if (sleepMinutes >= 60) "${sleepMinutes / 60}小时${sleepMinutes % 60}分" else "${sleepMinutes}分钟", Modifier.fillMaxWidth())
+                if (sleepEvents.isNotEmpty()) {
+                    SummaryPill("💤", "单次平均睡眠", if (averageSleepMinutes >= 60) "${averageSleepMinutes / 60}小时${averageSleepMinutes % 60}分" else "${averageSleepMinutes}分钟", Modifier.fillMaxWidth())
+                }
+            }
             if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
-    DailyTrendChart(recent, range, category)
+    DailyTrendChart(recent, range, category, chartDays, chartEndDate)
+
+    if (showStartDatePicker) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = localDateToPickerMillis(customStartDate ?: today)
+        )
+        DatePickerDialog(
+            onDismissRequest = { showStartDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let {
+                        customStartDate = pickerMillisToLocalDate(it).coerceAtMost(today)
+                        showStartDatePicker = false
+                        showEndDatePicker = true
+                    }
+                }) { Text("下一步") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartDatePicker = false }) { Text("取消") }
+            }
+        ) {
+            DatePicker(state = pickerState, title = { Text("选择开始日期") })
+        }
+    }
+    if (showEndDatePicker) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = localDateToPickerMillis(customEndDate ?: customStartDate ?: today)
+        )
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let {
+                        val selected = pickerMillisToLocalDate(it).coerceAtMost(today)
+                        customEndDate = if (selected.isBefore(customStartDate)) customStartDate else selected
+                        range = "自定义"
+                        showEndDatePicker = false
+                    }
+                }) { Text("完成") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) { Text("取消") }
+            }
+        ) {
+            DatePicker(state = pickerState, title = { Text("选择结束日期") })
+        }
+    }
 }
 
 @Composable
-private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, category: String) {
+private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, category: String, days: Int, endDate: LocalDate) {
     val availableMetrics = remember(category) { trendMetricsForCategory(category) }
     var metric by remember(category) { mutableStateOf(availableMetrics.first()) }
-    val days = if (range == "全部") {
-        calendarDaysCovered(events, LocalDate.now(), ZoneId.systemDefault()).coerceAtMost(366)
-    } else when (range) { "近30天" -> 30; "近90天" -> 90; else -> 7 }
+    val visibleDays = days.coerceIn(1, 366)
     val unit = when (metric) {
         "喂养奶量" -> "ml"
         "睡眠小时" -> "小时"
         else -> "次"
     }
-    val points = remember(events, metric, days) { dailyTrendPoints(events, metric, days) }
+    val points = remember(events, metric, visibleDays, endDate) { dailyTrendPoints(events, metric, visibleDays, today = endDate) }
     var selectedDayIndex by remember(points) { mutableStateOf(points.lastIndex) }
     val selectedDay = points.getOrNull(selectedDayIndex)
     val maximum = points.maxOfOrNull { it.value }?.coerceAtLeast(1f) ?: 1f
@@ -150,7 +239,7 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
                 Text("${"%.1f".format(Locale.CHINA, total)} $unit", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
             Text(
-                if (range == "全部") "统计范围为全部记录；趋势图最多展示最近 366 天" else "与上方统计使用同一周期",
+                if (range == "全部" || days > 366) "趋势图最多展示最近 366 天" else "与上方统计使用同一日期范围",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -169,7 +258,7 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
                 val bottomPadding = 8.dp.toPx()
                 val chartHeight = size.height - topPadding - bottomPadding
                 val slotWidth = (size.width - horizontalPadding * 2) / points.size.coerceAtLeast(1)
-                val barWidth = (slotWidth * if (days == 7) 0.52f else 0.68f).coerceAtLeast(1.dp.toPx())
+                val barWidth = (slotWidth * if (visibleDays <= 7) 0.52f else 0.68f).coerceAtLeast(1.dp.toPx())
                 points.forEachIndexed { index, point ->
                     val barHeight = chartHeight * (point.value / maximum)
                     val left = horizontalPadding + index * slotWidth + (slotWidth - barWidth) / 2f
