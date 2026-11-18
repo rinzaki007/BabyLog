@@ -1033,6 +1033,7 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
         seen.add(key)
     now=int(time.time())
     photo_files_to_delete=[]
+    avatar_files_to_delete=[]
     with connect() as db:
         require_member(db,body.family_id,uid)
         member=db.execute("SELECT role FROM family_members WHERE family_id=? AND user_id=?",(body.family_id,uid)).fetchone()
@@ -1068,6 +1069,10 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
                 if photo:
                     photo_files_to_delete.append(PHOTO_DIR/photo["relative_path"])
                 db.execute("DELETE FROM photos WHERE id=? AND family_id=?",(item.entity_id,body.family_id))
+            elif item.entity_type=="baby" and deleted:
+                avatar_files_to_delete.append(
+                    AVATAR_DIR/str(uuid.UUID(body.family_id))/f"{uuid.UUID(item.entity_id)}.jpg"
+                )
         # Any cloud-only record absent from the authoritative device is tombstoned.
         for key,old_version in old.items():
             if key in snapshot_keys: continue
@@ -1079,6 +1084,10 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
                 if photo:
                     photo_files_to_delete.append(PHOTO_DIR/photo["relative_path"])
                 db.execute("DELETE FROM photos WHERE id=? AND family_id=?",(entity_id,body.family_id))
+            elif entity_type=="baby":
+                avatar_files_to_delete.append(
+                    AVATAR_DIR/str(uuid.UUID(body.family_id))/f"{uuid.UUID(entity_id)}.jpg"
+                )
         versions=[]
         for entity_type,entity_id,operation,payload,version in changes_to_append:
             operation_id="snapshot:"+str(uuid.uuid4())
@@ -1091,6 +1100,10 @@ def authoritative_snapshot(body:SnapshotRequest,uid:str=Depends(current_user)):
     for photo_path in photo_files_to_delete:
         resolved=photo_path.resolve()
         if PHOTO_DIR.resolve() in resolved.parents:
+            resolved.unlink(missing_ok=True)
+    for avatar_path in avatar_files_to_delete:
+        resolved=avatar_path.resolve()
+        if AVATAR_DIR.resolve() in resolved.parents:
             resolved.unlink(missing_ok=True)
     return {"replaced":True,"items":len(body.items),"changes":len(changes_to_append),"cursor":latest,"versions":versions}
 
