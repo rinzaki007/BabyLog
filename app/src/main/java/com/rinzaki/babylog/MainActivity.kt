@@ -191,6 +191,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
         if (baby == null) flowOf(emptyList()) else dao.observeEventsByType(baby.id, "MILESTONE")
     }
     val milestoneEvents by milestoneEventsFlow.collectAsState(initial = emptyList())
+    val solidFoodEventsFlow = remember(baby?.id) {
+        if (baby == null) flowOf(emptyList()) else dao.observeEventsByType(baby.id, "SOLID_FOOD")
+    }
+    val solidFoodEvents by solidFoodEventsFlow.collectAsState(initial = emptyList())
     val vaccineEventsFlow = remember(baby?.id) {
         if (baby == null) flowOf(emptyList()) else dao.observeEventsByType(baby.id, "VACCINE")
     }
@@ -496,6 +500,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     }
+                    if (page == 2) item { SolidFoodJourneySection(solidFoodEvents) }
                     if (page == 3) item {
                         BabyAlbumSection(
                             baby = baby,
@@ -948,6 +953,10 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var foodAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("amount")) }
     var foodUnit by remember(existing?.id) { mutableStateOf(initialPayload.optString("unit", "g")) }
     var foodStatus by remember(existing?.id) { mutableStateOf(initialPayload.optString("eatingStatus", "正常")) }
+    var foodCategory by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodCategory", "未分类")) }
+    var foodStage by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodStage", if (existing == null) "首次尝试" else "未标记")) }
+    var foodReaction by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodReaction", if (existing == null) "待观察" else "未记录")) }
+    var foodReactionNote by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodReactionNote")) }
     var note by remember(existing?.id) { mutableStateOf(initialPayload.optString("note")) }
     var milestoneTitle by remember(existing?.id) { mutableStateOf(initialPayload.optString("milestoneTitle")) }
     val milestoneId = remember(existing?.id) { initialPayload.optString("milestoneId") }
@@ -1046,9 +1055,25 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                         )
                         Text("单位", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         SelectionRow(solidFoodUnits, foodUnit) { foodUnit = it }
+                        Text("食物类别", fontWeight = FontWeight.SemiBold)
+                        SelectionRow(solidFoodCategories, foodCategory) { foodCategory = it }
+                        Text("尝试阶段", fontWeight = FontWeight.SemiBold)
+                        SelectionRow(solidFoodStages, foodStage) { foodStage = it }
                         Text("进食情况", fontWeight = FontWeight.SemiBold)
                         SelectionRow(solidFoodStatuses, foodStatus) { foodStatus = it }
-                        Text("这里只记录实际尝试和进食情况；添加种类、时间及份量请按宝宝情况和专业建议安排。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("观察情况", fontWeight = FontWeight.SemiBold)
+                        SelectionRow(solidFoodReactions, foodReaction) { foodReaction = it }
+                        if (foodReaction == "出现不适") {
+                            OutlinedTextField(
+                                value = foodReactionNote,
+                                onValueChange = { foodReactionNote = it.take(120) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("观察到的情况（可选）") },
+                                minLines = 1,
+                                maxLines = 2
+                            )
+                        }
+                        Text("这里只记录实际尝试和家庭观察，不作过敏或营养诊断；添加种类、时间及份量请按宝宝情况和专业建议安排。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     "SUPPLEMENT" -> {
                         Text("补充项目", fontWeight = FontWeight.SemiBold)
@@ -1147,7 +1172,12 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                                             error = "请检查辅食数量"
                                             return
                                         }
-                                        payload.put("foodName", name).put("eatingStatus", foodStatus)
+                                        payload.put("foodName", name)
+                                            .put("foodCategory", foodCategory)
+                                            .put("foodStage", foodStage)
+                                            .put("eatingStatus", foodStatus)
+                                            .put("foodReaction", foodReaction)
+                                        if (foodReactionNote.isNotBlank()) payload.put("foodReactionNote", foodReactionNote.trim())
                                         if (amount != null) payload.put("amount", amount).put("unit", foodUnit)
                                     }
                                     "SUPPLEMENT" -> {
