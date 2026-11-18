@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,9 +44,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.window.Dialog
@@ -256,6 +261,9 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val timelinePhotosByDay = remember(timelinePhotos) {
         timelinePhotos.groupBy { java.time.Instant.ofEpochMilli(it.takenAt).atZone(ZoneId.systemDefault()).toLocalDate() }
     }
+    val timelineDayCounts = remember(timelineEvents) {
+        timelineEvents.groupingBy { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate() }.eachCount()
+    }
     val lastTimelineEventIdByDay = remember(timelineEvents) {
         timelineEvents.groupBy { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate() }
             .mapValues { (_, dayEvents) -> dayEvents.last().id }
@@ -430,7 +438,30 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                 }
                 if (baby != null) {
-                    if (page == 0) item { TodaySummary(todayEvents) }
+                    if (page == 0) item {
+                        TodaySummary(todayEvents) { category ->
+                            selectedEventFilter = category
+                            selectedNav = 1
+                        }
+                    }
+                    if (page == 0) item {
+                        SleepTimerCard { startedAt, endedAt, durationMinutes ->
+                            val now = System.currentTimeMillis()
+                            val payload = JSONObject()
+                                .put("durationMinutes", durationMinutes)
+                                .put("startedAt", startedAt)
+                                .put("endedAt", endedAt)
+                                .put("source", "timer")
+                            val event = BabyEventEntity(UUID.randomUUID().toString(), baby.id, "SLEEP", startedAt, payload.toString(), null, now)
+                            scope.launch {
+                                dao.upsertEvent(event)
+                                if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                    dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", event.id, "upsert", eventSyncPayload(event).toString(), event.serverVersion, now))
+                                    SyncScheduler.enqueue(appContext)
+                                }
+                            }
+                        }
+                    }
 
                     if (page == 2) item { TrendsSummary(baby.id, dao) }
                     if (page == 2) item { GrowthSection(baby, growthEvents) }
@@ -506,6 +537,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                                 if (selectedStartDate != null || selectedEndDate != null) TextButton(onClick = { selectedStartDate = null; selectedEndDate = null }) { Text("清除") }
                             }
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                TextButton(onClick = { selectedStartDate = LocalDate.now(); selectedEndDate = LocalDate.now() }) { Text("今天") }
+                                TextButton(onClick = { selectedStartDate = LocalDate.now().minusDays(6); selectedEndDate = LocalDate.now() }) { Text("近7天") }
+                                TextButton(onClick = { selectedStartDate = LocalDate.now().minusDays(29); selectedEndDate = LocalDate.now() }) { Text("近30天") }
+                                TextButton(onClick = { selectedStartDate = null; selectedEndDate = null }) { Text("全部") }
+                            }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "成长测量", "其他")) { category ->
                                 if (selectedEventFilter == category) {
@@ -533,12 +570,14 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                         }
-                    } else if (page == 1) items(timelineEvents, key = { it.id }) { event ->
+                    } else if (page == 1) itemsIndexed(timelineEvents, key = { _, event -> event.id }) { index, event ->
                         val zone = ZoneId.systemDefault()
                         val eventDay = java.time.Instant.ofEpochMilli(event.occurredAt).atZone(zone).toLocalDate()
+                        val previousDay = timelineEvents.getOrNull(index - 1)?.let { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(zone).toLocalDate() }
                         val dayPhotos = timelinePhotosByDay[eventDay].orEmpty()
                         val isLastEventOfDay = lastTimelineEventIdByDay[eventDay] == event.id
                         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            if (index == 0 || previousDay != eventDay) TimelineDayHeader(eventDay, timelineDayCounts[eventDay] ?: 1)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                                 EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
                             }
@@ -827,6 +866,7 @@ private fun ProfileMetric(label: String, value: String, modifier: Modifier = Mod
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, onDismiss: () -> Unit, onSave: (String, JSONObject, Long, Boolean) -> Unit) {
     val context = LocalContext.current.applicationContext
     val initialPayload = remember(existing?.id) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
@@ -870,11 +910,20 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
     var showEventTimePicker by remember { mutableStateOf(false) }
     val title = when (eventType) { "FEEDING" -> "喂养记录"; "SOLID_FOOD" -> "辅食记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; "SUPPLEMENT" -> "补充记录"; else -> "成长记录" }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontWeight = FontWeight.Bold) },
-        text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                TextButton(onClick = onDismiss) { Text("关闭") }
+            }
+            HorizontalDivider()
+            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("记录时间", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 OutlinedButton(onClick = { showEventTimePicker = true }, modifier = Modifier.fillMaxWidth()) {
                     Text(date.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA)) + " · %02d时%02d分".format(hour, minute))
@@ -1007,8 +1056,6 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                 OutlinedTextField(note, { note = it.take(120) }, Modifier.fillMaxWidth(), label = { Text("备注（可选）") }, minLines = 1, maxLines = 2)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
-        },
-        confirmButton = {
             fun submit(keepOpen: Boolean) {
                 
                                 val timestamp = date.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -1094,8 +1141,7 @@ private fun EventEditor(eventType: String, existing: BabyEventEntity? = null, on
                 }
                 Button(onClick = { submit(false) }) { Text("保存记录") }
             }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        }
     )
     if (showEventTimePicker) DateTimeOptionDialog(
         initial = date.atTime(hour, minute), includeTime = true,
@@ -1150,6 +1196,25 @@ internal fun SelectionRow(options: List<String>, selected: String, onSelect: (St
                 if (missing > 0) Spacer(Modifier.weight(missing / 2f))
             }
         }
+    }
+}
+
+@Composable
+private fun TimelineDayHeader(date: LocalDate, count: Int) {
+    val today = LocalDate.now()
+    val label = when (date) {
+        today -> "今天"
+        today.minusDays(1) -> "昨天"
+        else -> date.format(DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.CHINA))
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 1.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        Text("$count 条", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
