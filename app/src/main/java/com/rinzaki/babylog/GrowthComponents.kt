@@ -72,7 +72,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             "睡眠" -> event.eventType == "SLEEP"
             "补充" -> event.eventType == "SUPPLEMENT"
             "辅食" -> event.eventType == "SOLID_FOOD"
-            "成长" -> event.eventType == "GROWTH"
+            "成长" -> event.eventType in setOf("GROWTH", "MILESTONE")
             else -> true
         }
     }
