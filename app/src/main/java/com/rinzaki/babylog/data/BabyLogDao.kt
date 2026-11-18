@@ -46,6 +46,7 @@ interface BabyLogDao {
           AND (
               :eventType IS NULL
               OR (:eventType = 'OTHER' AND eventType NOT IN ('FEEDING', 'DIAPER', 'SLEEP', 'GROWTH', 'SUPPLEMENT', 'SOLID_FOOD', 'MILESTONE', 'VACCINE'))
+              OR (:eventType = 'GROWTH_JOURNEY' AND eventType IN ('GROWTH', 'MILESTONE'))
               OR eventType = :eventType
           )
         ORDER BY occurredAt DESC, id DESC
@@ -63,6 +64,7 @@ interface BabyLogDao {
           AND (
               :eventType IS NULL
               OR (:eventType = 'OTHER' AND eventType NOT IN ('FEEDING', 'DIAPER', 'SLEEP', 'GROWTH', 'SUPPLEMENT', 'SOLID_FOOD', 'MILESTONE', 'VACCINE'))
+              OR (:eventType = 'GROWTH_JOURNEY' AND eventType IN ('GROWTH', 'MILESTONE'))
               OR eventType = :eventType
           )
     """)
