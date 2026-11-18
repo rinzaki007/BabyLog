@@ -53,26 +53,42 @@ internal val growthMilestones = listOf(
     GrowthMilestone("jump", "尝试双脚离地跳跃", "约 24–36 个月", 24, 36, "大运动")
 )
 
-internal fun completedGrowthMilestones(events: List<BabyEventEntity>): Map<String, BabyEventEntity> =
-    events.asSequence()
-        .filter { it.eventType == "MILESTONE" && it.deletedAt == null }
-        .mapNotNull { event ->
-            val id = runCatching { JSONObject(event.payloadJson).optString("milestoneId") }
-                .getOrNull()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            id to event
+internal fun completedGrowthMilestones(events: List<BabyEventEntity>): Map<String, BabyEventEntity> {
+    val completed = LinkedHashMap<String, BabyEventEntity>()
+    for (event in events) {
+        if (event.eventType != "MILESTONE" || event.deletedAt != null) continue
+        val milestoneId = try {
+            JSONObject(event.payloadJson).optString("milestoneId")
+        } catch (_: Exception) {
+            ""
         }
-        .groupBy({ it.first }, { it.second })
-        .mapValues { (_, matches) -> matches.maxBy { it.occurredAt } }
+        if (milestoneId.isBlank()) continue
+        val previous = completed[milestoneId]
+        if (previous == null || event.occurredAt > previous.occurredAt) {
+            completed[milestoneId] = event
+        }
+    }
+    return completed
+}
 
 internal fun babyAgeMonths(
     birthTime: Long,
     today: LocalDate = LocalDate.now(),
     zoneId: ZoneId = ZoneId.systemDefault()
 ): Long {
-    val birthDate = runCatching {
+    val birthDate = try {
         Instant.ofEpochMilli(birthTime).atZone(zoneId).toLocalDate()
-    }.getOrDefault(today)
+    } catch (_: Exception) {
+        today
+    }
     return ChronoUnit.MONTHS.between(birthDate, today).coerceAtLeast(0)
+}
+
+private fun milestoneRecordedDate(event: BabyEventEntity, formatter: DateTimeFormatter): String {
+    val date = Instant.ofEpochMilli(event.occurredAt)
+        .atZone(ZoneId.systemDefault())
+        .toLocalDate()
+    return date.format(formatter)
 }
 
 @Composable
@@ -95,22 +111,27 @@ internal fun GrowthMilestonesSection(
                 }
                 Text("${completed.size}/${growthMilestones.size}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
-            growthMilestones.forEach { milestone ->
+            for (milestone in growthMilestones) {
                 val event = completed[milestone.id]
+                val statusText = if (event == null) {
+                    "${milestone.ageRange} · ${milestone.category}"
+                } else {
+                    "${milestone.ageRange} · ${milestone.category} · ${milestoneRecordedDate(event, formatter)} 已记录"
+                }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(milestone.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "${milestone.ageRange} · ${milestone.category}" + (event?.let {
-                                val date = Instant.ofEpochMilli(it.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate()
-                                " · ${date.format(formatter)} 已记录"
-                            } ?: ""),
+                            statusText,
                             style = MaterialTheme.typography.labelSmall,
                             color = if (event != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    if (event == null) TextButton(onClick = { onRecord(milestone) }) { Text("记录") }
-                    else Text("✓ 已记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    if (event == null) {
+                        TextButton(onClick = { onRecord(milestone) }) { Text("记录") }
+                    } else {
+                        Text("✓ 已记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
             Text("年龄范围仅作回忆记录参考，不是发育标准或筛查结论；每个宝宝的成长节奏都不同。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
