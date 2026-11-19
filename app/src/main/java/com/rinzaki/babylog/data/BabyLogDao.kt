@@ -18,6 +18,14 @@ interface BabyLogDao {
         SELECT * FROM baby_events
         WHERE babyId = :babyId
           AND deletedAt IS NULL
+        ORDER BY occurredAt ASC, id ASC
+    """)
+    suspend fun getGrowthReportEvents(babyId: String): List<BabyEventEntity>
+
+    @Query("""
+        SELECT * FROM baby_events
+        WHERE babyId = :babyId
+          AND deletedAt IS NULL
           AND eventType != 'VACCINE'
           AND occurredAt >= :startAt
           AND occurredAt <= :endAt
