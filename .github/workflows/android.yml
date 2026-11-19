@@ -40,13 +40,13 @@ jobs:
           BABYLOG_KEY_ALIAS: ${{ secrets.BABYLOG_KEY_ALIAS }}
           BABYLOG_KEY_PASSWORD: ${{ secrets.BABYLOG_KEY_PASSWORD }}
         run: |
-          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8/' gradle.properties
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx10g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8/' gradle.properties
           sed -i 's/^org.gradle.parallel=.*/org.gradle.parallel=false/' gradle.properties
           {
-            echo 'org.gradle.workers.max=2'
+            echo 'org.gradle.workers.max=1'
             echo 'kotlin.compiler.execution.strategy=in-process'
           } >> gradle.properties
-          gradle --no-daemon --max-workers=2 testDebugUnitTest assembleDebug
+          gradle --no-daemon --max-workers=1 testDebugUnitTest assembleDebug
       - name: Verify launcher icon is packaged in the APK
         shell: bash
         run: |
