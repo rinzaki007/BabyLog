@@ -82,7 +82,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import com.rinzaki.babylog.navigation.BabyLogDestination
 import com.rinzaki.babylog.navigation.BabyLogNavigationBar
 import com.rinzaki.babylog.ui.theme.BabyLogTheme
@@ -339,7 +338,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                     else -> "等待首次同步"
                                 }
                                 Box(Modifier.size(8.dp).background(
-                                    when { !syncError.isNullOrBlank() -> MaterialTheme.colorScheme.error; syncing -> MaterialTheme.colorScheme.primary; else -> Color(0xFF55A477) },
+                                    when { !syncError.isNullOrBlank() -> MaterialTheme.colorScheme.error; syncing -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.secondary },
                                     CircleShape
                                 ))
                                 Text(syncLabel, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 9.dp).weight(1f))
@@ -362,7 +361,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("本地与云端校验", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(syncConsistency ?: "尚未校验", style = MaterialTheme.typography.labelSmall, color = if (syncConsistency == "一致") Color(0xFF38845B) else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                                    Text(syncConsistency ?: "尚未校验", style = MaterialTheme.typography.labelSmall, color = if (syncConsistency == "一致") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
                                 }
                                 if (!syncError.isNullOrBlank()) Text("同步提示：$syncError", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                             }
@@ -609,7 +608,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                     if (page == 1 && timelineEvents.isEmpty() && !timelineLoading && timelineError == null) {
                         item {
-                            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
+                            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("🌱", style = MaterialTheme.typography.headlineLarge)
                                     Text(
@@ -788,7 +787,7 @@ private fun BabyProfileEditor(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) avatar = uri.toString()
     }
-    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Text(if (existing == null) "建立宝宝档案" else "编辑宝宝档案", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -887,7 +886,7 @@ private fun Avatar(uri: String?, size: Int) {
             else context.contentResolver.openInputStream(android.net.Uri.parse(uri))?.use { BitmapFactory.decodeStream(it) }
         }
     }
-    Surface(shape = CircleShape, color = Color(0xFFEDE7F6), modifier = Modifier.size(size.dp)) {
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(size.dp)) {
         if (bitmap != null) Image(bitmap!!.asImageBitmap(), contentDescription = "宝宝头像", modifier = Modifier.fillMaxSize())
         else Box(contentAlignment = Alignment.Center) { Text("👶", style = MaterialTheme.typography.headlineMedium) }
     }
@@ -900,7 +899,7 @@ private fun BabyProfileCard(baby: BabyEntity, onEdit: () -> Unit) {
     val days = java.time.temporal.ChronoUnit.DAYS.between(birthDate, today).coerceAtLeast(0) + 1
     val months = java.time.temporal.ChronoUnit.MONTHS.between(birthDate, today).coerceAtLeast(0)
     val ageText = if (months < 1) "第 $days 天" else "$months 个月"
-    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
+    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(baby.avatarUri, 54)
@@ -922,7 +921,7 @@ private fun BabyProfileCard(baby: BabyEntity, onEdit: () -> Unit) {
 
 @Composable
 private fun ProfileMetric(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.background(Color.White.copy(alpha = 0.72f), RoundedCornerShape(11.dp)).padding(vertical = 5.dp, horizontal = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f), RoundedCornerShape(11.dp)).padding(vertical = 5.dp, horizontal = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -1349,7 +1348,7 @@ private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onE
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
         Row(
@@ -1357,7 +1356,7 @@ private fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onE
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Surface(shape = RoundedCornerShape(11.dp), color = Color(0xFFF2EDF7), modifier = Modifier.size(34.dp)) {
+            Surface(shape = RoundedCornerShape(11.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(34.dp)) {
                 Box(contentAlignment = Alignment.Center) { Text(emoji, style = MaterialTheme.typography.titleMedium) }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -1406,7 +1405,7 @@ internal fun DateTimeOptionDialog(
         },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Surface(color = Color(0xFFF1ECF7), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(dateLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         if (includeTime) Text(timeLabel, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
