@@ -77,7 +77,7 @@ internal fun BabyAlbumSection(
     baby: BabyEntity,
     photos: List<BabyPhotoEntity>,
     photoCount: Int,
-    onLoadMore: suspend (offset: Int, limit: Int) -> List<BabyPhotoEntity>,
+    onLoadMore: suspend (beforeTakenAt: Long, beforeId: String, limit: Int) -> List<BabyPhotoEntity>,
     onAdd: (android.net.Uri, Long) -> Unit,
     onCaption: (BabyPhotoEntity, String) -> Unit,
     onDelete: (BabyPhotoEntity) -> Unit,
@@ -104,12 +104,16 @@ internal fun BabyAlbumSection(
     var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
     var showPhotoDatePicker by remember { mutableStateOf(false) }
     var extraPhotos by remember(baby.id, photoCount) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
+    var photoPageCursor by remember(baby.id) { mutableStateOf<BabyPhotoEntity?>(null) }
     var loadingMorePhotos by remember { mutableStateOf(false) }
     val loadedPhotos = remember(photos, extraPhotos, initialPhoto) {
         (photos + extraPhotos + listOfNotNull(initialPhoto)).distinctBy { it.id }
             .sortedWith(compareByDescending<BabyPhotoEntity> { it.takenAt }.thenByDescending { it.id })
     }
-    LaunchedEffect(photos) { extraPhotos = emptyList() }
+    LaunchedEffect(photos) {
+        extraPhotos = emptyList()
+        photoPageCursor = photos.lastOrNull()
+    }
     LaunchedEffect(initialPhoto?.id) {
         initialPhoto?.let { target ->
             extraPhotos = (extraPhotos + target).distinctBy { it.id }
@@ -277,13 +281,19 @@ internal fun BabyAlbumSection(
                     onClick = {
                         albumScope.launch {
                             loadingMorePhotos = true
-                            runCatching { onLoadMore(loadedPhotos.size, 60) }
-                                .onSuccess { page -> extraPhotos = (extraPhotos + page).distinctBy { it.id } }
-                                .onFailure { galleryMessage = "加载照片失败：${it.message ?: "请重试"}" }
+                            val cursor = photoPageCursor
+                            if (cursor != null) {
+                                runCatching { onLoadMore(cursor.takenAt, cursor.id, 60) }
+                                    .onSuccess { page ->
+                                        extraPhotos = (extraPhotos + page).distinctBy { it.id }
+                                        if (page.isNotEmpty()) photoPageCursor = page.last()
+                                    }
+                                    .onFailure { galleryMessage = "加载照片失败：${it.message ?: "请重试"}" }
+                            }
                             loadingMorePhotos = false
                         }
                     },
-                    enabled = !loadingMorePhotos,
+                    enabled = !loadingMorePhotos && photoPageCursor != null,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (loadingMorePhotos) "正在加载…" else "加载更多照片（已加载 ${loadedPhotos.size}/${photoCount} 张）")
