@@ -86,7 +86,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.ShowChart
 import com.rinzaki.babylog.navigation.BabyLogDestination
 import com.rinzaki.babylog.ui.theme.BabyLogTheme
 import androidx.compose.ui.graphics.asImageBitmap
@@ -322,20 +327,16 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             selected = selectedNav == index,
                             onClick = { selectedNav = index },
                             icon = {
-                                if (destination == BabyLogDestination.MORE) {
-                                    Icon(imageVector = Icons.Filled.MoreHoriz, contentDescription = destination.label)
-                                } else {
-                                    Text(
-                                        when (destination) {
-                                            BabyLogDestination.HOME -> "⌂"
-                                            BabyLogDestination.RECORDS -> "+"
-                                            BabyLogDestination.GROWTH -> "↗"
-                                            BabyLogDestination.ALBUM -> "▧"
-                                            BabyLogDestination.MORE -> "•••"
-                                        },
-                                        style = MaterialTheme.typography.titleLarge
-                                    )
-                                }
+                                Icon(
+                                    imageVector = when (destination) {
+                                        BabyLogDestination.HOME -> Icons.Filled.Home
+                                        BabyLogDestination.RECORDS -> Icons.Filled.Add
+                                        BabyLogDestination.GROWTH -> Icons.Filled.ShowChart
+                                        BabyLogDestination.ALBUM -> Icons.Filled.Photo
+                                        BabyLogDestination.MORE -> Icons.Filled.MoreHoriz
+                                    },
+                                    contentDescription = destination.label
+                                )
                             },
                             label = {
                                 Text(
