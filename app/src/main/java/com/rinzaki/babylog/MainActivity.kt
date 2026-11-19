@@ -658,6 +658,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         MorePageHeader(
                             syncStatus = syncStatus,
                             syncDescription = syncDescription,
+                            syncHasError = !syncError.isNullOrBlank(),
                             onOpenSyncSettings = { showSyncSettings = true }
                         )
                     }
