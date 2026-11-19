@@ -323,50 +323,27 @@ private fun BabyLogApp(dao: BabyLogDao) {
             ) {
                 if (page == 0) item { HomeDashboardHeader(todayDate = todayDate) { showSyncSettings = true } }
                 if (page == 0) item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surface,
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth().clickable { showSyncDetails = !showSyncDetails }
-                        ) {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                val syncLabel = when {
-                                    SyncPreferences.familyId(appContext).isBlank() -> "离线保存"
-                                    syncing -> "正在同步"
-                                    !syncError.isNullOrBlank() -> "同步需要检查"
-                                    lastSyncAt > 0L -> "家庭同步正常"
-                                    else -> "等待首次同步"
-                                }
-                                Box(Modifier.size(8.dp).background(
-                                    when { !syncError.isNullOrBlank() -> MaterialTheme.colorScheme.error; syncing -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.secondary },
-                                    CircleShape
-                                ))
-                                Text(syncLabel, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 9.dp).weight(1f))
-                                Text(
-                                    if (lastSyncAt > 0L) SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(lastSyncAt)) else "查看详情",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(if (showSyncDetails) "⌃" else "⌄", modifier = Modifier.padding(start = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        if (showSyncDetails) Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(if (syncing) "正在交换本地与云端数据…" else "自动同步已开启", style = MaterialTheme.typography.bodyMedium)
-                                        Text(if (lastSyncAt > 0L) "上次成功：${SimpleDateFormat("yyyy年M月d日 HH时mm分", Locale.CHINA).format(Date(lastSyncAt))}" else "尚无成功同步记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    OutlinedButton(enabled = SyncPreferences.familyId(appContext).isNotBlank() && !syncing, onClick = { SyncScheduler.enqueue(appContext) }) { Text(if (syncing) "同步中" else "立即同步") }
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("本地与云端校验", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(syncConsistency ?: "尚未校验", style = MaterialTheme.typography.labelSmall, color = if (syncConsistency == "一致") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-                                }
-                                if (!syncError.isNullOrBlank()) Text("同步提示：$syncError", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
+                    val syncConfigured = SyncPreferences.familyId(appContext).isNotBlank()
+                    val syncLabel = when {
+                        !syncConfigured -> "离线保存"
+                        syncing -> "正在同步"
+                        !syncError.isNullOrBlank() -> "同步需要检查"
+                        lastSyncAt > 0L -> "家庭同步正常"
+                        else -> "等待首次同步"
                     }
+                    HomeSyncStatusCard(
+                        syncLabel = syncLabel,
+                        lastSyncLabel = if (lastSyncAt > 0L) {
+                            "上次成功：" + SimpleDateFormat("yyyy年M月d日 HH时mm分", Locale.CHINA).format(Date(lastSyncAt))
+                        } else "尚无成功同步记录",
+                        syncConfigured = syncConfigured,
+                        syncing = syncing,
+                        showDetails = showSyncDetails,
+                        consistency = syncConsistency,
+                        syncError = syncError,
+                        onToggleDetails = { showSyncDetails = !showSyncDetails },
+                        onSyncNow = { SyncScheduler.enqueue(appContext) }
+                    )
                 }
                 if (page == 0) item {
                     if (baby == null || editingProfile) {
