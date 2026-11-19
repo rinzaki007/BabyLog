@@ -13,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
@@ -78,7 +77,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
         calendarDaysCovered(recent, LocalDate.now(), ZoneId.systemDefault())
     } else days
     val average = recent.size.toDouble() / daysCovered.toDouble()
-    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("数据统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -140,7 +139,9 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
     val selectedDay = points.getOrNull(selectedDayIndex)
     val maximum = points.maxOfOrNull { it.value }?.coerceAtLeast(1f) ?: 1f
     val total = points.sumOf { it.value.toDouble() }.toFloat()
-    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    val chartPrimary = MaterialTheme.colorScheme.primary
+    val chartSecondary = MaterialTheme.colorScheme.secondary
+    Card(shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -175,9 +176,9 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
                     val left = horizontalPadding + index * slotWidth + (slotWidth - barWidth) / 2f
                     drawRoundRect(
                         color = when {
-                            index == selectedDayIndex -> Color(0xFFB77969)
-                            point.value == 0f -> Color(0xFF8874B8).copy(alpha = 0.16f)
-                            else -> Color(0xFF8874B8).copy(alpha = 0.85f)
+                            index == selectedDayIndex -> chartPrimary
+                            point.value == 0f -> chartSecondary.copy(alpha = 0.16f)
+                            else -> chartSecondary.copy(alpha = 0.85f)
                         },
                         topLeft = Offset(left, topPadding + chartHeight - barHeight),
                         size = androidx.compose.ui.geometry.Size(barWidth, barHeight.coerceAtLeast(2.dp.toPx())),
@@ -226,7 +227,10 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val dateFormat = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)
     var selectedPointIndex by remember(points) { mutableStateOf(points.lastIndex) }
     val selectedPoint = points.getOrNull(selectedPointIndex)
-    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    val chartPrimary = MaterialTheme.colorScheme.primary
+    val chartSecondary = MaterialTheme.colorScheme.secondary
+    val chartGrid = MaterialTheme.colorScheme.outlineVariant
+    Card(shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -279,7 +283,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         val timeSpan = (points.last().first - timeStart).coerceAtLeast(1L)
                         repeat(4) { index ->
                             val y = top + (bottom - top) * index / 3f
-                            drawLine(Color(0xFFEDE7F6), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
+                            drawLine(chartGrid, Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
                         }
                         val coords = points.map { point ->
                             val x = left + (right - left) * ((point.first - timeStart).toFloat() / timeSpan.toFloat())
@@ -294,7 +298,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                 lineTo(coords.last().x, bottom)
                                 close()
                             }
-                            drawPath(fillPath, Color(0xFF8874B8).copy(alpha = 0.10f))
+                            drawPath(fillPath, chartSecondary.copy(alpha = 0.10f))
                             val linePath = Path().apply {
                                 moveTo(coords.first().x, coords.first().y)
                                 for (i in 1 until coords.size) {
@@ -305,13 +309,13 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                     lineTo(currentPoint.x, currentPoint.y)
                                 }
                             }
-                            drawPath(linePath, Color(0xFF8874B8), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                            drawPath(linePath, chartSecondary, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
                         }
                         coords.forEachIndexed { index, point ->
                             val isLatest = index == coords.lastIndex
                             val isSelected = index == selectedPointIndex
-                            if (isSelected) drawCircle(Color(0xFFB77969).copy(alpha = 0.18f), radius = 11.dp.toPx(), center = point)
-                            drawCircle(if (isLatest || isSelected) Color(0xFFB77969) else Color(0xFF8874B8), radius = if (isLatest || isSelected) 5.dp.toPx() else 3.5.dp.toPx(), center = point)
+                            if (isSelected) drawCircle(chartPrimary.copy(alpha = 0.18f), radius = 11.dp.toPx(), center = point)
+                            drawCircle(if (isLatest || isSelected) chartPrimary else chartSecondary, radius = if (isLatest || isSelected) 5.dp.toPx() else 3.5.dp.toPx(), center = point)
                         }
                     }
                 }

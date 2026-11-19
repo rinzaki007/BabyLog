@@ -191,7 +191,7 @@ internal fun BabyAlbumSection(
         if (photoCount == 0) {
             Card(
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F0))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(
                     Modifier.fillMaxWidth().padding(24.dp),
@@ -231,7 +231,7 @@ internal fun BabyAlbumSection(
                         Box(
                             Modifier.align(Alignment.TopCenter).padding(top = 5.dp)
                                 .width(2.dp).fillMaxSize()
-                                .background(Color(0xFFE4DCEF), RoundedCornerShape(2.dp))
+                                .background(MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(2.dp))
                         )
                         Surface(
                             modifier = Modifier.align(Alignment.TopCenter).padding(top = 3.dp).size(11.dp),
@@ -557,7 +557,7 @@ internal fun BabyAlbumSection(
                         Column {
                             Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                                galleryMessage?.let { Text(it, color = Color(0xFFD7C9F4), style = MaterialTheme.typography.bodySmall) }
+                                galleryMessage?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
                             }
                             Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                                 TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
@@ -569,7 +569,7 @@ internal fun BabyAlbumSection(
                                         }.getOrElse { "保存失败：" + (it.message ?: "未知错误") }
                                     }
                                 }) { Text("保存到手机", color = Color.White) }
-                                TextButton(onClick = { deletingPhoto = activePhoto; closeViewer() }) { Text("删除", color = Color(0xFFFF8A80)) }
+                                TextButton(onClick = { deletingPhoto = activePhoto; closeViewer() }) { Text("删除", color = MaterialTheme.colorScheme.error) }
                             }
                         }
                     }
@@ -832,7 +832,7 @@ private fun AlbumPhotoCard(
     Card(
         modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Box(Modifier.fillMaxWidth().height(height)) {
             if (bitmap != null) {
