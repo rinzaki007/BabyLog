@@ -944,6 +944,11 @@ def web_export(include_photos:bool=False,uid:str=Depends(current_user)):
                 raise HTTPException(409,"照片文件缺失或路径无效，备份未生成；请先恢复照片")
             asset=f"photos/{row['entity_id']}{path.suffix.lower()}"
             assets.append((asset,path)); entry["asset_path"]=asset
+            digest=hashlib.sha256()
+            with path.open("rb") as media:
+                for chunk in iter(lambda:media.read(1024*1024),b""):
+                    digest.update(chunk)
+            entry["asset_sha256"]=digest.hexdigest()
         elif row["entity_type"]=="baby" and payload.get("hasAvatar"):
             if include_photos:
                 try: avatar=(AVATAR_DIR/str(uuid.UUID(fid))/f"{uuid.UUID(row['entity_id'])}.jpg").resolve()
@@ -952,10 +957,15 @@ def web_export(include_photos:bool=False,uid:str=Depends(current_user)):
                     raise HTTPException(409,"宝宝头像文件缺失或路径无效，备份未生成；请先恢复头像")
                 asset=f"avatars/{row['entity_id']}.jpg"
                 assets.append((asset,avatar)); entry["asset_path"]=asset
+                digest=hashlib.sha256()
+                with avatar.open("rb") as media:
+                    for chunk in iter(lambda:media.read(1024*1024),b""):
+                        digest.update(chunk)
+                entry["asset_sha256"]=digest.hexdigest()
             else:
                 payload["hasAvatar"]=False
         entries.append(entry)
-    backup={"format":"babylog-backup","format_version":1,"exported_at":int(time.time()),
+    backup={"format":"babylog-backup","format_version":2,"exported_at":int(time.time()),
             "family_name":family["name"],"records":entries}
     DATA_DIR.mkdir(parents=True,exist_ok=True)
     fd,temp_path=tempfile.mkstemp(prefix="babylog-backup-",suffix=".zip",dir=DATA_DIR)
@@ -995,8 +1005,9 @@ def _parse_web_backup(archive_path:Path):
         if archive.getinfo("backup.json").file_size>20*1024*1024: raise HTTPException(413,"备份清单超过 20 MB")
         try: backup=json.loads(archive.read("backup.json"))
         except Exception: raise HTTPException(400,"备份清单无法读取")
-        if not isinstance(backup,dict) or backup.get("format")!="babylog-backup" or backup.get("format_version")!=1:
+        if not isinstance(backup,dict) or backup.get("format")!="babylog-backup" or backup.get("format_version") not in {1,2}:
             raise HTTPException(400,"不支持的 BabyLog 备份格式")
+        format_version=backup["format_version"]
         records=backup.get("records")
         if not isinstance(records,list) or len(records)>10000: raise HTTPException(400,"备份记录数量无效")
         assets=set(); seen=set()
@@ -1023,6 +1034,9 @@ def _parse_web_backup(archive_path:Path):
                 if item["entity_type"]=="baby" and Path(asset).suffix.lower()!=".jpg":
                     raise HTTPException(400,"备份头像格式不受支持")
                 assets.add(asset)
+                digest_value=item.get("asset_sha256")
+                if format_version >= 2 and (not isinstance(digest_value,str) or not re.fullmatch(r"[0-9a-f]{64}",digest_value)):
+                    raise HTTPException(400,"备份媒体文件缺少有效的 SHA-256 校验值")
         bad_member=archive.testzip()
         if bad_member: raise HTTPException(400,"备份媒体文件损坏："+Path(bad_member).name)
         # ZIP CRC only proves that the bytes match the archive checksum; it does
@@ -1044,6 +1058,14 @@ def _parse_web_backup(archive_path:Path):
             )
             if not valid:
                 raise HTTPException(400,"备份媒体文件内容与图片格式不符："+Path(asset).name)
+            expected=item.get("asset_sha256")
+            if expected:
+                digest=hashlib.sha256()
+                with archive.open(asset) as media:
+                    for chunk in iter(lambda:media.read(1024*1024),b""):
+                        digest.update(chunk)
+                if not secrets.compare_digest(digest.hexdigest(),expected):
+                    raise HTTPException(400,"备份媒体文件 SHA-256 校验失败："+Path(asset).name)
         return backup,assets
 
 async def _read_web_backup(request:Request):
@@ -1086,6 +1108,7 @@ async def web_import_preview(request:Request,uid:str=Depends(current_user)):
             mapped_photos={r["source_photo_id"] for r in db.execute("SELECT source_photo_id FROM web_import_mappings WHERE family_id=?",(fid,)).fetchall()}
         additions=[r for r in backup["records"] if (r["entity_type"],r["entity_id"]) not in existing and not (r["entity_type"]=="photo" and r["entity_id"] in mapped_photos)]
         return {"valid":True,"family_name":family["name"],"backup_family_name":str(backup.get("family_name") or ""),
+            "format_version":backup["format_version"],"integrity_verified":backup["format_version"]>=2,
             "total":len(backup["records"]),"new_count":len(additions),"conflict_count":len(backup["records"])-len(additions),
             "photo_count":sum(1 for r in additions if r["entity_type"]=="photo"),
             "asset_count":sum(1 for r in additions if r.get("asset_path") in assets)}

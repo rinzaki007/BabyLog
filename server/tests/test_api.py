@@ -1025,6 +1025,7 @@ def test_web_dashboard_login_overview_and_complete_export(client):
         backup = json.loads(archive.read("backup.json"))
         assert archive.getinfo("backup.json").compress_type == zipfile.ZIP_DEFLATED
     assert backup["format"] == "babylog-backup"
+    assert backup["format_version"] == 2
     assert {item["entity_type"] for item in backup["records"]} == {"baby", "event"}
     assert len(backup["records"]) == 2
 
@@ -1110,6 +1111,10 @@ def test_web_export_can_exclude_or_include_photo_assets(client):
         assert {item["entity_type"] for item in manifest["records"]} == {"baby", "event", "photo"}
         assert "photos/" + photo_id + ".jpg" in archive.namelist()
         assert "avatars/" + baby_id + ".jpg" in archive.namelist()
+        for item in manifest["records"]:
+            if item.get("asset_path"):
+                asset_bytes = archive.read(item["asset_path"])
+                assert item["asset_sha256"] == __import__("hashlib").sha256(asset_bytes).hexdigest()
 
 
 def test_web_export_fails_closed_when_referenced_media_is_missing(client):
@@ -1198,6 +1203,8 @@ def test_web_dashboard_pagination_date_filters_and_safe_import(client):
     assert preview.status_code == 200, preview.text
     assert preview.json()["new_count"] == 5
     assert preview.json()["photo_count"] == 1
+    assert preview.json()["format_version"] == 2
+    assert preview.json()["integrity_verified"] is True
     imported = client.post("/api/web/import", headers={"Origin": "http://testserver", "Content-Type": "application/zip"}, content=exported.content)
     assert imported.status_code == 200, imported.text
     assert imported.json() == {"imported": 5, "skipped_existing": 0}
@@ -1252,6 +1259,61 @@ def test_web_import_rejects_media_with_invalid_image_signature(tmp_path, entity_
         main._parse_web_backup(archive_path)
     assert error.value.status_code == 400
     assert "图片格式不符" in error.value.detail
+
+
+
+def test_web_import_rejects_media_sha256_mismatch(tmp_path):
+    from app import main
+
+    entity_id = "00000000-0000-0000-0000-000000000001"
+    asset_path = f"photos/{entity_id}.jpg"
+    manifest = {
+        "format": "babylog-backup",
+        "format_version": 2,
+        "records": [{
+            "entity_type": "photo",
+            "entity_id": entity_id,
+            "payload": {"id": entity_id},
+            "asset_path": asset_path,
+            "asset_sha256": "0" * 64,
+        }],
+    }
+    archive_path = tmp_path / "bad-digest.zip"
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("backup.json", json.dumps(manifest))
+        archive.writestr(asset_path, b"\xff\xd8\xffvalid-jpeg-signature")
+
+    with pytest.raises(main.HTTPException) as error:
+        main._parse_web_backup(archive_path)
+    assert error.value.status_code == 400
+    assert "SHA-256" in error.value.detail
+
+
+def test_web_import_rejects_v2_asset_without_sha256(tmp_path):
+    from app import main
+
+    entity_id = "00000000-0000-0000-0000-000000000001"
+    asset_path = f"photos/{entity_id}.jpg"
+    manifest = {
+        "format": "babylog-backup",
+        "format_version": 2,
+        "records": [{
+            "entity_type": "photo",
+            "entity_id": entity_id,
+            "payload": {"id": entity_id},
+            "asset_path": asset_path,
+        }],
+    }
+    archive_path = tmp_path / "missing-digest.zip"
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("backup.json", json.dumps(manifest))
+        archive.writestr(asset_path, b"\xff\xd8\xffvalid-jpeg-signature")
+
+    with pytest.raises(main.HTTPException) as error:
+        main._parse_web_backup(archive_path)
+    assert error.value.status_code == 400
+    assert "SHA-256" in error.value.detail
+
 
 def test_web_import_rejects_invalid_archive_without_changing_existing_data(client):
     token = register(client, "web-import-invalid@example.test")
