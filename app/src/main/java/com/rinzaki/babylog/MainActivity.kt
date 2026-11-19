@@ -61,11 +61,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -86,12 +83,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.ShowChart
 import com.rinzaki.babylog.navigation.BabyLogDestination
 import com.rinzaki.babylog.ui.theme.BabyLogTheme
 import androidx.compose.ui.graphics.asImageBitmap
@@ -316,40 +307,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
-                NavigationBar(
-                    modifier = Modifier.navigationBarsPadding().height(68.dp),
-                    containerColor = Color.White,
-                    tonalElevation = 0.dp,
-                    windowInsets = WindowInsets(0.dp)
-                ) {
-                    BabyLogDestination.entries.forEachIndexed { index, destination ->
-                        NavigationBarItem(
-                            selected = selectedNav == index,
-                            onClick = { selectedNav = index },
-                            icon = {
-                                Icon(
-                                    imageVector = when (destination) {
-                                        BabyLogDestination.HOME -> Icons.Filled.Home
-                                        BabyLogDestination.RECORDS -> Icons.Filled.Add
-                                        BabyLogDestination.GROWTH -> Icons.Filled.ShowChart
-                                        BabyLogDestination.ALBUM -> Icons.Filled.Photo
-                                        BabyLogDestination.MORE -> Icons.Filled.MoreHoriz
-                                    },
-                                    contentDescription = destination.label
-                                )
-                            },
-                            label = {
-                                Text(
-                                    destination.label,
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = if (selectedNav == index) FontWeight.SemiBold else FontWeight.Medium
-                                    ),
-                                    maxLines = 1
-                                )
-                            }
-                        )
-                    }
-                }
+                BabyLogNavigationBar(selectedIndex = selectedNav, onSelect = { selectedNav = it })
             },
         ) { scaffoldPadding ->
             HorizontalPager(
@@ -363,20 +321,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                if (page == 0) item {
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                Text("BABYLOG", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                Text("今天也要好好记录", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                                Text(todayDate.format(DateTimeFormatter.ofPattern("M月d日 · EEEE", Locale.CHINA)), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            OutlinedButton(onClick = { showSyncSettings = true }, contentPadding = PaddingValues(horizontal = 13.dp, vertical = 7.dp)) {
-                                Text("⚙ 设置")
-                            }
-                        }
-                    }
-                }
+                if (page == 0) item { HomeDashboardHeader(todayDate = todayDate) { showSyncSettings = true } }
                 if (page == 0) item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Surface(

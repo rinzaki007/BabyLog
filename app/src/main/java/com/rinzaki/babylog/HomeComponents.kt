@@ -23,6 +23,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+
+@Composable
+internal fun HomeDashboardHeader(todayDate: LocalDate, onSettings: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("BABYLOG", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text("今天也要好好记录", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                todayDate.format(java.time.format.DateTimeFormatter.ofPattern("M月d日 · EEEE", java.util.Locale.CHINA)),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        androidx.compose.material3.OutlinedButton(
+            onClick = onSettings,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 13.dp, vertical = 7.dp)
+        ) {
+            Text("⚙ 设置")
+        }
+    }
+}
 import com.rinzaki.babylog.data.BabyEventEntity
 import org.json.JSONObject
 import java.time.LocalDate
@@ -69,7 +90,7 @@ internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> U
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Surface(shape = CircleShape, color = Color(0xFFF2EDF7)) {
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
                     Text(
                         today.size.toString(),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -103,7 +124,7 @@ internal fun SummaryPill(emoji: String, label: String, value: String, modifier: 
     Column(
         modifier.fillMaxWidth().heightIn(min = 72.dp)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .background(Color(0xFFFFF6F1), RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
             .padding(horizontal = 4.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
@@ -129,9 +150,9 @@ internal fun ActionCard(emoji: String, title: String, subtitle: String, modifier
     Card(
         onClick = onClick,
         modifier = modifier.heightIn(min = 88.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 8.dp),
@@ -140,7 +161,7 @@ internal fun ActionCard(emoji: String, title: String, subtitle: String, modifier
         ) {
             Surface(
                 shape = RoundedCornerShape(13.dp),
-                color = Color(0xFFF2EDF7),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.size(40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
