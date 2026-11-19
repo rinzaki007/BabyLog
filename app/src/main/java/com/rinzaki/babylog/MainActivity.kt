@@ -235,18 +235,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var timelineLoading by remember { mutableStateOf(false) }
     var timelineError by remember { mutableStateOf<String?>(null) }
     var timelineRetryToken by remember { mutableStateOf(0) }
-    val timelineEventType = when (selectedEventFilter) {
-        "喂养" -> "FEEDING"
-        "大小便" -> "DIAPER"
-        "睡眠" -> "SLEEP"
-        "补充记录" -> "SUPPLEMENT"
-        "辅食记录" -> "SOLID_FOOD"
-        "成长测量" -> "GROWTH"
-        "成长里程碑" -> "MILESTONE"
-        "成长足迹" -> "GROWTH_JOURNEY"
-        "其他" -> "OTHER"
-        else -> null
-    }
+    val timelineEventType = timelineEventTypeForFilter(selectedEventFilter)
     val timelineStartAt = selectedStartDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
     val timelineEndAt = selectedEndDate?.plusDays(1)?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
     LaunchedEffect(baby?.id, selectedEventFilter, selectedStartDate, selectedEndDate, eventRevision, timelineRetryToken) {
