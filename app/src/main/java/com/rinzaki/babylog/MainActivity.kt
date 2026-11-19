@@ -1,6 +1,7 @@
 package com.rinzaki.babylog
 
 import android.graphics.BitmapFactory
+import android.widget.Toast
 import android.os.Bundle
 import android.content.ContentValues
 import android.provider.MediaStore
@@ -210,6 +211,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val photoRevisionFlow = remember(baby?.id) { if (baby == null) flowOf("0:0") else dao.observePhotoRevision(baby.id) }
     val photoRevision by photoRevisionFlow.collectAsState(initial = "0:0")
     var editingProfile by remember { mutableStateOf(false) }
+    var exportingGrowthReport by remember { mutableStateOf(false) }
     var showSyncSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
     var editingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
@@ -501,6 +503,30 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                     if (page == 2) item { SolidFoodJourneySection(solidFoodEvents) }
+                    if (page == 2) item {
+                        GrowthReportCard(isExporting = exportingGrowthReport) {
+                            scope.launch {
+                                exportingGrowthReport = true
+                                try {
+                                    val reportEvents = withContext(Dispatchers.IO) {
+                                        dao.getGrowthReportEvents(baby.id)
+                                    }
+                                    val reportFile = withContext(Dispatchers.IO) {
+                                        createGrowthReportPdf(appContext, baby, reportEvents)
+                                    }
+                                    shareGrowthReport(appContext, reportFile)
+                                } catch (error: Exception) {
+                                    Toast.makeText(
+                                        appContext,
+                                        "生成成长报告失败：${error.message ?: "请稍后重试"}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                } finally {
+                                    exportingGrowthReport = false
+                                }
+                            }
+                        }
+                    }
                     if (page == 3) item {
                         BabyAlbumSection(
                             baby = baby,
