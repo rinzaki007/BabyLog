@@ -326,7 +326,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 if (page == 0) item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Surface(
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth().clickable { showSyncDetails = !showSyncDetails }
                         ) {
@@ -351,7 +351,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 Text(if (showSyncDetails) "⌃" else "⌄", modifier = Modifier.padding(start = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
-                        if (showSyncDetails) Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        if (showSyncDetails) Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
@@ -665,7 +665,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
-                    if (page == 4) item { MorePageHeader() }
+                    if (page == 4) item { MorePageHeader(onOpenSyncSettings = { showSyncSettings = true }) }
                     if (page == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
                         scope.launch {
