@@ -62,11 +62,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -78,8 +73,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Typography
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -93,13 +86,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.MoreHoriz
+import com.rinzaki.babylog.navigation.BabyLogDestination
+import com.rinzaki.babylog.ui.theme.BabyLogTheme
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.room.Room
 import com.rinzaki.babylog.data.BabyEntity
 import com.rinzaki.babylog.data.BabyEventEntity
@@ -131,31 +125,6 @@ import java.util.UUID
 import java.io.File
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
-
-private val BabyLogTypography = Typography().copy(
-    displayLarge = TextStyle(fontSize = 30.sp, lineHeight = 36.sp),
-    displayMedium = TextStyle(fontSize = 28.sp, lineHeight = 34.sp),
-    displaySmall = TextStyle(fontSize = 26.sp, lineHeight = 32.sp),
-    headlineLarge = TextStyle(fontSize = 24.sp, lineHeight = 30.sp),
-    headlineMedium = TextStyle(fontSize = 22.sp, lineHeight = 28.sp),
-    headlineSmall = TextStyle(fontSize = 20.sp, lineHeight = 26.sp),
-    titleLarge = TextStyle(fontSize = 18.sp, lineHeight = 24.sp),
-    titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 22.sp),
-    titleSmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
-    bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 22.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
-    bodySmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
-    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
-    labelMedium = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
-    labelSmall = TextStyle(fontSize = 12.sp, lineHeight = 17.sp)
-)
-
-private val WarmColors = lightColorScheme(
-    primary = Color(0xFF7564A8), onPrimary = Color.White,
-    secondary = Color(0xFFB77969), background = Color(0xFFFFF9F5),
-    surface = Color.White, surfaceVariant = Color(0xFFF2EDF7),
-    onSurface = Color(0xFF302B38), onSurfaceVariant = Color(0xFF716B78)
-)
 
 class MainActivity : ComponentActivity() {
     private lateinit var database: BabyLogDatabase
@@ -330,7 +299,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
         }
     }
     var selectedNav by remember { mutableStateOf(0) }
-    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 5 })
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { BabyLogDestination.entries.size })
     LaunchedEffect(selectedNav) {
         if (pagerState.currentPage != selectedNav) pagerState.animateScrollToPage(selectedNav)
     }
@@ -338,7 +307,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
         snapshotFlow { pagerState.settledPage }.collect { page -> selectedNav = page }
     }
 
-    MaterialTheme(colorScheme = WarmColors, typography = BabyLogTypography) {
+    BabyLogTheme {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
@@ -348,13 +317,35 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     tonalElevation = 0.dp,
                     windowInsets = WindowInsets(0.dp)
                 ) {
-                    val destinations = listOf("首页", "记录", "成长", "相册", "疫苗")
-                    destinations.forEachIndexed { index, label ->
+                    BabyLogDestination.entries.forEachIndexed { index, destination ->
                         NavigationBarItem(
                             selected = selectedNav == index,
                             onClick = { selectedNav = index },
-                            icon = { Icon(imageVector = when (index) { 0 -> Icons.Filled.Home; 1 -> Icons.Filled.Add; 2 -> Icons.Filled.ShowChart; 3 -> Icons.Filled.Photo; else -> Icons.Filled.Favorite }, contentDescription = label) },
-                            label = { Text(label, style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = if (selectedNav == index) FontWeight.SemiBold else FontWeight.Medium), maxLines = 1) }
+                            icon = {
+                                if (destination == BabyLogDestination.MORE) {
+                                    Icon(imageVector = Icons.Filled.MoreHoriz, contentDescription = destination.label)
+                                } else {
+                                    Text(
+                                        when (destination) {
+                                            BabyLogDestination.HOME -> "⌂"
+                                            BabyLogDestination.RECORDS -> "+"
+                                            BabyLogDestination.GROWTH -> "↗"
+                                            BabyLogDestination.ALBUM -> "▧"
+                                            BabyLogDestination.MORE -> "•••"
+                                        },
+                                        style = MaterialTheme.typography.titleLarge
+                                    )
+                                }
+                            },
+                            label = {
+                                Text(
+                                    destination.label,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = if (selectedNav == index) FontWeight.SemiBold else FontWeight.Medium
+                                    ),
+                                    maxLines = 1
+                                )
+                            }
                         )
                     }
                 }
@@ -376,7 +367,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                 Text("BABYLOG", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                Text("成长的每一天", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                Text("今天也要好好记录", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                Text(todayDate.format(DateTimeFormatter.ofPattern("M月d日 · EEEE", Locale.CHINA)), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             OutlinedButton(onClick = { showSyncSettings = true }, contentPadding = PaddingValues(horizontal = 13.dp, vertical = 7.dp)) {
                                 Text("⚙ 设置")
@@ -726,6 +718,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
+                    if (page == 4) item { MorePageHeader() }
                     if (page == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
                         scope.launch {
