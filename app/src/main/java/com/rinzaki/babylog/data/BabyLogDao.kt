@@ -99,6 +99,31 @@ interface BabyLogDao {
     @Query("SELECT * FROM babies")
     suspend fun getAllBabies(): List<BabyEntity>
 
+    // Read only the fields needed for the cross-device integrity fingerprint.
+    // Keep ordering identical to the NAS endpoint without materializing full entities.
+    @Query("""
+        SELECT fingerprint FROM (
+            SELECT 'baby:' || id || ':' || COALESCE(serverVersion, 0) AS fingerprint,
+                   'baby' AS entityType, id AS entityId
+            FROM babies
+            WHERE familyId = :familyId
+            UNION ALL
+            SELECT 'event:' || e.id || ':' || COALESCE(e.serverVersion, 0) AS fingerprint,
+                   'event' AS entityType, e.id AS entityId
+            FROM baby_events e
+            INNER JOIN babies b ON b.id = e.babyId
+            WHERE b.familyId = :familyId AND e.deletedAt IS NULL
+            UNION ALL
+            SELECT 'photo:' || p.id || ':' || COALESCE(p.serverVersion, 0) AS fingerprint,
+                   'photo' AS entityType, p.id AS entityId
+            FROM baby_photos p
+            INNER JOIN babies b ON b.id = p.babyId
+            WHERE b.familyId = :familyId AND p.deletedAt IS NULL
+        )
+        ORDER BY entityType, entityId
+    """)
+    suspend fun getActiveSyncCanonicalRows(familyId: String): List<String>
+
     @Query("DELETE FROM sync_operations")
     suspend fun clearAllSyncOperations()
 
