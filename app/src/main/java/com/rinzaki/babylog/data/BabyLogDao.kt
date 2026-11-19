@@ -62,6 +62,37 @@ interface BabyLogDao {
     """)
     suspend fun getTimelinePage(babyId: String, startAt: Long?, endAt: Long?, eventType: String?, limit: Int, offset: Int): List<BabyEventEntity>
 
+    // Keyset pagination keeps later pages stable when newer records are inserted.
+    @Query("""
+        SELECT * FROM baby_events
+        WHERE babyId = :babyId
+          AND deletedAt IS NULL
+          AND eventType != 'VACCINE'
+          AND (:startAt IS NULL OR occurredAt >= :startAt)
+          AND (:endAt IS NULL OR occurredAt < :endAt)
+          AND (
+              :eventType IS NULL
+              OR (:eventType = 'OTHER' AND eventType NOT IN ('FEEDING', 'DIAPER', 'SLEEP', 'GROWTH', 'SUPPLEMENT', 'SOLID_FOOD', 'MILESTONE', 'VACCINE'))
+              OR (:eventType = 'GROWTH_JOURNEY' AND eventType IN ('GROWTH', 'MILESTONE'))
+              OR eventType = :eventType
+          )
+          AND (
+              occurredAt < :beforeOccurredAt
+              OR (occurredAt = :beforeOccurredAt AND id < :beforeId)
+          )
+        ORDER BY occurredAt DESC, id DESC
+        LIMIT :limit
+    """)
+    suspend fun getTimelinePageAfter(
+        babyId: String,
+        startAt: Long?,
+        endAt: Long?,
+        eventType: String?,
+        beforeOccurredAt: Long,
+        beforeId: String,
+        limit: Int
+    ): List<BabyEventEntity>
+
     @Query("""
         SELECT COUNT(*) FROM baby_events
         WHERE babyId = :babyId
@@ -250,6 +281,25 @@ interface BabyLogDao {
 
     @Query("SELECT * FROM baby_photos WHERE babyId = :babyId AND deletedAt IS NULL ORDER BY takenAt DESC, id DESC LIMIT :limit OFFSET :offset")
     suspend fun getPhotoPage(babyId: String, limit: Int, offset: Int): List<BabyPhotoEntity>
+
+    // The timestamp + ID pair is a deterministic cursor, including equal timestamps.
+    @Query("""
+        SELECT * FROM baby_photos
+        WHERE babyId = :babyId
+          AND deletedAt IS NULL
+          AND (
+              takenAt < :beforeTakenAt
+              OR (takenAt = :beforeTakenAt AND id < :beforeId)
+          )
+        ORDER BY takenAt DESC, id DESC
+        LIMIT :limit
+    """)
+    suspend fun getPhotoPageAfter(
+        babyId: String,
+        beforeTakenAt: Long,
+        beforeId: String,
+        limit: Int
+    ): List<BabyPhotoEntity>
 
     @Query("""
         SELECT * FROM baby_photos
