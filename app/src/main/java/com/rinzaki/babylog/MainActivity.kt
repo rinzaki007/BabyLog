@@ -640,7 +640,27 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
-                    if (page == 4) item { MorePageHeader(onOpenSyncSettings = { showSyncSettings = true }) }
+                    if (page == 4) item {
+                        val syncConfigured = SyncPreferences.familyId(appContext).isNotBlank()
+                        val syncStatus = when {
+                            !syncConfigured -> "未配置"
+                            syncing -> "同步中"
+                            !syncError.isNullOrBlank() -> "需检查"
+                            lastSyncAt > 0L -> "正常"
+                            else -> "待首次同步"
+                        }
+                        val syncDescription = when {
+                            !syncConfigured -> "配置家庭空间，在设备间安全同步记录"
+                            !syncError.isNullOrBlank() -> syncError ?: "同步遇到问题，请检查设置"
+                            lastSyncAt > 0L -> "最近同步：" + SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(lastSyncAt))
+                            else -> "家庭空间已连接，等待首次同步"
+                        }
+                        MorePageHeader(
+                            syncStatus = syncStatus,
+                            syncDescription = syncDescription,
+                            onOpenSyncSettings = { showSyncSettings = true }
+                        )
+                    }
                     if (page == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
                         val now = System.currentTimeMillis()
                         scope.launch {
