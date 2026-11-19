@@ -233,6 +233,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var selectedTimelinePhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var timelineTotal by remember { mutableStateOf(0) }
     var timelineLoading by remember { mutableStateOf(false) }
+    var timelineError by remember { mutableStateOf<String?>(null) }
+    var timelineRetryToken by remember { mutableStateOf(0) }
     val timelineEventType = when (selectedEventFilter) {
         "喂养" -> "FEEDING"
         "大小便" -> "DIAPER"
@@ -247,15 +249,28 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
     val timelineStartAt = selectedStartDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
     val timelineEndAt = selectedEndDate?.plusDays(1)?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
-    LaunchedEffect(baby?.id, selectedEventFilter, selectedStartDate, selectedEndDate, eventRevision) {
+    LaunchedEffect(baby?.id, selectedEventFilter, selectedStartDate, selectedEndDate, eventRevision, timelineRetryToken) {
+        timelineError = null
         if (baby == null) {
             timelineEvents = emptyList()
             timelineTotal = 0
+            timelineLoading = false
         } else {
             timelineLoading = true
-            timelineEvents = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, 0)
-            timelineTotal = dao.countTimelineEvents(baby.id, timelineStartAt, timelineEndAt, timelineEventType)
-            timelineLoading = false
+            try {
+                val firstPage = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, 0)
+                val total = dao.countTimelineEvents(baby.id, timelineStartAt, timelineEndAt, timelineEventType)
+                timelineEvents = firstPage
+                timelineTotal = total
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                timelineEvents = emptyList()
+                timelineTotal = 0
+                timelineError = error.message?.takeIf { it.isNotBlank() } ?: "加载记录失败，请重试"
+            } finally {
+                timelineLoading = false
+            }
         }
     }
     LaunchedEffect(baby?.id, timelineEvents, photoRevision) {
@@ -619,7 +634,23 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                     }
-                    if (page == 1 && timelineEvents.isEmpty() && !timelineLoading) {
+                    if (page == 1 && timelineError != null) item {
+                        Card(shape = RoundedCornerShape(18.dp)) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("暂时无法加载成长足迹", fontWeight = FontWeight.SemiBold)
+                                Text(timelineError ?: "加载失败，请重试", color = MaterialTheme.colorScheme.error)
+                                OutlinedButton(
+                                    enabled = !timelineLoading,
+                                    onClick = { timelineRetryToken++ },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("重试") }
+                            }
+                        }
+                    }
+                    if (page == 1 && timelineEvents.isEmpty() && !timelineLoading && timelineError == null) {
                         item {
                             Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -660,21 +691,29 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             onClick = {
                                 scope.launch {
                                     timelineLoading = true
-                                    val cursor = timelineEvents.lastOrNull()
-                                    if (cursor != null) {
-                                        val nextPage = dao.getTimelinePageAfter(
-                                            baby.id,
-                                            timelineStartAt,
-                                            timelineEndAt,
-                                            timelineEventType,
-                                            cursor.occurredAt,
-                                            cursor.id,
-                                            100
-                                        )
-                                        val existingIds = timelineEvents.mapTo(mutableSetOf()) { it.id }
-                                        timelineEvents = timelineEvents + nextPage.filterNot { it.id in existingIds }
+                                    timelineError = null
+                                    try {
+                                        val cursor = timelineEvents.lastOrNull()
+                                        if (cursor != null) {
+                                            val nextPage = dao.getTimelinePageAfter(
+                                                baby.id,
+                                                timelineStartAt,
+                                                timelineEndAt,
+                                                timelineEventType,
+                                                cursor.occurredAt,
+                                                cursor.id,
+                                                100
+                                            )
+                                            val existingIds = timelineEvents.mapTo(mutableSetOf()) { it.id }
+                                            timelineEvents = timelineEvents + nextPage.filterNot { it.id in existingIds }
+                                        }
+                                    } catch (error: kotlinx.coroutines.CancellationException) {
+                                        throw error
+                                    } catch (error: Exception) {
+                                        timelineError = error.message?.takeIf { it.isNotBlank() } ?: "加载更多记录失败，请重试"
+                                    } finally {
+                                        timelineLoading = false
                                     }
-                                    timelineLoading = false
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
