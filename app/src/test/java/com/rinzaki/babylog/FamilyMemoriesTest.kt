@@ -17,7 +17,7 @@ class FamilyMemoriesTest {
     fun upcomingMomentsAreOrderedAndExcludePastDates() {
         val birth = LocalDate.of(2026, 1, 1)
         val moments = familyMemoryMoments(birth, LocalDate.of(2026, 4, 1))
-        assertEquals("一周岁", moments.first().title)
+        assertEquals("百日纪念日", moments.first().title)
         assertTrue(moments.all { !it.date.isBefore(LocalDate.of(2026, 4, 1)) })
         assertEquals(moments.sortedBy { it.date }, moments)
     }
