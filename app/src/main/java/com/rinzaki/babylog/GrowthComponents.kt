@@ -336,7 +336,46 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     }
                 }
             }
-            Text("曲线按实际日期间隔绘制，仅展示已记录的数据，不代表医学评估；建议按医生建议解读。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val longTerm = remember(allPoints) { growthMonthlySummaries(allPoints) }
+            val interval = remember(allPoints) { growthMeasurementInterval(allPoints) }
+            Spacer(Modifier.height(4.dp))
+            Text("长期变化", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("按自然月汇总已有测量；没有记录的月份不会补值。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            interval?.let { observed ->
+                val sign = if (observed.change > 0f) "+" else ""
+                val rate = observed.changePer30Days?.let { value ->
+                    val rateSign = if (value > 0f) "+" else ""
+                    " · 约 $rateSign${"%.2f".format(Locale.CHINA, value)} $unit/30天"
+                } ?: ""
+                Text(
+                    "最近两次：间隔 ${observed.elapsedDays} 天，变化 $sign${"%.2f".format(Locale.CHINA, observed.change)} $unit$rate",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            if (longTerm.isEmpty()) {
+                Text("累计测量后，这里会显示每月变化。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                longTerm.asReversed().forEach { month ->
+                    val changeSign = if (month.change > 0f) "+" else ""
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("${month.month.year}年${month.month.monthValue}月", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text("${month.measurementCount} 次测量", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("${"%.2f".format(Locale.CHINA, month.latestValue)} $unit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (month.measurementCount > 1) "月内 $changeSign${"%.2f".format(Locale.CHINA, month.change)} $unit" else "单次记录",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+            Text("以上仅描述实际记录之间的变化，不进行生长速度预测或医学评价；请结合专业人员建议解读。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
