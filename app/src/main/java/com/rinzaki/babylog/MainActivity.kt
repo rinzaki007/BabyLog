@@ -533,7 +533,9 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             baby = baby,
                             photos = photos,
                             photoCount = photoCount,
-                            onLoadMore = { offset, limit -> dao.getPhotoPage(baby.id, limit, offset) },
+                            onLoadMore = { beforeTakenAt, beforeId, limit ->
+                                dao.getPhotoPageAfter(baby.id, beforeTakenAt, beforeId, limit)
+                            },
                             onAdd = { uri, takenAt ->
                                 scope.launch {
                                     runCatching {
@@ -658,8 +660,20 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             onClick = {
                                 scope.launch {
                                     timelineLoading = true
-                                    val nextPage = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, timelineEvents.size)
-                                    timelineEvents = timelineEvents + nextPage
+                                    val cursor = timelineEvents.lastOrNull()
+                                    if (cursor != null) {
+                                        val nextPage = dao.getTimelinePageAfter(
+                                            baby.id,
+                                            timelineStartAt,
+                                            timelineEndAt,
+                                            timelineEventType,
+                                            cursor.occurredAt,
+                                            cursor.id,
+                                            100
+                                        )
+                                        val existingIds = timelineEvents.mapTo(mutableSetOf()) { it.id }
+                                        timelineEvents = timelineEvents + nextPage.filterNot { it.id in existingIds }
+                                    }
                                     timelineLoading = false
                                 }
                             },
