@@ -84,6 +84,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import com.rinzaki.babylog.navigation.BabyLogDestination
+import com.rinzaki.babylog.navigation.BabyLogNavigationBar
 import com.rinzaki.babylog.ui.theme.BabyLogTheme
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.blur
