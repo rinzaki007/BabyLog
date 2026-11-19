@@ -100,6 +100,8 @@ jobs:
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Restore the temporary Gradle memory overrides before switching branches.
+          git restore --source=HEAD -- gradle.properties
           git switch --orphan update-feed
           git rm -rf . >/dev/null 2>&1 || true
           cp "$RUNNER_TEMP/babylog-update-feed/latest.json" latest.json
