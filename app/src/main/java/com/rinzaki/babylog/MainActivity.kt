@@ -502,6 +502,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     }
+                    if (page == 2) item { FamilyMemorySection(baby, milestoneEvents) }
                     if (page == 2) item { SolidFoodJourneySection(solidFoodEvents) }
                     if (page == 2) item {
                         GrowthReportCard(isExporting = exportingGrowthReport) {
