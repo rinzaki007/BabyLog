@@ -233,29 +233,35 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var selectedTimelinePhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var timelineTotal by remember { mutableStateOf(0) }
     var timelineLoading by remember { mutableStateOf(false) }
-    val timelineEventType = when (selectedEventFilter) {
-        "喂养" -> "FEEDING"
-        "大小便" -> "DIAPER"
-        "睡眠" -> "SLEEP"
-        "补充记录" -> "SUPPLEMENT"
-        "辅食记录" -> "SOLID_FOOD"
-        "成长测量" -> "GROWTH"
-        "成长里程碑" -> "MILESTONE"
-        "成长足迹" -> "GROWTH_JOURNEY"
-        "其他" -> "OTHER"
-        else -> null
-    }
+    var timelineError by remember { mutableStateOf<String?>(null) }
+    var timelineLoadMoreError by remember { mutableStateOf<String?>(null) }
+    var timelineRetryToken by remember { mutableStateOf(0) }
+    val timelineEventType = timelineEventTypeForFilter(selectedEventFilter)
     val timelineStartAt = selectedStartDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
     val timelineEndAt = selectedEndDate?.plusDays(1)?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
-    LaunchedEffect(baby?.id, selectedEventFilter, selectedStartDate, selectedEndDate, eventRevision) {
+    LaunchedEffect(baby?.id, selectedEventFilter, selectedStartDate, selectedEndDate, eventRevision, timelineRetryToken) {
+        timelineError = null
+        timelineLoadMoreError = null
         if (baby == null) {
             timelineEvents = emptyList()
             timelineTotal = 0
+            timelineLoading = false
         } else {
             timelineLoading = true
-            timelineEvents = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, 0)
-            timelineTotal = dao.countTimelineEvents(baby.id, timelineStartAt, timelineEndAt, timelineEventType)
-            timelineLoading = false
+            try {
+                val firstPage = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, 0)
+                val total = dao.countTimelineEvents(baby.id, timelineStartAt, timelineEndAt, timelineEventType)
+                timelineEvents = firstPage
+                timelineTotal = total
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                timelineEvents = emptyList()
+                timelineTotal = 0
+                timelineError = error.message?.takeIf { it.isNotBlank() } ?: "加载记录失败，请重试"
+            } finally {
+                timelineLoading = false
+            }
         }
     }
     LaunchedEffect(baby?.id, timelineEvents, photoRevision) {
@@ -279,6 +285,33 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val lastTimelineEventIdByDay = remember(timelineEvents) {
         timelineEvents.groupBy { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate() }
             .mapValues { (_, dayEvents) -> dayEvents.last().id }
+    }
+    val loadMoreTimelinePage: suspend () -> Unit = {
+        val currentBaby = baby
+        if (currentBaby != null && timelineEvents.isNotEmpty()) {
+            timelineLoading = true
+            timelineLoadMoreError = null
+            try {
+                val cursor = timelineEvents.last()
+                val nextPage = dao.getTimelinePageAfter(
+                    currentBaby.id,
+                    timelineStartAt,
+                    timelineEndAt,
+                    timelineEventType,
+                    cursor.occurredAt,
+                    cursor.id,
+                    100
+                )
+                val existingIds = timelineEvents.mapTo(mutableSetOf()) { it.id }
+                timelineEvents = timelineEvents + nextPage.filterNot { it.id in existingIds }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                timelineLoadMoreError = error.message?.takeIf { it.isNotBlank() } ?: "加载更多记录失败，请重试"
+            } finally {
+                timelineLoading = false
+            }
+        }
     }
     LaunchedEffect(Unit) {
         if (SyncPreferences.familyId(appContext).isNotBlank()) SyncScheduler.schedule(appContext)
@@ -533,7 +566,9 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             baby = baby,
                             photos = photos,
                             photoCount = photoCount,
-                            onLoadMore = { offset, limit -> dao.getPhotoPage(baby.id, limit, offset) },
+                            onLoadMore = { beforeTakenAt, beforeId, limit ->
+                                dao.getPhotoPageAfter(baby.id, beforeTakenAt, beforeId, limit)
+                            },
                             onAdd = { uri, takenAt ->
                                 scope.launch {
                                     runCatching {
@@ -617,7 +652,23 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                     }
-                    if (page == 1 && timelineEvents.isEmpty() && !timelineLoading) {
+                    if (page == 1 && timelineError != null) item {
+                        Card(shape = RoundedCornerShape(18.dp)) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("暂时无法加载成长足迹", fontWeight = FontWeight.SemiBold)
+                                Text(timelineError ?: "加载失败，请重试", color = MaterialTheme.colorScheme.error)
+                                OutlinedButton(
+                                    enabled = !timelineLoading,
+                                    onClick = { timelineRetryToken++ },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("重试") }
+                            }
+                        }
+                    }
+                    if (page == 1 && timelineEvents.isEmpty() && !timelineLoading && timelineError == null) {
                         item {
                             Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EDF7))) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -652,17 +703,26 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     }
+                    if (page == 1 && timelineLoadMoreError != null) item {
+                        Card(shape = RoundedCornerShape(18.dp)) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("加载更多记录失败", fontWeight = FontWeight.SemiBold)
+                                Text(timelineLoadMoreError ?: "加载失败，请重试", color = MaterialTheme.colorScheme.error)
+                                OutlinedButton(
+                                    enabled = !timelineLoading,
+                                    onClick = { scope.launch { loadMoreTimelinePage() } },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("重试加载更多") }
+                            }
+                        }
+                    }
                     if (page == 1 && timelineEvents.size < timelineTotal) item {
                         OutlinedButton(
                             enabled = !timelineLoading,
-                            onClick = {
-                                scope.launch {
-                                    timelineLoading = true
-                                    val nextPage = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, timelineEvents.size)
-                                    timelineEvents = timelineEvents + nextPage
-                                    timelineLoading = false
-                                }
-                            },
+                            onClick = { scope.launch { loadMoreTimelinePage() } },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }

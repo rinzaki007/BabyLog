@@ -56,6 +56,7 @@ import com.rinzaki.babylog.data.BabyPhotoEntity
 import com.rinzaki.babylog.sync.mimeTypeForPath
 import com.rinzaki.babylog.sync.SyncPreferences
 import com.rinzaki.babylog.sync.SyncHttp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -77,7 +78,7 @@ internal fun BabyAlbumSection(
     baby: BabyEntity,
     photos: List<BabyPhotoEntity>,
     photoCount: Int,
-    onLoadMore: suspend (offset: Int, limit: Int) -> List<BabyPhotoEntity>,
+    onLoadMore: suspend (beforeTakenAt: Long, beforeId: String, limit: Int) -> List<BabyPhotoEntity>,
     onAdd: (android.net.Uri, Long) -> Unit,
     onCaption: (BabyPhotoEntity, String) -> Unit,
     onDelete: (BabyPhotoEntity) -> Unit,
@@ -104,12 +105,16 @@ internal fun BabyAlbumSection(
     var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
     var showPhotoDatePicker by remember { mutableStateOf(false) }
     var extraPhotos by remember(baby.id, photoCount) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
+    var photoPageCursor by remember(baby.id) { mutableStateOf<BabyPhotoEntity?>(null) }
     var loadingMorePhotos by remember { mutableStateOf(false) }
     val loadedPhotos = remember(photos, extraPhotos, initialPhoto) {
         (photos + extraPhotos + listOfNotNull(initialPhoto)).distinctBy { it.id }
             .sortedWith(compareByDescending<BabyPhotoEntity> { it.takenAt }.thenByDescending { it.id })
     }
-    LaunchedEffect(photos) { extraPhotos = emptyList() }
+    LaunchedEffect(photos) {
+        extraPhotos = emptyList()
+        photoPageCursor = photos.lastOrNull()
+    }
     LaunchedEffect(initialPhoto?.id) {
         initialPhoto?.let { target ->
             extraPhotos = (extraPhotos + target).distinctBy { it.id }
@@ -272,18 +277,29 @@ internal fun BabyAlbumSection(
             if (filteredPhotos.isEmpty() && loadedPhotos.size < photoCount) {
                 Text("当前已加载的照片中暂无匹配结果，可以继续加载更早的照片。", modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
-            if (loadedPhotos.size < photoCount) {
+            if (loadedPhotos.size < photoCount && photoPageCursor != null) {
                 OutlinedButton(
                     onClick = {
                         albumScope.launch {
                             loadingMorePhotos = true
-                            runCatching { onLoadMore(loadedPhotos.size, 60) }
-                                .onSuccess { page -> extraPhotos = (extraPhotos + page).distinctBy { it.id } }
-                                .onFailure { galleryMessage = "加载照片失败：${it.message ?: "请重试"}" }
-                            loadingMorePhotos = false
+                            galleryMessage = null
+                            val cursor = photoPageCursor
+                            try {
+                                if (cursor != null) {
+                                    val page = onLoadMore(cursor.takenAt, cursor.id, 60)
+                                    extraPhotos = (extraPhotos + page).distinctBy { it.id }
+                                    photoPageCursor = page.lastOrNull()
+                                }
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Exception) {
+                                galleryMessage = "加载照片失败：${error.message ?: "请重试"}"
+                            } finally {
+                                loadingMorePhotos = false
+                            }
                         }
                     },
-                    enabled = !loadingMorePhotos,
+                    enabled = !loadingMorePhotos && photoPageCursor != null,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (loadingMorePhotos) "正在加载…" else "加载更多照片（已加载 ${loadedPhotos.size}/${photoCount} 张）")

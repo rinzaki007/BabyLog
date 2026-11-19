@@ -154,4 +154,45 @@ class BabyLogDaoPaginationTest {
         dao.upsertEvent(BabyEventEntity("old-feed", "baby", "FEEDING", 50L, "{}", null, 300L))
         assertEquals("5:300", dao.observeEventRevision("baby").first())
     }
+    @Test
+    fun timelineKeysetPagesDoNotShiftWhenNewerRecordsAreInserted() = runBlocking {
+        dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
+        dao.upsertEvent(BabyEventEntity("event-a", "baby", "FEEDING", 100L, "{}", null, 100L))
+        dao.upsertEvent(BabyEventEntity("event-b", "baby", "FEEDING", 200L, "{}", null, 200L))
+        dao.upsertEvent(BabyEventEntity("event-c", "baby", "FEEDING", 200L, "{}", null, 200L))
+        dao.upsertEvent(BabyEventEntity("event-d", "baby", "FEEDING", 300L, "{}", null, 300L))
+
+        val firstPage = dao.getTimelinePage("baby", null, null, "FEEDING", 2, 0)
+        assertEquals(listOf("event-d", "event-c"), firstPage.map { it.id })
+
+        // A newer row inserted after page one must not shift the cursor or repeat a row.
+        dao.upsertEvent(BabyEventEntity("event-new", "baby", "FEEDING", 250L, "{}", null, 350L))
+        val cursor = firstPage.last()
+        val secondPage = dao.getTimelinePageAfter(
+            "baby", null, null, "FEEDING", cursor.occurredAt, cursor.id, 2
+        )
+
+        assertEquals(listOf("event-b", "event-a"), secondPage.map { it.id })
+        assertEquals(listOf("event-d", "event-new"), dao.getTimelinePage("baby", null, null, "FEEDING", 2, 0).map { it.id })
+    }
+
+    @Test
+    fun photoKeysetPagesUseTimestampAndIdWithoutRepeatingRows() = runBlocking {
+        dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
+        dao.upsertPhoto(BabyPhotoEntity("photo-a", "baby", "/tmp/a.jpg", null, 100L, 100L, 100L))
+        dao.upsertPhoto(BabyPhotoEntity("photo-b", "baby", "/tmp/b.jpg", null, 200L, 200L, 200L))
+        dao.upsertPhoto(BabyPhotoEntity("photo-c", "baby", "/tmp/c.jpg", null, 200L, 200L, 200L))
+        dao.upsertPhoto(BabyPhotoEntity("photo-d", "baby", "/tmp/d.jpg", null, 300L, 300L, 300L))
+
+        val firstPage = dao.getPhotoPage("baby", 2, 0)
+        assertEquals(listOf("photo-d", "photo-c"), firstPage.map { it.id })
+
+        dao.upsertPhoto(BabyPhotoEntity("photo-new", "baby", "/tmp/new.jpg", null, 250L, 350L, 350L))
+        val cursor = firstPage.last()
+        val secondPage = dao.getPhotoPageAfter("baby", cursor.takenAt, cursor.id, 2)
+
+        assertEquals(listOf("photo-b", "photo-a"), secondPage.map { it.id })
+        assertEquals(listOf("photo-d", "photo-new"), dao.getPhotoPage("baby", 2, 0).map { it.id })
+    }
+
 }
