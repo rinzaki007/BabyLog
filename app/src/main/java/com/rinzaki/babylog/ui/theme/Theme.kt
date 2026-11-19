@@ -10,17 +10,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 private val BabyLogColors = lightColorScheme(
-    primary = Color(0xFF9B6254),
+    primary = Color(0xFF955D50),
     onPrimary = Color.White,
-    secondary = Color(0xFF748B78),
+    secondary = Color(0xFF58715D),
     onSecondary = Color.White,
-    tertiary = Color(0xFFB58B5C),
+    tertiary = Color(0xFF86613A),
     background = Color(0xFFFFF9F4),
     surface = Color(0xFFFFFEFC),
     surfaceVariant = Color(0xFFF3EBE4),
     onSurface = Color(0xFF352E2A),
-    onSurfaceVariant = Color(0xFF766B63),
-    outline = Color(0xFFE2D7CE),
+    onSurfaceVariant = Color(0xFF71655D),
+    outline = Color(0xFF96877D),
     outlineVariant = Color(0xFFECE3DC)
 )
 
