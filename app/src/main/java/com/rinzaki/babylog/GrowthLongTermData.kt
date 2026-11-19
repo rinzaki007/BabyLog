@@ -31,6 +31,7 @@ internal fun growthMonthlySummaries(
         .groupBy { Instant.ofEpochMilli(it.first).atZone(zone).toLocalDate().let(YearMonth::from) }
         .toSortedMap()
         .entries
+        .toList()
         .takeLast(maxMonths)
         .map { (month, measurements) ->
             val first = measurements.first()
