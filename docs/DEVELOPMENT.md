@@ -12,6 +12,16 @@ BabyLog Android 客户端、NAS 同步服务和网页管理面板属于同一个
 
 以上 Android、NAS API 与 Docker 检查全部通过，才视为该提交通过 CI。当前 CI 不要求启动 Android Emulator；Android Keystore 等依赖真实 Android 系统的行为仍需在目标设备上验证。Android APK 作为 Actions artifact 上传；Docker 镜像由 CI 构建验证，不代表 NAS 已自动更新。除非专门配置发布流程，合并代码后仍需由部署者在 NAS / Dockge 更新容器。
 
+## Android UI 架构与约定
+
+- `ui/theme/Theme.kt` 统一维护暖色 Material 3 配色与 Typography；页面颜色优先使用 `MaterialTheme.colorScheme` 的语义角色，不在普通页面散落硬编码颜色。
+- `navigation/` 维护首页、记录、成长、相册、更多五个一级目的地；首页、成长、相册、疫苗和更多页面的展示组件分别放在对应组件文件中。
+- `BabyProfileComponents.kt`、`EventEditor.kt`、`DateTimePickerDialog.kt`、`FormSelectionRow.kt` 与 `TimelineComponents.kt` 承载可复用的档案、表单、日期和时间线 UI。
+- `MainActivity` 负责组合 Room 数据流、页面导航和现有同步操作；新的完整表单或可复用展示组件应优先放到独立文件，避免继续堆积在 Activity 中。
+- `BabyLogTheme` 必须同时覆盖主页面与其同级弹窗 / ModalBottomSheet，确保弹层沿用同一套颜色和字体。
+- Activity 使用 `adjustResize`；可滚动编辑器和设置弹窗应结合 `imePadding()` 与滚动容器，避免软键盘遮住输入项。
+- UI 整理不得顺带改变 Room Entity、DAO、数据库版本 / Migration、事件 payload、照片路径、同步队列或 NAS API 契约。
+
 ## API 与数据兼容原则
 
 - Android 和服务端共用 `docs/FAMILY_SYNC.md` 中定义的 API 契约。
