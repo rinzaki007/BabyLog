@@ -115,7 +115,7 @@ NAS 服务启动后，可在浏览器打开服务地址进入网页面板，使�
 详细说明：
 
 - [家庭同步与 NAS 部署说明](docs/FAMILY_SYNC.md)
-- [开发与 CI 约定](docs/DEVELOPMENT.md)
+- [开发与 CI 约定](docs/DEVELOPMENT.md)（包含正式 APK 发布步骤、失败恢复方法及 NAS 更新判断）
 
 ## 🧰 技术栈
 
