@@ -179,6 +179,7 @@ internal fun ActionCard(emoji: String, title: String, subtitle: String, modifier
 internal fun HomeSyncStatusCard(
     syncLabel: String,
     lastSyncLabel: String,
+    syncDetailLabel: String,
     syncConfigured: Boolean,
     syncing: Boolean,
     showDetails: Boolean,
@@ -237,7 +238,7 @@ internal fun HomeSyncStatusCard(
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                lastSyncLabel,
+                                syncDetailLabel,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

@@ -333,9 +333,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                     HomeSyncStatusCard(
                         syncLabel = syncLabel,
-                        lastSyncLabel = if (lastSyncAt > 0L) {
-                            "上次成功：" + SimpleDateFormat("yyyy年M月d日 HH时mm分", Locale.CHINA).format(Date(lastSyncAt))
-                        } else "尚无成功同步记录",
+                        lastSyncLabel = if (lastSyncAt > 0L) SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(lastSyncAt)) else "查看详情",
+                        syncDetailLabel = if (lastSyncAt > 0L) "上次成功：" + SimpleDateFormat("yyyy年M月d日 HH时mm分", Locale.CHINA).format(Date(lastSyncAt)) else "尚无成功同步记录",
                         syncConfigured = syncConfigured,
                         syncing = syncing,
                         showDetails = showSyncDetails,
