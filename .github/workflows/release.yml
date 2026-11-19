@@ -45,7 +45,13 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then VERSION="${{ inputs.version }}"; fi
           VERSION_CODE=$((GITHUB_RUN_NUMBER + 1))
-          gradle --no-daemon assembleRelease -PappVersionName="$VERSION" -PappVersionCode="$VERSION_CODE"
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx10g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8/' gradle.properties
+          sed -i 's/^org.gradle.parallel=.*/org.gradle.parallel=false/' gradle.properties
+          {
+            echo 'org.gradle.workers.max=1'
+            echo 'kotlin.compiler.execution.strategy=in-process'
+          } >> gradle.properties
+          gradle --no-daemon --max-workers=1 assembleRelease -PappVersionName="$VERSION" -PappVersionCode="$VERSION_CODE"
       - name: Verify launcher icon is packaged in the release APK
         shell: bash
         run: |
