@@ -764,6 +764,26 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     } }) }
+                    if (page == 4) item {
+                        val webPanelBase = SyncPreferences.server(appContext).trim().trimEnd('/')
+                        val webPanelConfigured = webPanelBase.startsWith("https://") || webPanelBase.startsWith("http://")
+                        MoreDataManagementCard(serverConfigured = webPanelConfigured) {
+                            if (!webPanelConfigured) {
+                                showSyncSettings = true
+                            } else {
+                                runCatching {
+                                    appContext.startActivity(
+                                        android.content.Intent(
+                                            android.content.Intent.ACTION_VIEW,
+                                            android.net.Uri.parse("$webPanelBase/")
+                                        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }.onFailure {
+                                    Toast.makeText(appContext, "无法打开 NAS 网页管理面板，请检查浏览器或服务器地址", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    }
                 } else if (page == 0) item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             }
