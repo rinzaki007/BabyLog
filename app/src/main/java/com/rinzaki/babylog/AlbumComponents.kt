@@ -418,7 +418,16 @@ internal fun BabyAlbumSection(
                         val fullBitmap = withContext(Dispatchers.IO) {
                             runCatching { decodeSampledPhoto(sourcePath, 2400, 3000) }.getOrNull()
                         }
-                        if (fullBitmap != null) photoBitmapCache[activePhoto.id] = fullBitmap
+                        if (fullBitmap != null) {
+                            photoBitmapCache[activePhoto.id] = fullBitmap
+                            galleryMessage = null
+                        } else {
+                            galleryMessage = "云端原图已下载，但暂时无法解码，当前保留预览图"
+                        }
+                    } else if (base.isBlank() || token.isBlank() || familyId.isBlank()) {
+                        galleryMessage = "连接家庭同步后即可查看云端原图"
+                    } else {
+                        galleryMessage = "云端原图暂时无法加载，当前显示预览图；请检查网络后重试"
                     }
                 }
             }
@@ -555,7 +564,7 @@ internal fun BabyAlbumSection(
                             )
                         }
                     }
-                    Box(Modifier.fillMaxWidth().height(116.dp)) {
+                    Box(Modifier.fillMaxWidth().height(140.dp)) {
                     this@Column.AnimatedVisibility(
                         visible = showViewerChrome,
                         enter = fadeIn(animationSpec = tween(180)),
@@ -564,7 +573,23 @@ internal fun BabyAlbumSection(
                         Column {
                             Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                                galleryMessage?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    val sourceLabel = if (activePhoto.originalOnDevice) {
+                                        "本地原图"
+                                    } else if (photoOriginalCache[activePhoto.id]?.let { File(it).isFile } == true) {
+                                        "云端原图 · 已缓存"
+                                    } else {
+                                        "云端原图"
+                                    }
+                                    Icon(
+                                        if (activePhoto.originalOnDevice) Icons.Filled.PhoneAndroid else Icons.Filled.Cloud,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(13.dp),
+                                        tint = Color.LightGray
+                                    )
+                                    Text(sourceLabel, color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                                }
+                                galleryMessage?.let { Text(it, color = Color(0xFFFFCC80), style = MaterialTheme.typography.bodySmall) }
                             }
                             Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                                 TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
