@@ -15,18 +15,39 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.data.BabyEventEntity
 import org.json.JSONObject
 import java.time.LocalDate
 import java.time.ZoneId
+
+@Composable
+internal fun HomeDashboardHeader(todayDate: LocalDate, onSettings: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("BABYLOG", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text("今天也要好好记录", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                todayDate.format(java.time.format.DateTimeFormatter.ofPattern("M月d日 · EEEE", java.util.Locale.CHINA)),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        androidx.compose.material3.OutlinedButton(
+            onClick = onSettings,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 13.dp, vertical = 7.dp)
+        ) {
+            Text("⚙ 设置")
+        }
+    }
+}
 
 @Composable
 internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> Unit = {}) {
@@ -55,7 +76,7 @@ internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> U
         "${sleepMinutes}分钟"
     }
 
-    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)
@@ -69,7 +90,7 @@ internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> U
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Surface(shape = CircleShape, color = Color(0xFFF2EDF7)) {
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
                     Text(
                         today.size.toString(),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -103,7 +124,7 @@ internal fun SummaryPill(emoji: String, label: String, value: String, modifier: 
     Column(
         modifier.fillMaxWidth().heightIn(min = 72.dp)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .background(Color(0xFFFFF6F1), RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
             .padding(horizontal = 4.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
@@ -129,9 +150,9 @@ internal fun ActionCard(emoji: String, title: String, subtitle: String, modifier
     Card(
         onClick = onClick,
         modifier = modifier.heightIn(min = 88.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 8.dp),
@@ -140,7 +161,7 @@ internal fun ActionCard(emoji: String, title: String, subtitle: String, modifier
         ) {
             Surface(
                 shape = RoundedCornerShape(13.dp),
-                color = Color(0xFFF2EDF7),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.size(40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -149,6 +170,110 @@ internal fun ActionCard(emoji: String, title: String, subtitle: String, modifier
             }
             Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
             Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+    }
+}
+
+
+@Composable
+internal fun HomeSyncStatusCard(
+    syncLabel: String,
+    lastSyncLabel: String,
+    syncDetailLabel: String,
+    syncConfigured: Boolean,
+    syncing: Boolean,
+    showDetails: Boolean,
+    consistency: String?,
+    syncError: String?,
+    onToggleDetails: () -> Unit,
+    onSyncNow: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onToggleDetails)
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val statusColor = when {
+                    !syncError.isNullOrBlank() -> MaterialTheme.colorScheme.error
+                    syncing -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.secondary
+                }
+                Box(Modifier.size(8.dp).background(statusColor, CircleShape))
+                Text(
+                    syncLabel,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(start = 9.dp).weight(1f)
+                )
+                Text(
+                    lastSyncLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    if (showDetails) "⌃" else "⌄",
+                    modifier = Modifier.padding(start = 8.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (showDetails) {
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (syncing) "正在交换本地与云端数据…" else "自动同步已开启",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                syncDetailLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        OutlinedButton(
+                            enabled = syncConfigured && !syncing,
+                            onClick = onSyncNow
+                        ) {
+                            Text(if (syncing) "同步中" else "立即同步")
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "本地与云端校验",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            consistency ?: "尚未校验",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (consistency == "一致") MaterialTheme.colorScheme.secondary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    if (!syncError.isNullOrBlank()) {
+                        Text(
+                            "同步提示：$syncError",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
         }
     }
 }

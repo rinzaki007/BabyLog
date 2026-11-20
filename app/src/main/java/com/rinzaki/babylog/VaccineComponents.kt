@@ -9,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.data.BabyEventEntity
@@ -76,7 +75,7 @@ internal fun VaccineScheduleSection(
         })
     }
     val conflicts = remember(allItems, recordedConflicts) { (liveVaccineScheduleConflicts(allItems) + recordedConflicts).distinct() }
-    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EFF8))) {
+    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -92,13 +91,13 @@ internal fun VaccineScheduleSection(
             if (reviewCount > 0) {
                 Text(
                     "有 $reviewCount 项可能受到联合疫苗或流脑替代产品影响，暂不自动抵扣，也不标记为逾期。请携带具体疫苗名称、剂次和接种日期向接种门诊核对。",
-                    color = Color(0xFF9A6727),
+                    color = MaterialTheme.colorScheme.tertiary,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
             conflicts.forEach { warning ->
                 Text("⚠ 接种间隔提示：$warning。部分注射用减毒活疫苗通常需同日接种或间隔至少 28 天，请让接种门诊核对具体产品和日期。",
-                    color = Color(0xFFB65D4A), style = MaterialTheme.typography.bodySmall)
+                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             if (visible.isEmpty()) {
                 Text(if (selectedCategory == "待接种") "当前没有待记录剂次，太棒啦！" else "这个分类下暂时没有计划项目。", color = MaterialTheme.colorScheme.primary)
@@ -115,15 +114,15 @@ internal fun VaccineScheduleSection(
                         }
                     }
                     val statusColor = when (doseStatus) {
-                        VaccineDoseStatus.RECORDED -> Color(0xFF54856A)
-                        VaccineDoseStatus.REVIEW_REQUIRED -> Color(0xFFB77936)
+                        VaccineDoseStatus.RECORDED -> MaterialTheme.colorScheme.secondary
+                        VaccineDoseStatus.REVIEW_REQUIRED -> MaterialTheme.colorScheme.tertiary
                         VaccineDoseStatus.PENDING -> when {
-                            days <= 0 -> Color(0xFFB65D4A)
-                            days <= 14 -> Color(0xFFB77936)
+                            days <= 0 -> MaterialTheme.colorScheme.error
+                            days <= 14 -> MaterialTheme.colorScheme.tertiary
                             else -> MaterialTheme.colorScheme.primary
                         }
                     }
-                    Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(14.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(item.vaccineName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
@@ -161,7 +160,7 @@ internal fun VaccineScheduleSection(
                 chinaOptionalVaccineCatalog().groupBy { it.category }.forEach { (category, entries) ->
                     Text(category, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     entries.forEach { entry ->
-                        Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(12.dp)).padding(10.dp)) {
+                        Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)).padding(10.dp)) {
                             Text(entry.name, fontWeight = FontWeight.SemiBold)
                             Text(entry.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -200,7 +199,7 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
             editorInitialDose = dose
             showEditor = true
         }
-        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6))) {
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("💉 宝宝疫苗档案", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("已记录 " + events.size + " 次接种", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -208,7 +207,7 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
             }
         }
         if (events.isEmpty()) {
-            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("💉", style = MaterialTheme.typography.headlineLarge)
                     Text("还没有疫苗接种记录", fontWeight = FontWeight.SemiBold)
@@ -227,7 +226,7 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
             }
             if (showHistory) events.sortedByDescending { it.occurredAt }.take(visibleHistoryCount).forEach { event ->
                 val data = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
-                Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("💉", style = MaterialTheme.typography.titleLarge)
