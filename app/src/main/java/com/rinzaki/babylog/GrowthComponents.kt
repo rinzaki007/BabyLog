@@ -326,6 +326,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                 selectedPoint?.let { point ->
                     Text(
                         SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(point.first)) + " · " +
+                            growthMeasurementAgeLabel(baby.birthTime, point.first) + " · " +
                             String.format(Locale.CHINA, "%.2f", point.second) + " " + unit,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
