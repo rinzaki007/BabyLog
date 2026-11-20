@@ -47,7 +47,9 @@ class GrowthReportDataTest {
         assertEquals(2, report.growthMeasurements.size)
         assertTrue(report.growthMeasurements.first().isBirthMeasurement)
         assertEquals(3.2, report.growthMeasurements.first().weightKg!!, 0.001)
+        assertEquals("出生当天", report.growthMeasurements.first().ageLabel)
         assertEquals(6.5, report.growthMeasurements.last().weightKg!!, 0.001)
+        assertEquals("10 个月", report.growthMeasurements.last().ageLabel)
         assertEquals(1, report.eventCount)
     }
 
@@ -127,6 +129,8 @@ class GrowthReportDataTest {
         assertEquals(1, report.solidFoodCount)
         assertEquals(1, report.vaccineCount)
         assertEquals("第一次翻身", report.milestones.first().title)
-        assertTrue(report.foodExploration.any { it.contains("米粉") })
+        assertEquals("10 个月", report.milestones.first().ageLabel)
+        assertTrue(report.foodExploration.any { it.contains("米粉") && it.contains("首次") && it.contains("最近") && it.contains("10 个月") })
+        assertEquals("10 个月", report.recentRecords.first { it.title == "成长里程碑" }.ageLabel)
     }
 }
