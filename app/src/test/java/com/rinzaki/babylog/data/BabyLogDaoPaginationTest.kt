@@ -154,6 +154,7 @@ class BabyLogDaoPaginationTest {
         dao.upsertEvent(BabyEventEntity("old-feed", "baby", "FEEDING", 50L, "{}", null, 300L))
         assertEquals("5:300", dao.observeEventRevision("baby").first())
     }
+
     @Test
     fun timelineKeysetPagesDoNotShiftWhenNewerRecordsAreInserted() = runBlocking {
         dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
@@ -195,4 +196,24 @@ class BabyLogDaoPaginationTest {
         assertEquals(listOf("photo-d", "photo-new"), dao.getPhotoPage("baby", 2, 0).map { it.id })
     }
 
+    @Test
+    fun timelineKeysetPaginationKeepsDateTypeAndDeletionFiltersAcrossPages() = runBlocking {
+        dao.upsertBaby(BabyEntity("baby", "family", "宝宝", 1L, 1L, 1L))
+        dao.upsertEvent(BabyEventEntity("feed-a", "baby", "FEEDING", 200L, "{}", null, 200L))
+        dao.upsertEvent(BabyEventEntity("feed-b", "baby", "FEEDING", 200L, "{}", null, 200L))
+        dao.upsertEvent(BabyEventEntity("feed-c", "baby", "FEEDING", 200L, "{}", null, 200L))
+        dao.upsertEvent(BabyEventEntity("old-feed", "baby", "FEEDING", 99L, "{}", null, 99L))
+        dao.upsertEvent(BabyEventEntity("diaper", "baby", "DIAPER", 200L, "{}", null, 200L))
+        dao.upsertEvent(BabyEventEntity("deleted-feed", "baby", "FEEDING", 200L, "{}", null, 200L, deletedAt = 250L))
+
+        val firstPage = dao.getTimelinePage("baby", 100L, 300L, "FEEDING", 2, 0)
+        assertEquals(listOf("feed-c", "feed-b"), firstPage.map { it.id })
+
+        val cursor = firstPage.last()
+        val secondPage = dao.getTimelinePageAfter(
+            "baby", 100L, 300L, "FEEDING", cursor.occurredAt, cursor.id, 2
+        )
+        assertEquals(listOf("feed-a"), secondPage.map { it.id })
+        assertEquals(3, dao.countTimelineEvents("baby", 100L, 300L, "FEEDING"))
+    }
 }
