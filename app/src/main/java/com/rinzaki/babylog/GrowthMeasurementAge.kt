@@ -23,7 +23,7 @@ internal fun growthMeasurementAgeLabel(
     val candidateAnchor = birthDate.plusMonths(calendarMonthDifference)
     val months = if (measuredDate.isBefore(candidateAnchor)) calendarMonthDifference - 1 else calendarMonthDifference
     val monthAnchor = birthDate.plusMonths(months)
-    val days = ChronoUnit.DAYS.between(monthAnchor, measuredDate)
+    val days = java.time.temporal.ChronoUnit.DAYS.between(monthAnchor, measuredDate)
 
     return when {
         months == 0L && days == 0L -> "出生当天"
