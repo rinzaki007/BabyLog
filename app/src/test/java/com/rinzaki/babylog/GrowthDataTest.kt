@@ -8,11 +8,12 @@ import org.junit.Test
 
 class GrowthDataTest {
     private fun baby(
+        id: String = "baby-1",
         weight: Int? = 3200,
         length: Double? = 50.0,
         head: Double? = 34.0
     ) = BabyEntity(
-        id = "baby-1",
+        id = id,
         familyId = "family-1",
         displayName = "宝宝",
         birthTime = 1_700_000_000_000L,
@@ -23,14 +24,21 @@ class GrowthDataTest {
         birthHeadCircumferenceCm = head
     )
 
-    private fun event(type: String, time: Long, payload: String) = BabyEventEntity(
-        id = "event-$time",
-        babyId = "baby-1",
+    private fun event(
+        type: String,
+        time: Long,
+        payload: String,
+        babyId: String = "baby-1",
+        deletedAt: Long? = null
+    ) = BabyEventEntity(
+        id = "event-$time-$babyId",
+        babyId = babyId,
         eventType = type,
         occurredAt = time,
         payloadJson = payload,
         createdBy = null,
-        updatedAt = time
+        updatedAt = time,
+        deletedAt = deletedAt
     )
 
     @Test
@@ -62,6 +70,23 @@ class GrowthDataTest {
         assertEquals(1, points.size)
         assertEquals(6.0f, points.single().second, 0.001f)
         assertTrue(points.single().first > 1_700_000_000_000L)
+    }
+
+    @Test
+    fun excludesOtherBabiesAndSoftDeletedGrowthMeasurements() {
+        val points = growthMetricPoints(
+            baby(weight = null, length = null, head = null),
+            listOf(
+                event("GROWTH", 1_710_000_000_000L, """{"weightGrams":5100}""", babyId = "baby-2"),
+                event("GROWTH", 1_720_000_000_000L, """{"weightGrams":5200}""", deletedAt = 1_730_000_000_000L),
+                event("GROWTH", 1_740_000_000_000L, """{"weightGrams":5300}""")
+            ),
+            "weightGrams"
+        )
+
+        assertEquals(1, points.size)
+        assertEquals(5.3f, points.single().second, 0.001f)
+        assertEquals(1_740_000_000_000L, points.single().first)
     }
 
     @Test
