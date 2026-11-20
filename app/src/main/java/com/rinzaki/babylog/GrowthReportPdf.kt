@@ -163,12 +163,12 @@ private class GrowthReportPdfRenderer(
                     point.lengthCm?.let { "${"%.1f".format(Locale.CHINA, it)} cm 身长" },
                     point.headCircumferenceCm?.let { "${"%.1f".format(Locale.CHINA, it)} cm 头围" }
                 ).joinToString(" · ")
-                drawText("$date${if (point.isBirthMeasurement) "（出生）" else ""}：$values")
+                drawText("$date（${point.ageLabel}）${if (point.isBirthMeasurement) " · 出生测量" else ""}：$values")
             }
         }
         drawSection("成长里程碑")
         if (report.milestones.isEmpty()) drawText("暂未记录成长里程碑。", smallPaint)
-        else report.milestones.forEach { drawText("${formatDate(it.occurredAt)} · ${it.title}（${it.detail}）") }
+        else report.milestones.forEach { drawText("${formatDate(it.occurredAt)}（${it.ageLabel}） · ${it.title}（${it.detail}）") }
 
         drawSection("辅食探索")
         if (report.foodExploration.isEmpty()) drawText("暂未记录辅食尝试。", smallPaint)
@@ -177,7 +177,7 @@ private class GrowthReportPdfRenderer(
         drawSection("最近记录")
         if (report.recentRecords.isEmpty()) drawText("暂未添加日常记录。", smallPaint)
         else report.recentRecords.forEach {
-            drawText("${formatDate(it.occurredAt)} · ${it.title}", boldPaint)
+            drawText("${formatDate(it.occurredAt)}（${it.ageLabel}） · ${it.title}", boldPaint)
             drawText(it.detail, smallPaint, 14f)
         }
 

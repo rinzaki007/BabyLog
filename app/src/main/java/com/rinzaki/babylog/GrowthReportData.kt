@@ -15,13 +15,15 @@ internal data class GrowthReportMeasurement(
     val weightKg: Double?,
     val lengthCm: Double?,
     val headCircumferenceCm: Double?,
+    val ageLabel: String,
     val isBirthMeasurement: Boolean = false
 )
 
 internal data class GrowthReportEntry(
     val occurredAt: Long,
     val title: String,
-    val detail: String
+    val detail: String,
+    val ageLabel: String
 )
 
 internal data class GrowthReportData(
@@ -55,12 +57,17 @@ internal fun buildGrowthReportData(
 ): GrowthReportData {
     val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
     val birthDate = Instant.ofEpochMilli(baby.birthTime).atZone(zone).toLocalDate()
-    val months = growthCompletedMonths(birthDate, today)
-    val ageLabel = when {
-        months < 1 -> "${ChronoUnit.DAYS.between(birthDate, today).coerceAtLeast(0)} 天"
-        months < 12 -> "${months} 个月"
-        else -> "${months / 12} 岁${months % 12} 个月"
+    fun ageLabelAt(date: LocalDate): String {
+        if (date.isBefore(birthDate)) return "出生前"
+        if (date == birthDate) return "出生当天"
+        val completedMonths = growthCompletedMonths(birthDate, date)
+        return when {
+            completedMonths < 1 -> "${ChronoUnit.DAYS.between(birthDate, date).coerceAtLeast(0)} 天"
+            completedMonths < 12 -> "${completedMonths} 个月"
+            else -> "${completedMonths / 12} 岁${completedMonths % 12} 个月"
+        }
     }
+    val ageLabel = ageLabelAt(today)
     val active = events.asSequence()
         .filter { it.babyId == baby.id && it.deletedAt == null && it.occurredAt <= now }
         .sortedBy { it.occurredAt }
@@ -76,6 +83,7 @@ internal fun buildGrowthReportData(
                     weightKg = baby.birthWeightGrams?.takeIf { it > 0 }?.div(1000.0),
                     lengthCm = baby.birthLengthCm?.takeIf { it.isFinite() && it > 0.0 },
                     headCircumferenceCm = baby.birthHeadCircumferenceCm?.takeIf { it.isFinite() && it > 0.0 },
+                    ageLabel = ageLabelAt(birthDate),
                     isBirthMeasurement = true
                 )
             )
@@ -88,7 +96,8 @@ internal fun buildGrowthReportData(
             val lengthCm = length.takeIf { it.isFinite() && it > 0.0 }
             val headCm = head.takeIf { it.isFinite() && it > 0.0 }
             if (weightKg != null || lengthCm != null || headCm != null) {
-                add(GrowthReportMeasurement(event.occurredAt, weightKg, lengthCm, headCm))
+                val measurementDate = Instant.ofEpochMilli(event.occurredAt).atZone(zone).toLocalDate()
+                add(GrowthReportMeasurement(event.occurredAt, weightKg, lengthCm, headCm, ageLabelAt(measurementDate)))
             }
         }
     }.sortedBy { it.occurredAt }
@@ -97,13 +106,18 @@ internal fun buildGrowthReportData(
         GrowthReportEntry(
             event.occurredAt,
             payload.optString("milestoneTitle").ifBlank { "成长里程碑" },
-            payload.optString("category").ifBlank { "家庭记录" }
+            payload.optString("category").ifBlank { "家庭记录" },
+            ageLabelAt(Instant.ofEpochMilli(event.occurredAt).atZone(zone).toLocalDate())
         )
     }.sortedByDescending { it.occurredAt }
 
     val foodExploration = solidFoodJourney(active)
         .map { entry ->
-            "${entry.name} · ${entry.attempts} 次尝试 · ${entry.latestReaction}"
+            val firstDate = Instant.ofEpochMilli(entry.firstTriedAt).atZone(zone).toLocalDate()
+                .format(reportDateFormatter)
+            val latestDate = Instant.ofEpochMilli(entry.latestAt).atZone(zone).toLocalDate()
+                .format(reportDateFormatter)
+            "${entry.name} · ${entry.category} · 首次 ${firstDate}（${ageLabelAt(Instant.ofEpochMilli(entry.firstTriedAt).atZone(zone).toLocalDate())}） · 最近 ${latestDate}（${ageLabelAt(Instant.ofEpochMilli(entry.latestAt).atZone(zone).toLocalDate())}） · ${entry.attempts} 次尝试 · ${entry.latestStage} · ${entry.latestReaction}"
         }
 
     val recent = active.asSequence()
@@ -170,7 +184,7 @@ internal fun buildGrowthReportData(
                     detail = event.eventType
                 }
             }
-            GrowthReportEntry(event.occurredAt, title, detail)
+            GrowthReportEntry(event.occurredAt, title, detail, ageLabelAt(Instant.ofEpochMilli(event.occurredAt).atZone(zone).toLocalDate()))
         }.toList()
 
     return GrowthReportData(
