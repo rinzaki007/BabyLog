@@ -179,6 +179,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var exportingGrowthReport by remember { mutableStateOf(false) }
     var showSyncSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
+    var showRecordTypePicker by remember { mutableStateOf(false) }
     var editingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
     var deletingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
     var showSyncDetails by remember { mutableStateOf(false) }
@@ -534,8 +535,13 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                     if (page == 1) item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("成长足迹", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Text("共 ${timelineTotal} 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("成长足迹", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Text("共 ${timelineTotal} 条记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            FilledTonalButton(onClick = { showRecordTypePicker = true }) {
+                                Text("＋ 记一笔")
+                            }
                         }
                     }
                     if (page == 1) item {
@@ -738,6 +744,42 @@ private fun BabyLogApp(dao: BabyLogDao) {
             showEndDatePicker = false
         }
     )
+
+    if (showRecordTypePicker) {
+        val recordTypes = listOf(
+            "FEEDING" to "喂养",
+            "DIAPER" to "日常护理",
+            "SLEEP" to "睡眠",
+            "SOLID_FOOD" to "辅食",
+            "SUPPLEMENT" to "补充",
+            "GROWTH" to "成长测量"
+        )
+        AlertDialog(
+            onDismissRequest = { showRecordTypePicker = false },
+            title = { Text("选择记录类型") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    recordTypes.chunked(2).forEach { rowTypes ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            rowTypes.forEach { (type, label) ->
+                                FilledTonalButton(
+                                    onClick = {
+                                        showRecordTypePicker = false
+                                        addingEvent = type
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text(label) }
+                            }
+                            if (rowTypes.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showRecordTypePicker = false }) { Text("取消") }
+            }
+        )
+    }
 
     if ((addingEvent != null || editingEvent != null) && baby != null) {
         val currentEvent = editingEvent
