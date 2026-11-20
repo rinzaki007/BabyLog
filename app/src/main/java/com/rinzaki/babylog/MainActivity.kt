@@ -682,18 +682,41 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         scope.launch {
                             val vaccine = existing?.copy(occurredAt = timestamp, payloadJson = payload.toString(), updatedAt = now, syncStatus = "PENDING")
                                 ?: BabyEventEntity(UUID.randomUUID().toString(), baby.id, "VACCINE", timestamp, payload.toString(), null, now)
-                            dao.upsertEvent(vaccine)
+                            try {
+                                dao.upsertEvent(vaccine)
+                            } catch (error: Exception) {
+                                Toast.makeText(appContext, "保存接种记录失败，请稍后重试", Toast.LENGTH_LONG).show()
+                                return@launch
+                            }
                             if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                                dao.clearPendingOperations("event", vaccine.id)
-                                dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", vaccine.id, "upsert", eventSyncPayload(vaccine).toString(), vaccine.serverVersion, now))
-                                SyncScheduler.enqueue(appContext)
+                                try {
+                                    dao.clearPendingOperations("event", vaccine.id)
+                                    dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", vaccine.id, "upsert", eventSyncPayload(vaccine).toString(), vaccine.serverVersion, now))
+                                    SyncScheduler.enqueue(appContext)
+                                } catch (syncError: Exception) {
+                                    Toast.makeText(appContext, "接种记录已保存到本机，但同步任务创建失败，请稍后重试", Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
                     }, onDelete = { event -> scope.launch {
-                        val now = System.currentTimeMillis(); dao.softDeleteEvent(event.id, now)
+                        val now = System.currentTimeMillis()
+                        try {
+                            dao.softDeleteEvent(event.id, now)
+                        } catch (error: Exception) {
+                            Toast.makeText(appContext, "删除接种记录失败，请稍后重试", Toast.LENGTH_LONG).show()
+                            return@launch
+                        }
                         if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                            val deleted = dao.getEvent(event.id)
-                            if (deleted != null) { dao.clearPendingOperations("event", deleted.id); dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", deleted.id, "delete", eventSyncPayload(deleted).toString(), deleted.serverVersion, now)); SyncScheduler.enqueue(appContext) }
+                            try {
+                                val deleted = dao.getEvent(event.id)
+                                if (deleted != null) {
+                                    dao.clearPendingOperations("event", deleted.id)
+                                    dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", deleted.id, "delete", eventSyncPayload(deleted).toString(), deleted.serverVersion, now))
+                                    SyncScheduler.enqueue(appContext)
+                                }
+                            } catch (syncError: Exception) {
+                                Toast.makeText(appContext, "接种记录已在本机删除，但同步任务创建失败，请稍后重试", Toast.LENGTH_LONG).show()
+                            }
                         }
                     } }) }
                 } else if (page == 0) item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
