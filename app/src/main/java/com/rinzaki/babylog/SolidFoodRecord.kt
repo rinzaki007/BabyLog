@@ -10,8 +10,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -92,6 +96,11 @@ fun solidFoodDescription(payloadJson: String): String {
 internal fun SolidFoodJourneySection(events: List<BabyEventEntity>) {
     val entries = solidFoodJourney(events)
     val totalAttempts = entries.sumOf { it.attempts }
+    var selectedCategory by remember { mutableStateOf("全部") }
+    var expanded by remember { mutableStateOf(false) }
+    val categories = listOf("全部") + entries.map { it.category }.distinct().sorted()
+    val filteredEntries = if (selectedCategory == "全部") entries else entries.filter { it.category == selectedCategory }
+    val visibleEntries = if (expanded) filteredEntries else filteredEntries.take(6)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -103,25 +112,54 @@ internal fun SolidFoodJourneySection(events: List<BabyEventEntity>) {
         ) {
             Text("辅食探索记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "${entries.size} 种食物 · $totalAttempts 次尝试",
+                "${entries.size} 种食物 · ${totalAttempts} 次尝试",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (entries.isEmpty()) {
                 Text("还没有辅食尝试记录。添加第一条后，这里会逐步形成宝宝的食物探索清单。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                entries.take(6).forEach { entry ->
-                    val firstDate = Instant.ofEpochMilli(entry.firstTriedAt).atZone(ZoneId.systemDefault())
-                        .toLocalDate().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))
-                    val detail = "${entry.category} · 首次尝试 $firstDate · ${entry.attempts} 次 · ${entry.latestReaction}"
-                    Text(
-                        "${entry.name}  ·  $detail",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (entry.latestReaction == "出现不适") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                    )
+                if (categories.size > 2) {
+                    Text("按食物类别查看", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    SelectionRow(categories, selectedCategory) {
+                        selectedCategory = it
+                        expanded = false
+                    }
                 }
-                if (entries.size > 6) {
-                    Text("最近展示 6 种，完整记录可在「记录」时间线中查看。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (filteredEntries.isEmpty()) {
+                    Text("这个类别暂时没有记录。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    visibleEntries.forEach { entry ->
+                        val firstDate = Instant.ofEpochMilli(entry.firstTriedAt).atZone(ZoneId.systemDefault())
+                            .toLocalDate().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))
+                        val latestDate = Instant.ofEpochMilli(entry.latestAt).atZone(ZoneId.systemDefault())
+                            .toLocalDate().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))
+                        val attemptLabel = if (entry.attempts > 1) "${entry.attempts} 次尝试" else "首次记录"
+                        val detail = listOf(
+                            entry.category,
+                            "首次 $firstDate",
+                            "最近 $latestDate",
+                            attemptLabel,
+                            entry.latestStage,
+                            entry.latestReaction
+                        ).joinToString(" · ")
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(entry.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                detail,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (entry.latestReaction == "出现不适") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    if (filteredEntries.size > 6) {
+                        TextButton(
+                            onClick = { expanded = !expanded },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (expanded) "收起列表" else "展开全部 ${filteredEntries.size} 种食物")
+                        }
+                    }
                 }
             }
             Text("这里只整理家庭观察记录，不作过敏或营养诊断；如有明显不适，请及时咨询专业人员。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
