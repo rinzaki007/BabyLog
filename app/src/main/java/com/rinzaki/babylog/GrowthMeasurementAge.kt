@@ -3,11 +3,27 @@ package com.rinzaki.babylog
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 /**
- * Formats the baby's completed age on the date of a growth measurement.
- * Uses calendar months (not an average 30-day month) so birthday boundaries
- * remain consistent with the rest of the app.
+ * Counts completed calendar months, using the same month-end clamping as LocalDate.plusMonths.
+ * Dates before birth are clamped to zero for age-stage filtering.
+ */
+internal fun growthCompletedMonths(birthDate: LocalDate, measuredDate: LocalDate): Long {
+    if (measuredDate.isBefore(birthDate)) return 0L
+    val calendarMonthDifference = (measuredDate.year - birthDate.year) * 12L +
+        (measuredDate.monthValue - birthDate.monthValue)
+    val candidateAnchor = birthDate.plusMonths(calendarMonthDifference)
+    return if (measuredDate.isBefore(candidateAnchor)) {
+        (calendarMonthDifference - 1).coerceAtLeast(0L)
+    } else {
+        calendarMonthDifference
+    }
+}
+
+/**
+ * Formats the baby's completed age on a measurement date.
+ * Uses calendar months rather than an average 30-day month.
  */
 internal fun growthMeasurementAgeLabel(
     birthTime: Long,
@@ -18,12 +34,9 @@ internal fun growthMeasurementAgeLabel(
     val measuredDate = Instant.ofEpochMilli(measuredAt).atZone(zone).toLocalDate()
     if (measuredDate.isBefore(birthDate)) return "出生前"
 
-    val calendarMonthDifference = (measuredDate.year - birthDate.year) * 12L +
-        (measuredDate.monthValue - birthDate.monthValue)
-    val candidateAnchor = birthDate.plusMonths(calendarMonthDifference)
-    val months = if (measuredDate.isBefore(candidateAnchor)) calendarMonthDifference - 1 else calendarMonthDifference
+    val months = growthCompletedMonths(birthDate, measuredDate)
     val monthAnchor = birthDate.plusMonths(months)
-    val days = java.time.temporal.ChronoUnit.DAYS.between(monthAnchor, measuredDate)
+    val days = ChronoUnit.DAYS.between(monthAnchor, measuredDate)
 
     return when {
         months == 0L && days == 0L -> "出生当天"
