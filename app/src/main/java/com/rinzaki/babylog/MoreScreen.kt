@@ -22,6 +22,13 @@ internal fun MorePageHeader(
     syncStatus: String,
     syncDescription: String,
     syncHasError: Boolean,
+    pendingCount: Int,
+    conflictCount: Int,
+    lastSyncLabel: String,
+    consistency: String?,
+    syncError: String?,
+    syncing: Boolean,
+    onSyncNow: () -> Unit,
     onOpenSyncSettings: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -62,8 +69,37 @@ internal fun MorePageHeader(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+                androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(
+                        if (pendingCount == 0 && conflictCount == 0) "同步队列已清空"
+                        else "待同步 $pendingCount 项 · 冲突 $conflictCount 项",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (conflictCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("最近成功同步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        Text(lastSyncLabel, style = MaterialTheme.typography.labelSmall)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("本地与云端校验", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        Text(
+                            consistency ?: "尚未校验",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (consistency == "一致") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    if (!syncError.isNullOrBlank()) {
+                        Text("同步提示：$syncError", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                OutlinedButton(onClick = onSyncNow, enabled = !syncing && syncStatus != "未配置", modifier = Modifier.fillMaxWidth()) {
+                    Text(if (syncing) "同步中…" else "立即同步")
+                }
                 Button(onClick = onOpenSyncSettings, modifier = Modifier.fillMaxWidth()) {
-                    Text("管理家庭同步")
+                    Text("管理家庭同步与冲突")
                 }
             }
         }
