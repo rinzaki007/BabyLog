@@ -40,6 +40,35 @@ class FeedingRecordTest {
     }
 
     @Test
+    fun feedingAmountAcceptsInclusiveMinimumAndMaximum() {
+        assertEquals(1, buildFeedingPayload("配方奶", "1", "").getInt("amountMl"))
+        assertEquals(1000, buildFeedingPayload("配方奶", "1000", "").getInt("amountMl"))
+    }
+
+    @Test
+    fun breastfeedingDurationAcceptsInclusiveMinimumAndMaximum() {
+        assertEquals(1, buildFeedingPayload("母乳", "", "1").getInt("breastMinutes"))
+        assertEquals(180, buildFeedingPayload("母乳", "", "180").getInt("breastMinutes"))
+    }
+
+    @Test
+    fun mixedFeedingRequiresVolumeButAllowsDurationToBeOmitted() {
+        val payload = buildFeedingPayload("混合喂养", "90", "")
+        assertEquals(90, payload.getInt("amountMl"))
+        assertFalse(payload.has("breastMinutes"))
+        assertThrows(IllegalArgumentException::class.java) {
+            buildFeedingPayload("混合喂养", "", "15")
+        }
+    }
+
+    @Test
+    fun rejectsUnsupportedFeedingMethod() {
+        assertThrows(IllegalArgumentException::class.java) {
+            buildFeedingPayload("其他", "120", "")
+        }
+    }
+
+    @Test
     fun rejectsMissingRequiredValuesAndOutOfRangeValues() {
         assertThrows(IllegalArgumentException::class.java) {
             buildFeedingPayload("配方奶", "", "")
@@ -47,11 +76,15 @@ class FeedingRecordTest {
         assertThrows(IllegalArgumentException::class.java) {
             buildFeedingPayload("母乳", "", "")
         }
-        assertThrows(IllegalArgumentException::class.java) {
-            buildFeedingPayload("母乳", "1001", "")
+        listOf("0", "1001", "abc", "1.5").forEach { amount ->
+            assertThrows(IllegalArgumentException::class.java) {
+                buildFeedingPayload("配方奶", amount, "")
+            }
         }
-        assertThrows(IllegalArgumentException::class.java) {
-            buildFeedingPayload("母乳", "", "181")
+        listOf("0", "181", "abc", "1.5").forEach { duration ->
+            assertThrows(IllegalArgumentException::class.java) {
+                buildFeedingPayload("母乳", "", duration)
+            }
         }
     }
 
