@@ -182,6 +182,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var showRecordTypePicker by remember { mutableStateOf(false) }
     var editingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
     var deletingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
+    var savingEvent by remember { mutableStateOf(false) }
     var showSyncDetails by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
@@ -710,16 +711,24 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 TextButton(onClick = {
                     scope.launch {
                         val now = System.currentTimeMillis()
-                        dao.softDeleteEvent(target.id, now)
-                        if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                            val deleted = dao.getEvent(target.id)
-                            if (deleted != null) {
-                                dao.clearPendingOperations("event", deleted.id)
-                                dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", deleted.id, "delete", eventSyncPayload(deleted).toString(), deleted.serverVersion, now))
-                                SyncScheduler.enqueue(appContext)
+                        try {
+                            dao.softDeleteEvent(target.id, now)
+                            if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                try {
+                                    val deleted = dao.getEvent(target.id)
+                                    if (deleted != null) {
+                                        dao.clearPendingOperations("event", deleted.id)
+                                        dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", deleted.id, "delete", eventSyncPayload(deleted).toString(), deleted.serverVersion, now))
+                                        SyncScheduler.enqueue(appContext)
+                                    }
+                                } catch (syncError: Exception) {
+                                    Toast.makeText(appContext, "记录已在本机删除，但同步任务创建失败，请稍后重试", Toast.LENGTH_LONG).show()
+                                }
                             }
+                            deletingEvent = null
+                        } catch (error: Exception) {
+                            Toast.makeText(appContext, "删除记录失败，请稍后重试", Toast.LENGTH_LONG).show()
                         }
-                        deletingEvent = null
                     }
                 }) { Text("确认删除", color = MaterialTheme.colorScheme.error) }
             },
@@ -791,22 +800,34 @@ private fun BabyLogApp(dao: BabyLogDao) {
 
     if ((addingEvent != null || editingEvent != null) && baby != null) {
         val currentEvent = editingEvent
-        EventEditor(currentEvent?.eventType ?: addingEvent!!, existing = currentEvent, onDismiss = { addingEvent = null; editingEvent = null }) { type, payload, occurredAt, keepOpen ->
+        EventEditor(currentEvent?.eventType ?: addingEvent!!, existing = currentEvent, onDismiss = { if (!savingEvent) { addingEvent = null; editingEvent = null } }, saving = savingEvent) { type, payload, occurredAt, keepOpen ->
+            if (savingEvent) return@EventEditor
+            savingEvent = true
             val now = System.currentTimeMillis()
             scope.launch {
-                val event = currentEvent?.copy(
-                    eventType = type, occurredAt = occurredAt, payloadJson = payload.toString(),
-                    updatedAt = now, syncStatus = "PENDING", deletedAt = null
-                ) ?: BabyEventEntity(UUID.randomUUID().toString(), baby.id, type, occurredAt, payload.toString(), null, now)
-                dao.upsertEvent(event)
-                if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                    dao.clearPendingOperations("event", event.id)
-                    dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", event.id, "upsert", eventSyncPayload(event).toString(), event.serverVersion, now))
-                    SyncScheduler.enqueue(appContext)
-                }
-                if (!keepOpen) {
-                    addingEvent = null
-                    editingEvent = null
+                try {
+                    val event = currentEvent?.copy(
+                        eventType = type, occurredAt = occurredAt, payloadJson = payload.toString(),
+                        updatedAt = now, syncStatus = "PENDING", deletedAt = null
+                    ) ?: BabyEventEntity(UUID.randomUUID().toString(), baby.id, type, occurredAt, payload.toString(), null, now)
+                    dao.upsertEvent(event)
+                    if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                        try {
+                            dao.clearPendingOperations("event", event.id)
+                            dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", event.id, "upsert", eventSyncPayload(event).toString(), event.serverVersion, now))
+                            SyncScheduler.enqueue(appContext)
+                        } catch (syncError: Exception) {
+                            Toast.makeText(appContext, "记录已保存到本机，但同步任务创建失败，请稍后重试", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    if (!keepOpen) {
+                        addingEvent = null
+                        editingEvent = null
+                    }
+                } catch (error: Exception) {
+                    Toast.makeText(appContext, "保存记录失败，请检查后重试", Toast.LENGTH_LONG).show()
+                } finally {
+                    savingEvent = false
                 }
             }
         }
