@@ -194,6 +194,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
     var syncConsistency by remember { mutableStateOf(SyncPreferences.lastConsistency(appContext)) }
+    var pendingSyncCount by remember { mutableStateOf(0) }
+    var syncConflictCount by remember { mutableStateOf(0) }
     var selectedEventFilter by remember { mutableStateOf("全部") }
     var selectedStartDate by remember { mutableStateOf<LocalDate?>(null) }
     var selectedEndDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -302,6 +304,11 @@ private fun BabyLogApp(dao: BabyLogDao) {
             syncError = SyncPreferences.lastSyncError(appContext)
             syncing = SyncPreferences.isSyncing(appContext)
             syncConsistency = SyncPreferences.lastConsistency(appContext)
+            val queueCounts = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                dao.pendingOperationCount() to dao.conflictOperationCount()
+            }
+            pendingSyncCount = queueCounts.first
+            syncConflictCount = queueCounts.second
             val now = System.currentTimeMillis()
             if (SyncPreferences.familyId(appContext).isNotBlank() && now - lastForegroundSync >= 30_000L) {
                 SyncScheduler.enqueue(appContext)
@@ -717,6 +724,13 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             syncStatus = syncStatus,
                             syncDescription = syncDescription,
                             syncHasError = !syncError.isNullOrBlank(),
+                            pendingCount = pendingSyncCount,
+                            conflictCount = syncConflictCount,
+                            lastSyncLabel = if (lastSyncAt > 0L) SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).format(Date(lastSyncAt)) else "暂无记录",
+                            consistency = syncConsistency,
+                            syncError = syncError,
+                            syncing = syncing,
+                            onSyncNow = { SyncScheduler.enqueue(appContext) },
                             onOpenSyncSettings = { showSyncSettings = true }
                         )
                     }
