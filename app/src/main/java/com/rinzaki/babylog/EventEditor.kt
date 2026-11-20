@@ -299,17 +299,19 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                         if (milestoneId.isNotBlank()) payload.put("milestoneId", milestoneId)
                                     }
                                     "GROWTH" -> {
-                                        val weight = weightKg.toDoubleOrNull()
-                                        val length = lengthCm.toDoubleOrNull()
-                                        val head = headCm.toDoubleOrNull()
-                                        if (weight == null && length == null && head == null) {
-                                            error = "请至少填写一项测量数据"
+                                        val measurements = try {
+                                            Triple(
+                                                parseOptionalMeasurement(weightKg, "体重", 0.1, 80.0),
+                                                parseOptionalMeasurement(lengthCm, "身长", 20.0, 120.0),
+                                                parseOptionalMeasurement(headCm, "头围", 20.0, 70.0)
+                                            )
+                                        } catch (validation: IllegalArgumentException) {
+                                            error = validation.message
                                             return
                                         }
-                                        if ((weight != null && weight !in 0.1..80.0) ||
-                                            (length != null && length !in 20.0..120.0) ||
-                                            (head != null && head !in 20.0..70.0)) {
-                                            error = "请检查测量数值是否在合理范围内"
+                                        val (weight, length, head) = measurements
+                                        if (weight == null && length == null && head == null) {
+                                            error = "请至少填写一项测量数据"
                                             return
                                         }
                                         weight?.let { payload.put("weightGrams", (it * 1000).toInt()) }
