@@ -11,12 +11,13 @@ class GrowthDataTest {
         id: String = "baby-1",
         weight: Int? = 3200,
         length: Double? = 50.0,
-        head: Double? = 34.0
+        head: Double? = 34.0,
+        birthTime: Long = 1_700_000_000_000L
     ) = BabyEntity(
         id = id,
         familyId = "family-1",
         displayName = "宝宝",
-        birthTime = 1_700_000_000_000L,
+        birthTime = birthTime,
         createdAt = 1_700_000_000_000L,
         updatedAt = 1_700_000_000_000L,
         birthWeightGrams = weight,
@@ -87,6 +88,26 @@ class GrowthDataTest {
         assertEquals(1, points.size)
         assertEquals(5.3f, points.single().second, 0.001f)
         assertEquals(1_740_000_000_000L, points.single().first)
+    }
+
+    @Test
+    fun excludesFutureBirthAndGrowthMeasurementsButKeepsMeasurementAtAsOfTime() {
+        val asOf = 1_750_000_000_000L
+        val points = growthMetricPoints(
+            baby(birthTime = 1_800_000_000_000L),
+            listOf(
+                event("GROWTH", 1_740_000_000_000L, """{"weightGrams":5100}"""),
+                event("GROWTH", asOf, """{"weightGrams":5200}"""),
+                event("GROWTH", 1_760_000_000_000L, """{"weightGrams":5300}""")
+            ),
+            "weightGrams",
+            asOfMillis = asOf
+        )
+
+        assertEquals(2, points.size)
+        assertEquals(5.1f, points[0].second, 0.001f)
+        assertEquals(5.2f, points[1].second, 0.001f)
+        assertEquals(asOf, points.last().first)
     }
 
     @Test
