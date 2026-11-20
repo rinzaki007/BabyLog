@@ -28,7 +28,7 @@ internal fun growthMetricPoints(
             add(baby.birthTime to it.toFloat())
         }
         events.asSequence()
-            .filter { it.eventType == "GROWTH" }
+            .filter { it.babyId == baby.id && it.deletedAt == null && it.eventType == "GROWTH" }
             .forEach { event ->
                 val value = runCatching {
                     JSONObject(event.payloadJson).optDouble(metricKey).takeIf { it.isFinite() && it > 0.0 }
