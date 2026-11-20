@@ -343,10 +343,20 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                 if (note.isNotBlank()) payload.put("note", note.trim())
                                 onSave(eventType, payload, timestamp, keepOpen)
                                 if (keepOpen) {
+                                    // Keep the user's preferred selections, but clear values that
+                                    // belong only to the record just saved.
                                     val nextTime = LocalDateTime.now()
                                     date = nextTime.toLocalDate()
                                     hour = nextTime.hour
                                     minute = nextTime.minute
+                                    note = ""
+                                    foodAmount = ""
+                                    foodReactionNote = ""
+                                    supplementAmount = ""
+                                    weightKg = ""
+                                    lengthCm = ""
+                                    headCm = ""
+                                    milestoneTitle = ""
                                     error = null
                                 }
                             
