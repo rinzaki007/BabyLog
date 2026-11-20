@@ -213,9 +213,9 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val unit = if (metric == "体重") "kg" else "cm"
     val allPoints = remember(baby, events, key) { growthMetricPoints(baby, events, key) }
     val now = remember { System.currentTimeMillis() }
-    val days = when (range) { "近 30 天" -> 30L; "近 90 天" -> 90L; "近半年" -> 182L; "近一年" -> 365L; else -> Long.MAX_VALUE }
-    val points = remember(allPoints, days, now) {
-        if (days == Long.MAX_VALUE) allPoints else allPoints.filter { it.first >= now - days * 86400000L }
+    val rangeStart = remember(range, now) { growthRangeStartMillis(range, now) }
+    val points = remember(allPoints, rangeStart) {
+        if (rangeStart == null) allPoints else allPoints.filter { it.first >= rangeStart }
     }
     val latest = points.lastOrNull()
     val previous = points.dropLast(1).lastOrNull()

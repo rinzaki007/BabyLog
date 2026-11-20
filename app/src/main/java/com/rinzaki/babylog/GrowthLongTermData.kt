@@ -77,3 +77,27 @@ internal fun growthMeasurementInterval(
         changePer30Days = if (elapsed > 0) (latest.second - previous.second) * 30f / elapsed else null
     )
 }
+
+
+/**
+ * Resolves chart range labels using calendar-aware boundaries.
+ * Short ranges are rolling day windows; half-year and year ranges use calendar arithmetic
+ * so month ends and leap years do not silently shift the requested period.
+ * Returns null for the unbounded "全部" range.
+ */
+internal fun growthRangeStartMillis(
+    range: String,
+    nowMillis: Long,
+    zone: ZoneId = ZoneId.systemDefault()
+): Long? {
+    val now = Instant.ofEpochMilli(nowMillis).atZone(zone)
+    val start = when (range) {
+        "近 30 天" -> now.minusDays(30)
+        "近 90 天" -> now.minusDays(90)
+        "近半年" -> now.minusMonths(6)
+        "近一年" -> now.minusYears(1)
+        "全部" -> return null
+        else -> return null
+    }
+    return start.toInstant().toEpochMilli()
+}
