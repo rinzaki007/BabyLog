@@ -265,9 +265,10 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                     "SOLID_FOOD" -> {
                                         val name = if (foodName == "其他") customFoodName.trim() else foodName
                                         if (name.isBlank()) { error = "请输入食物名称"; return }
-                                        val amount = foodAmount.toDoubleOrNull()
-                                        if (foodAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 10000.0)) {
-                                            error = "请检查辅食数量"
+                                        val amount = try {
+                                            parseOptionalRecordAmount(foodAmount, "辅食数量", 10000.0)
+                                        } catch (validation: IllegalArgumentException) {
+                                            error = validation.message
                                             return
                                         }
                                         payload.put("foodName", name)
@@ -283,9 +284,10 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                     "SUPPLEMENT" -> {
                                         val name = if (supplementName == "其他") customSupplementName.trim() else supplementName
                                         if (name.isBlank()) { error = "请输入补充项目名称"; return }
-                                        val amount = supplementAmount.toDoubleOrNull()
-                                        if (supplementAmount.isNotBlank() && (amount == null || amount <= 0.0 || amount > 100000.0)) {
-                                            error = "请检查补充数量"
+                                        val amount = try {
+                                            parseOptionalRecordAmount(supplementAmount, "补充数量", 100000.0)
+                                        } catch (validation: IllegalArgumentException) {
+                                            error = validation.message
                                             return
                                         }
                                         payload.put("supplementName", name)
