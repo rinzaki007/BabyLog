@@ -70,4 +70,23 @@ class GrowthLongTermDataTest {
         assertEquals(0L, sameDay.elapsedDays)
         assertNull(sameDay.changePer30Days)
     }
+
+    @Test
+    fun growthChartHalfYearRangeUsesCalendarMonthsAtMonthEnd() {
+        val now = LocalDate.of(2026, 8, 31).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        val expected = LocalDate.of(2026, 2, 28).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(expected, growthRangeStartMillis("近半年", now, zone))
+    }
+
+    @Test
+    fun growthChartYearRangeHandlesLeapDayAndShortRangesRemainRollingDays() {
+        val leapDay = LocalDate.of(2024, 2, 29).atTime(9, 30).atZone(zone).toInstant().toEpochMilli()
+        val yearExpected = LocalDate.of(2023, 2, 28).atTime(9, 30).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(yearExpected, growthRangeStartMillis("近一年", leapDay, zone))
+
+        val thirtyDayExpected = LocalDate.of(2024, 1, 30).atTime(9, 30).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(thirtyDayExpected, growthRangeStartMillis("近 30 天", leapDay, zone))
+        assertNull(growthRangeStartMillis("全部", leapDay, zone))
+    }
+
 }
