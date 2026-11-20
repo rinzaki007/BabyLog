@@ -254,10 +254,10 @@ internal fun BabyAlbumSection(
                                 Text(group.subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Text(
-                                "\${dayPhotos.size} 张",
+                                "${dayPhotos.size} 张",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
-                            
+                            )
                         }
                         photoRows.forEach { rowPhotos ->
                             Row(
