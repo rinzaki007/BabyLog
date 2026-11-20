@@ -797,12 +797,13 @@ private fun savePhotoToGallery(context: android.content.Context, path: String) {
 @Composable
 internal fun TimelinePhotoStrip(
     photos: List<BabyPhotoEntity>,
+    title: String = "当天照片",
     onPhotoClick: (BabyPhotoEntity) -> Unit
 ) {
     if (photos.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(
-            "当天照片 · ${photos.size} 张",
+            "$title · ${photos.size} 张",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold
