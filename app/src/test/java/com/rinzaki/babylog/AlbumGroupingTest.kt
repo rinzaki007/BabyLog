@@ -33,7 +33,7 @@ class AlbumGroupingTest {
             ),
             birthTime,
             byAge = false,
-            zone
+            zone = zone
         )
 
         assertEquals(listOf("2026年3月", "2026年2月", "2026年1月"), groups.map { it.title })
@@ -52,7 +52,7 @@ class AlbumGroupingTest {
             ),
             birthTime,
             byAge = true,
-            zone
+            zone = zone
         )
 
         assertEquals(
@@ -72,7 +72,7 @@ class AlbumGroupingTest {
             ),
             birthTime,
             byAge = false,
-            zone
+            zone = zone
         )
 
         assertEquals(1, groups.sumOf { it.photos.size })
