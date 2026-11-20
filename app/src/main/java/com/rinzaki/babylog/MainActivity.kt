@@ -707,13 +707,14 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                     if (page == 4) item {
                         val syncConfigured = SyncPreferences.familyId(appContext).isNotBlank()
-                        val syncStatus = when {
-                            !syncConfigured -> "未配置"
-                            syncing -> "同步中"
-                            !syncError.isNullOrBlank() -> "需检查"
-                            lastSyncAt > 0L -> "正常"
-                            else -> "待首次同步"
-                        }
+                        val syncStatus = familySyncStatusLabel(
+                            configured = syncConfigured,
+                            syncing = syncing,
+                            hasError = !syncError.isNullOrBlank(),
+                            pendingCount = pendingSyncCount,
+                            conflictCount = syncConflictCount,
+                            lastSyncAt = lastSyncAt
+                        )
                         val syncDescription = when {
                             !syncConfigured -> "配置家庭空间，在设备间安全同步记录"
                             !syncError.isNullOrBlank() -> syncError ?: "同步遇到问题，请检查设置"
