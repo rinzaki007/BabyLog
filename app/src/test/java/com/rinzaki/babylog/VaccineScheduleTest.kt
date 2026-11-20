@@ -210,4 +210,31 @@ class VaccineScheduleTest {
         )
         assertTrue(!vaccineDoseIsRecorded(hibBooster, pentavalentWithoutDose))
     }
+
+    @Test
+    fun vaccineScheduleWindowSeparatesOverdueUpcomingAndClinicReview() {
+        val today = LocalDate.of(2026, 11, 20)
+        val overdue = Triple(VaccineScheduleItem("乙肝疫苗", "第 1 剂", 0), today.minusDays(2), VaccineDoseStatus.PENDING)
+        val dueToday = Triple(VaccineScheduleItem("百白破疫苗", "第 1 剂", 2), today, VaccineDoseStatus.PENDING)
+        val dueInThirtyDays = Triple(VaccineScheduleItem("麻腮风疫苗", "第 1 剂", 8), today.plusDays(30), VaccineDoseStatus.PENDING)
+        val dueLater = Triple(VaccineScheduleItem("乙脑疫苗", "第 1 剂", 8), today.plusDays(31), VaccineDoseStatus.PENDING)
+        val review = Triple(VaccineScheduleItem("五联疫苗", "第 1 剂", 2), today.minusDays(1), VaccineDoseStatus.REVIEW_REQUIRED)
+        val recorded = Triple(VaccineScheduleItem("卡介苗", "第 1 剂", 0), today.minusDays(100), VaccineDoseStatus.RECORDED)
+        val items = listOf(overdue, dueToday, dueInThirtyDays, dueLater, review, recorded)
+
+        assertEquals(listOf(overdue, dueToday, dueInThirtyDays, dueLater, review),
+            filterVaccineScheduleWindow(items, today, "全部待接种"))
+        assertEquals(listOf(overdue), filterVaccineScheduleWindow(items, today, "已逾期"))
+        assertEquals(listOf(dueToday, dueInThirtyDays), filterVaccineScheduleWindow(items, today, "未来30天"))
+        assertEquals(listOf(review), filterVaccineScheduleWindow(items, today, "待门诊核对"))
+    }
+
+    @Test
+    fun vaccineScheduleWindowIncludesTodayAndThirtyDayBoundary() {
+        val today = LocalDate.of(2026, 11, 20)
+        val todayItem = Triple(VaccineScheduleItem("今天", "第 1 剂", 0), today, VaccineDoseStatus.PENDING)
+        val boundaryItem = Triple(VaccineScheduleItem("边界", "第 1 剂", 0), today.plusDays(30), VaccineDoseStatus.PENDING)
+        assertEquals(listOf(todayItem, boundaryItem),
+            filterVaccineScheduleWindow(listOf(todayItem, boundaryItem), today, "未来30天"))
+    }
 }

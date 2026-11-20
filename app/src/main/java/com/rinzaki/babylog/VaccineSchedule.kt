@@ -281,3 +281,24 @@ internal fun vaccineDoseStatus(
     vaccineDoseNeedsClinicReview(item, recordedNamesAndDoses) -> VaccineDoseStatus.REVIEW_REQUIRED
     else -> VaccineDoseStatus.PENDING
 }
+
+
+internal fun filterVaccineScheduleWindow(
+    items: List<Triple<VaccineScheduleItem, LocalDate, VaccineDoseStatus>>,
+    today: LocalDate,
+    window: String
+): List<Triple<VaccineScheduleItem, LocalDate, VaccineDoseStatus>> {
+    return when (window) {
+        "已逾期" -> items.filter { (_, date, status) ->
+            status == VaccineDoseStatus.PENDING && date.isBefore(today)
+        }
+        "未来30天" -> {
+            val endDate = today.plusDays(30)
+            items.filter { (_, date, status) ->
+                status == VaccineDoseStatus.PENDING && !date.isBefore(today) && !date.isAfter(endDate)
+            }
+        }
+        "待门诊核对" -> items.filter { it.third == VaccineDoseStatus.REVIEW_REQUIRED }
+        else -> items.filter { it.third != VaccineDoseStatus.RECORDED }
+    }
+}
