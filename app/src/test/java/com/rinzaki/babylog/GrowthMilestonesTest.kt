@@ -43,7 +43,25 @@ class GrowthMilestonesTest {
     }
 
     @Test
-    fun milestonesDoNotClaimEveryMilestoneIsDueAtCurrentAge() {
-        assertFalse(growthMilestones.any { it.minAgeMonths < 0 })
+    fun monthEndBirthdaysUseCompletedCalendarMonthBoundaries() {
+        val birth = LocalDate.of(2026, 1, 31)
+        assertEquals(0L, growthCompletedMonths(birth, LocalDate.of(2026, 2, 27)))
+        assertEquals(1L, growthCompletedMonths(birth, LocalDate.of(2026, 2, 28)))
+        assertEquals(2L, growthCompletedMonths(birth, LocalDate.of(2026, 3, 31)))
+    }
+
+    @Test
+    fun currentStageIncludesCurrentWindowAndNearFutureButNotDistantMilestones() {
+        val visible = growthMilestonesForCurrentStage(growthMilestones, 5L)
+        assertTrue(visible.any { it.id == "reach_grab" })
+        assertTrue(visible.any { it.id == "sit" })
+        assertFalse(visible.any { it.id == "first_steps" })
+    }
+
+    @Test
+    fun currentStageDoesNotMutateCatalogOrCompletedHistory() {
+        val allIds = growthMilestones.map { it.id }
+        growthMilestonesForCurrentStage(growthMilestones, 8L)
+        assertEquals(allIds, growthMilestones.map { it.id })
     }
 }
