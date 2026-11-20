@@ -603,14 +603,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("🌱", style = MaterialTheme.typography.headlineLarge)
-                                    Text(
-                                        if (selectedStartDate != null || selectedEndDate != null) "这个日期范围内暂无记录" else if (selectedEventFilter == "全部") "第一条记录，等你来写" else "还没有${selectedEventFilter}记录",
-                                        fontWeight = FontWeight.SemiBold
+                                    val emptyState = timelineEmptyState(
+                                        hasDateFilter = selectedStartDate != null || selectedEndDate != null,
+                                        selectedFilter = selectedEventFilter
                                     )
-                                    Text(
-                                        if (selectedStartDate != null || selectedEndDate != null) "可以调整日期范围，或清除日期筛选查看全部记录。" else if (selectedEventFilter == "全部") "从一次喂养、一段好觉或一次成长测量开始。" else "试试切换其他分类，查看宝宝的成长足迹。",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Text(emptyState.title, fontWeight = FontWeight.SemiBold)
+                                    Text(emptyState.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
