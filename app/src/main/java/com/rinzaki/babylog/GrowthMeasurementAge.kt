@@ -3,7 +3,6 @@ package com.rinzaki.babylog
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.temporal.ChronoUnit
 
 /**
  * Formats the baby's completed age on the date of a growth measurement.
@@ -19,7 +18,10 @@ internal fun growthMeasurementAgeLabel(
     val measuredDate = Instant.ofEpochMilli(measuredAt).atZone(zone).toLocalDate()
     if (measuredDate.isBefore(birthDate)) return "出生前"
 
-    val months = ChronoUnit.MONTHS.between(birthDate, measuredDate)
+    val calendarMonthDifference = (measuredDate.year - birthDate.year) * 12L +
+        (measuredDate.monthValue - birthDate.monthValue)
+    val candidateAnchor = birthDate.plusMonths(calendarMonthDifference)
+    val months = if (measuredDate.isBefore(candidateAnchor)) calendarMonthDifference - 1 else calendarMonthDifference
     val monthAnchor = birthDate.plusMonths(months)
     val days = ChronoUnit.DAYS.between(monthAnchor, measuredDate)
 
