@@ -1,6 +1,6 @@
 # BabyLog Android release signing and updates
 
-Android only allows an in-place update when both APKs use the same signing certificate. Keep the private key and exported keystore permanently and back them up offline.
+Android only allows an in-place update when both APKs use the same signing certificate. Keep the private key and exported PKCS#12 keystore permanently and back them up offline. Losing the signing key may prevent users from installing future APKs over the existing app.
 
 ## Create the signing key once (Windows, without installing JDK)
 
@@ -23,7 +23,7 @@ Copy the PKCS#12 file as Base64 for GitHub Actions:
 base64 -w 0 babylog-release.p12 | clip.exe
 ```
 
-This copies the Base64 text to the Windows clipboard. Never commit or share the private key, keystore, Base64 value, or passwords.
+This copies the Base64 text to the Windows clipboard. Never commit or share the private key, keystore, Base64 value, or passwords. Keep at least one encrypted offline backup of the original `.p12` file and its recovery information.
 
 ## Add GitHub Actions secrets
 
@@ -36,12 +36,34 @@ In the repository, open **Settings → Secrets and variables → Actions → Rep
 | `BABYLOG_KEY_ALIAS` | `babylog` |
 | `BABYLOG_KEY_PASSWORD` | Same PKCS#12 export password |
 
-CI debug builds use this certificate once configured. The release workflow refuses to publish without all four secrets.
+CI debug builds use this certificate once configured. The formal release workflow refuses to publish without all four secrets.
 
 ## Publish a release
 
-Push a tag such as `v0.2.1` to trigger **BabyLog Android Release**. It builds a signed APK and attaches it to a GitHub Release. The app checks for updates every 24 hours and also has a manual check on the home page. Use a version higher than the app's installed version.
+The workflow is **BabyLog Android Release** at `.github/workflows/release.yml`. It is separate from the ordinary PR / main CI.
 
-The first installation after switching from the old ephemeral CI key may require uninstalling the old app. Sync or back up local-only records first. Future updates can be installed over the existing app.
+Recommended manual process:
 
-The updater checks file size and SHA-256 (when GitHub provides it), then opens Android's package installer. Android may ask to allow BabyLog to install unknown apps. Installation is never silent.
+1. Merge the intended release changes into `main` and confirm all three CI checks pass.
+2. Open **GitHub → Actions → BabyLog Android Release → Run workflow**.
+3. Select the `main` branch and enter the version without the `v` prefix, for example `1.9.1`.
+4. Start the workflow and wait for the signed APK build, launcher-icon validation, GitHub Release publication, and update-manifest publication to finish.
+5. Verify the GitHub Release attachment and the `updates` branch's `latest.json`; the tag, version, download URL, file size, and SHA-256 must match the actual APK.
+
+A pushed tag matching `v*` (for example `v1.9.1`) also triggers the workflow. Only create such a tag after confirming it points to a commit already merged into `main` and validated by CI. Manual dispatch creates the corresponding `v<version>` tag and GitHub Release.
+
+The workflow generates `versionCode` from the GitHub Actions run number. The version name comes from the manual input or the pushed tag. Do not reuse a version tag or assume that rerunning a partially successful release is harmless.
+
+## Verify the published update feed
+
+The release workflow generates `latest.json` on the `updates` branch. It contains the release tag, version, APK download URL, file size, and SHA-256 digest. The app's update checker uses this public manifest to identify the current release.
+
+A successful GitHub Release does not by itself prove that the in-app update feed was published. Confirm that the **Publish public update manifest** step also succeeded and compare the manifest values with the actual release APK. If that step fails after the Release was created, inspect the existing Release and manifest before retrying; repair the feed from the already-published APK where possible rather than rebuilding and republishing the same tag blindly.
+
+For the complete failure-recovery checklist and NAS update decision rules, see [DEVELOPMENT.md](DEVELOPMENT.md#android-正式发布流程).
+
+## First installation and upgrades
+
+The first installation after switching from an old ephemeral CI signing key may require uninstalling the old app. Sync or back up local-only records first. Once the persistent release certificate is installed, future releases signed with the same key can be installed over the existing app.
+
+The updater checks file size and SHA-256 when supplied by the manifest, then opens Android's package installer. Android may ask to allow BabyLog to install unknown apps. Installation is never silent.
