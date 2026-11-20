@@ -395,46 +395,57 @@ internal fun BabyAlbumSection(
                     }
                 }
             }
-            // Cloud-only photos show their local preview immediately, then fetch the
-            // original in the background for full-resolution viewing when online.
-            LaunchedEffect(activePhoto.id, activePhoto.originalOnDevice) {
-                if (!activePhoto.originalOnDevice) {
-                    val cachedPath = photoOriginalCache[activePhoto.id]?.takeIf { File(it).isFile }
-                    val base = SyncPreferences.server(context)
-                    val token = SyncPreferences.token(context)
-                    val familyId = SyncPreferences.familyId(context)
-                    val destination = photoOriginalCacheFile(context.cacheDir, activePhoto)
-                    if (cachedPath != null) withContext(Dispatchers.IO) {
-                        File(cachedPath).setLastModified(System.currentTimeMillis())
+            // Check the local original off the main thread. If the original was removed
+            // outside the app, the local preview remains usable while we recover it from NAS.
+            val localOriginalAvailable by produceState<Boolean?>(
+                initialValue = null,
+                activePhoto.id,
+                activePhoto.localPath,
+                activePhoto.originalOnDevice
+            ) {
+                value = withContext(Dispatchers.IO) {
+                    activePhoto.originalOnDevice && File(activePhoto.localPath).isFile
+                }
+            }
+            // Cloud-only photos and locally-missing originals both fall back to the
+            // family server; the preview stays visible while the original is recovered.
+            LaunchedEffect(activePhoto.id, activePhoto.originalOnDevice, activePhoto.localPath, localOriginalAvailable) {
+                if (localOriginalAvailable == null || localOriginalAvailable == true) return@LaunchedEffect
+                val cachedPath = photoOriginalCache[activePhoto.id]?.takeIf { File(it).isFile }
+                val base = SyncPreferences.server(context)
+                val token = SyncPreferences.token(context)
+                val familyId = SyncPreferences.familyId(context)
+                val destination = photoOriginalCacheFile(context.cacheDir, activePhoto)
+                if (cachedPath != null) withContext(Dispatchers.IO) {
+                    File(cachedPath).setLastModified(System.currentTimeMillis())
+                }
+                val sourcePath = cachedPath ?: if (base.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) {
+                    withContext(Dispatchers.IO) {
+                        runCatching {
+                            if (!destination.isFile || destination.length() <= 0L) {
+                                SyncHttp.downloadPhoto(base, familyId, activePhoto.id, token, destination)
+                            }
+                            destination.setLastModified(System.currentTimeMillis())
+                            trimPhotoOriginalCache(context.cacheDir, destination)
+                            destination.absolutePath
+                        }.getOrNull()
                     }
-                    val sourcePath = cachedPath ?: if (base.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) {
-                        withContext(Dispatchers.IO) {
-                            runCatching {
-                                if (!destination.isFile || destination.length() <= 0L) {
-                                    SyncHttp.downloadPhoto(base, familyId, activePhoto.id, token, destination)
-                                }
-                                destination.setLastModified(System.currentTimeMillis())
-                                trimPhotoOriginalCache(context.cacheDir, destination)
-                                destination.absolutePath
-                            }.getOrNull()
-                        }
-                    } else null
-                    if (sourcePath != null) {
-                        photoOriginalCache[activePhoto.id] = sourcePath
-                        val fullBitmap = withContext(Dispatchers.IO) {
-                            runCatching { decodeSampledPhoto(sourcePath, 2400, 3000) }.getOrNull()
-                        }
-                        if (fullBitmap != null) {
-                            photoBitmapCache[activePhoto.id] = fullBitmap
-                            galleryMessage = null
-                        } else {
-                            galleryMessage = "云端原图已下载，但暂时无法解码，当前保留预览图"
-                        }
-                    } else if (base.isBlank() || token.isBlank() || familyId.isBlank()) {
-                        galleryMessage = "连接家庭同步后即可查看云端原图"
+                } else null
+                if (sourcePath != null) {
+                    photoOriginalCache[activePhoto.id] = sourcePath
+                    val fullBitmap = withContext(Dispatchers.IO) {
+                        runCatching { decodeSampledPhoto(sourcePath, 2400, 3000) }.getOrNull()
+                    }
+                    if (fullBitmap != null) {
+                        photoBitmapCache[activePhoto.id] = fullBitmap
+                        galleryMessage = null
                     } else {
-                        galleryMessage = "云端原图暂时无法加载，当前显示预览图；请检查网络后重试"
+                        galleryMessage = "云端原图已下载，但暂时无法解码，当前保留预览图"
                     }
+                } else if (base.isBlank() || token.isBlank() || familyId.isBlank()) {
+                    galleryMessage = "连接家庭同步后即可查看云端原图"
+                } else {
+                    galleryMessage = "云端原图暂时无法加载，当前显示预览图；请检查网络后重试"
                 }
             }
             val activeBitmap = photoBitmapCache[activePhoto.id]
@@ -580,7 +591,7 @@ internal fun BabyAlbumSection(
                             Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    val sourceLabel = if (activePhoto.originalOnDevice) {
+                                    val sourceLabel = if (localOriginalAvailable == true) {
                                         "本地原图"
                                     } else if (photoOriginalCache[activePhoto.id]?.let { File(it).isFile } == true) {
                                         "云端原图 · 已缓存"
@@ -588,7 +599,7 @@ internal fun BabyAlbumSection(
                                         "云端原图"
                                     }
                                     Icon(
-                                        if (activePhoto.originalOnDevice) Icons.Filled.PhoneAndroid else Icons.Filled.Cloud,
+                                        if (localOriginalAvailable == true) Icons.Filled.PhoneAndroid else Icons.Filled.Cloud,
                                         contentDescription = null,
                                         modifier = Modifier.size(13.dp),
                                         tint = Color.LightGray
