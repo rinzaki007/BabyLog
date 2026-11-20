@@ -75,7 +75,7 @@ class GrowthDataTest {
     @Test
     fun excludesOtherBabiesAndSoftDeletedGrowthMeasurements() {
         val points = growthMetricPoints(
-            baby(),
+            baby(weight = null, length = null, head = null),
             listOf(
                 event("GROWTH", 1_710_000_000_000L, """{"weightGrams":5100}""", babyId = "baby-2"),
                 event("GROWTH", 1_720_000_000_000L, """{"weightGrams":5200}""", deletedAt = 1_730_000_000_000L),
