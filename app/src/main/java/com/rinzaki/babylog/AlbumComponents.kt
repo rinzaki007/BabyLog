@@ -102,6 +102,7 @@ internal fun BabyAlbumSection(
     var pendingPhotoUris by remember { mutableStateOf<List<android.net.Uri>>(emptyList()) }
     var showPhotoTimePicker by remember { mutableStateOf(false) }
     var albumFilter by remember { mutableStateOf("全部") }
+    var albumGrouping by remember(baby.id) { mutableStateOf("按月份") }
     var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
     var showPhotoDatePicker by remember { mutableStateOf(false) }
     var extraPhotos by remember(baby.id, photoCount) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
@@ -149,7 +150,7 @@ internal fun BabyAlbumSection(
             Column(Modifier.weight(1f)) {
                 Text("成长相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "共 ${photoCount} 张照片 · 按拍摄日期排列",
+                    "共 ${photoCount} 张照片 · 按月份或月龄整理",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -167,6 +168,7 @@ internal fun BabyAlbumSection(
             albumFilter = selected
             if (selected == "指定日期") showPhotoDatePicker = true
         }
+        SelectionRow(listOf("按月份", "按月龄"), albumGrouping) { albumGrouping = it }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -209,15 +211,18 @@ internal fun BabyAlbumSection(
             }
         } else {
             val visiblePhotos = sortedFilteredPhotos
-            val grouped = visiblePhotos.groupBy {
-                SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(it.takenAt))
-            }
+            val grouped = groupAlbumPhotos(
+                visiblePhotos,
+                baby.birthTime,
+                byAge = albumGrouping == "按月龄"
+            )
             if (filteredPhotos.isEmpty()) Text(
                 if (loadedPhotos.size < photoCount) "当前已加载的照片中暂无匹配结果，可以继续加载更早的照片。" else "这个日期范围内还没有照片。",
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            grouped.forEach { (day, dayPhotos) ->
+            grouped.forEach { group ->
+                val dayPhotos = group.photos
                 val photoRows = dayPhotos.chunked(3)
                 Row(
                     Modifier.fillMaxWidth(),
@@ -244,8 +249,10 @@ internal fun BabyAlbumSection(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(day, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.weight(1f))
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(group.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(group.subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             Text(
                                 "${dayPhotos.size} 张",
                                 style = MaterialTheme.typography.labelSmall,
