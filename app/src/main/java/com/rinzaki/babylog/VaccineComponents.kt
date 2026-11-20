@@ -174,8 +174,10 @@ internal fun VaccineScheduleSection(
 }
 
 @Composable
-internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, sex: String?, onSave: (BabyEventEntity?, JSONObject, Long) -> Unit, onDelete: (BabyEventEntity) -> Unit) {
+internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, sex: String?, onSave: (BabyEventEntity?, JSONObject, Long, (Boolean) -> Unit) -> Unit, onDelete: (BabyEventEntity) -> Unit) {
     var showEditor by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<BabyEventEntity?>(null) }
     var editing by remember { mutableStateOf<BabyEventEntity?>(null) }
     var editorInitialName by remember { mutableStateOf("") }
     var editorInitialDose by remember { mutableStateOf("") }
@@ -249,7 +251,7 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
                                 editorInitialDose = ""
                                 showEditor = true
                             }) { Text("编辑") }
-                            TextButton(onClick = { onDelete(event) }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                            TextButton(onClick = { deleting = event }) { Text("删除", color = MaterialTheme.colorScheme.error) }
                         }
                     }
                 }
@@ -262,20 +264,40 @@ internal fun VaccinePage(events: List<BabyEventEntity>, birthDate: LocalDate, se
             }
         }
     }
+    deleting?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("删除这条接种记录？") },
+            text = { Text("删除后会从本机接种档案中隐藏；如果已启用家庭同步，也会同步删除。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete(target)
+                    deleting = null
+                }) { Text("确认删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } }
+        )
+    }
     if (showEditor) VaccineEditor(
         editing,
         initialName = editorInitialName,
         initialDose = editorInitialDose,
-        onDismiss = { showEditor = false }
+        saving = saving,
+        onDismiss = { if (!saving) showEditor = false }
     ) { payload, timestamp ->
-        onSave(editing, payload, timestamp)
-        showEditor = false
+        if (!saving) {
+            saving = true
+            onSave(editing, payload, timestamp) { saved ->
+                saving = false
+                if (saved) showEditor = false
+            }
+        }
     }
 }
 
 
 @Composable
-internal fun VaccineEditor(existing: BabyEventEntity?, initialName: String = "", initialDose: String = "", onDismiss: () -> Unit, onSave: (JSONObject, Long) -> Unit) {
+internal fun VaccineEditor(existing: BabyEventEntity?, initialName: String = "", initialDose: String = "", saving: Boolean = false, onDismiss: () -> Unit, onSave: (JSONObject, Long) -> Unit) {
     val data = remember(existing?.id, initialName, initialDose) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
     var name by remember(existing?.id, initialName) { mutableStateOf(data.optString("vaccineName").ifBlank { initialName }) }
     var dose by remember(existing?.id, initialDose) { mutableStateOf(data.optString("dose").ifBlank { initialDose }) }
@@ -303,11 +325,12 @@ internal fun VaccineEditor(existing: BabyEventEntity?, initialName: String = "",
         },
         confirmButton = {
             Button(onClick = {
+                if (saving) return@Button
                 if (name.isBlank()) { error = "请填写疫苗名称"; return@Button }
                 val payload = JSONObject().put("vaccineName", name.trim()).put("dose", dose.trim())
                     .put("clinic", clinic.trim()).put("site", site.trim()).put("batchNumber", batch.trim()).put("note", note.trim())
                 onSave(payload, date.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
-            }) { Text("保存记录") }
+            }, enabled = !saving) { Text(if (saving) "保存中…" else "保存记录") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
