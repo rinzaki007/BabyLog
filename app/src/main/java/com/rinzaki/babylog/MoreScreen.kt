@@ -88,3 +88,49 @@ internal fun MoreSectionHeader(title: String, description: String) {
         )
     }
 }
+
+
+@Composable
+internal fun MoreDataManagementCard(
+    serverConfigured: Boolean,
+    onOpenDataManagement: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        MoreSectionHeader(
+            title = "数据管理",
+            description = "备份与恢复统一在 NAS 网页管理面板中完成"
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("📦", style = MaterialTheme.typography.headlineMedium)
+                    Column(
+                        modifier = Modifier.weight(1f).padding(start = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text("备份与恢复", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (serverConfigured) {
+                                "可导出宝宝档案和记录；完整迁移时可选择包含照片与头像。导入前会先校验，并以增量方式恢复，不覆盖已有记录。"
+                            } else {
+                                "连接 NAS 后，可在网页面板导出备份、检查备份内容并安全恢复数据。"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Button(onClick = onOpenDataManagement, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (serverConfigured) "打开 NAS 数据管理" else "配置 NAS 连接")
+                }
+            }
+        }
+    }
+}
