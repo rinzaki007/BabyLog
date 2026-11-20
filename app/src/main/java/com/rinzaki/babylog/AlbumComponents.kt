@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.rinzaki.babylog.data.BabyEntity
+import com.rinzaki.babylog.data.BabyEventEntity
 import com.rinzaki.babylog.data.BabyPhotoEntity
 import com.rinzaki.babylog.sync.mimeTypeForPath
 import com.rinzaki.babylog.sync.SyncPreferences
@@ -82,6 +83,8 @@ internal fun BabyAlbumSection(
     onAdd: (android.net.Uri, Long) -> Unit,
     onCaption: (BabyPhotoEntity, String) -> Unit,
     onDelete: (BabyPhotoEntity) -> Unit,
+    events: List<BabyEventEntity> = emptyList(),
+    onLinkEvent: (BabyPhotoEntity, BabyEventEntity, Boolean) -> Unit = { _, _, _ -> },
     initialPhoto: BabyPhotoEntity? = null,
     onInitialPhotoConsumed: () -> Unit = {}
 ) {
@@ -92,6 +95,7 @@ internal fun BabyAlbumSection(
         if (viewingPhoto == null) photoCacheRefreshKey++
     }
     var editingCaption by remember { mutableStateOf<BabyPhotoEntity?>(null) }
+    var showEventPicker by remember { mutableStateOf(false) }
     var photoDateTime by remember { mutableStateOf(LocalDateTime.now()) }
     val photoDateTimeLabel = remember(photoDateTime) {
         photoDateTime.format(DateTimeFormatter.ofPattern("M月d日 HH时mm分", Locale.CHINA))
@@ -352,6 +356,8 @@ internal fun BabyAlbumSection(
                 pageCount = { sortedFilteredPhotos.size }
             )
             val activePhoto = sortedFilteredPhotos.getOrNull(pagerState.currentPage) ?: photo
+            val linkedEvents = events.filter { activePhoto.id in PhotoEventAssociation.photoIds(it) }
+                .sortedByDescending { it.occurredAt }
             val photoBitmapCache = remember { mutableStateMapOf<String, android.graphics.Bitmap>() }
             val photoOriginalCache = remember { mutableStateMapOf<String, String>() }
 
@@ -564,7 +570,7 @@ internal fun BabyAlbumSection(
                             )
                         }
                     }
-                    Box(Modifier.fillMaxWidth().height(140.dp)) {
+                    Box(Modifier.fillMaxWidth().height(190.dp)) {
                     this@Column.AnimatedVisibility(
                         visible = showViewerChrome,
                         enter = fadeIn(animationSpec = tween(180)),
@@ -590,6 +596,28 @@ internal fun BabyAlbumSection(
                                     Text(sourceLabel, color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                                 }
                                 galleryMessage?.let { Text(it, color = Color(0xFFFFCC80), style = MaterialTheme.typography.bodySmall) }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("关联成长记录", color = Color.LightGray, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                                    TextButton(onClick = { showEventPicker = true }) { Text("＋ 选择记录", color = Color.White) }
+                                }
+                                if (linkedEvents.isEmpty()) {
+                                    Text("尚未关联成长记录", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                                } else {
+                                    linkedEvents.take(2).forEach { linked ->
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            val typeName = when (linked.eventType) {
+                                                "GROWTH" -> "成长测量"
+                                                "MILESTONE" -> "成长里程碑"
+                                                "SOLID_FOOD" -> "辅食记录"
+                                                "VACCINE" -> "接种记录"
+                                                else -> "成长足迹"
+                                            }
+                                            Text("$typeName · ${SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(linked.occurredAt))}", color = Color.LightGray, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                                            TextButton(onClick = { onLinkEvent(activePhoto, linked, false) }) { Text("取消关联", color = Color(0xFFFFCC80), style = MaterialTheme.typography.labelSmall) }
+                                        }
+                                    }
+                                    if (linkedEvents.size > 2) Text("还有 ${linkedEvents.size - 2} 条关联", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                             Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                                 TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
@@ -609,6 +637,42 @@ internal fun BabyAlbumSection(
                 }
             }
         }
+    }
+
+    if (showEventPicker) {
+        val availableEvents = events.filter { it.id !in events.filter { active -> viewingPhoto?.id?.let { id -> id in PhotoEventAssociation.photoIds(active) } == true }.map { it.id }.toSet() }
+            .sortedByDescending { it.occurredAt }
+        AlertDialog(
+            onDismissRequest = { showEventPicker = false },
+            title = { Text("选择要关联的成长记录") },
+            text = {
+                if (availableEvents.isEmpty()) {
+                    Text("目前没有可关联的成长记录，请先在成长足迹中添加记录。")
+                } else {
+                    Column(Modifier.heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        availableEvents.take(40).forEach { event ->
+                            val label = when (event.eventType) {
+                                "GROWTH" -> "成长测量"
+                                "MILESTONE" -> "成长里程碑"
+                                "SOLID_FOOD" -> "辅食记录"
+                                "VACCINE" -> "接种记录"
+                                else -> "成长足迹"
+                            }
+                            TextButton(onClick = {
+                                viewingPhoto?.let { onLinkEvent(it, event, true) }
+                                showEventPicker = false
+                            }) {
+                                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+                                    Text(label)
+                                    Text(SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(event.occurredAt)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showEventPicker = false }) { Text("完成") } }
+        )
     }
 
     editingCaption?.let { photo ->

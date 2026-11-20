@@ -169,6 +169,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
         if (baby == null) flowOf("0:0") else dao.observeEventRevision(baby.id)
     }
     val eventRevision by eventRevisionFlow.collectAsState(initial = "0:0")
+    val allEventsFlow = remember(baby?.id) {
+        if (baby == null) flowOf(emptyList()) else dao.observeEvents(baby.id)
+    }
+    val allEvents by allEventsFlow.collectAsState(initial = emptyList())
     val photosFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observePhotoPage(baby.id, 60, 0) }
     val photos by photosFlow.collectAsState(initial = emptyList())
     val photoCountFlow = remember(baby?.id) { if (baby == null) flowOf(0) else dao.observePhotoCount(baby.id) }
@@ -520,9 +524,32 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                     }
                                 }
                             },
+                            events = allEvents,
+                            onLinkEvent = { photo, event, linked ->
+                                scope.launch {
+                                    val now = System.currentTimeMillis()
+                                    val updated = PhotoEventAssociation.withPhotoLink(event, photo.id, linked)
+                                        .copy(updatedAt = now, syncStatus = "PENDING")
+                                    dao.upsertEvent(updated)
+                                    if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                        dao.clearPendingOperations("event", updated.id)
+                                        dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", updated.id, "upsert", eventSyncPayload(updated).toString(), updated.serverVersion, now))
+                                        SyncScheduler.enqueue(appContext)
+                                    }
+                                }
+                            },
                             onDelete = { photo ->
                                 scope.launch {
                                     val now = System.currentTimeMillis()
+                                    allEvents.filter { photo.id in PhotoEventAssociation.photoIds(it) }.forEach { event ->
+                                        val updated = PhotoEventAssociation.withPhotoLink(event, photo.id, false)
+                                            .copy(updatedAt = now, syncStatus = "PENDING")
+                                        dao.upsertEvent(updated)
+                                        if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                            dao.clearPendingOperations("event", updated.id)
+                                            dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", updated.id, "upsert", eventSyncPayload(updated).toString(), updated.serverVersion, now))
+                                        }
+                                    }
                                     dao.softDeletePhoto(photo.id, now)
                                     if (SyncPreferences.familyId(appContext).isNotBlank()) {
                                         dao.clearPendingOperations("photo", photo.id)
