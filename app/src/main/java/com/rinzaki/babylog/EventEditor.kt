@@ -21,7 +21,7 @@ import java.util.Locale
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, onDismiss: () -> Unit, onSave: (String, JSONObject, Long, Boolean) -> Unit) {
+internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, onDismiss: () -> Unit, saving: Boolean = false, onSave: (String, JSONObject, Long, Boolean) -> Unit) {
     val context = LocalContext.current.applicationContext
     val initialPayload = remember(existing?.id) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
     val existingFeedingMethod = initialPayload.optString("method", "配方奶").ifBlank { "配方奶" }
@@ -368,9 +368,9 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (existing == null) {
-                    TextButton(onClick = { submit(true) }) { Text("保存并继续") }
+                    TextButton(onClick = { submit(true) }, enabled = !saving) { Text(if (saving) "保存中…" else "保存并继续") }
                 }
-                Button(onClick = { submit(false) }) { Text("保存记录") }
+                Button(onClick = { submit(false) }, enabled = !saving) { Text(if (saving) "保存中…" else "保存记录") }
             }
         }
     }
