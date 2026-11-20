@@ -40,9 +40,15 @@ internal fun familyMemoryMoments(birthDate: LocalDate, today: LocalDate): List<F
         if (!firstBirthday.isBefore(today)) add(Triple("一周岁", firstBirthday, "第一个生日"))
         val thousandDays = birthDate.plusDays(1000)
         if (!thousandDays.isBefore(today)) add(Triple("千日纪念日", thousandDays, "出生第 1000 天"))
-        for (year in 1..10) {
-            val birthday = runCatching { birthDate.plusYears(year.toLong()) }.getOrNull() ?: continue
-            if (!birthday.isBefore(today)) add(Triple(if (year == 1) "一周岁" else "$year 周岁", birthday, "生日"))
+        // Keep future birthdays available beyond the first ten years of use.
+        val elapsedYears = ChronoUnit.YEARS.between(birthDate, today).coerceAtLeast(0L)
+        var nextBirthdayYear = maxOf(1L, elapsedYears)
+        while (runCatching { birthDate.plusYears(nextBirthdayYear).isBefore(today) }.getOrDefault(true)) {
+            nextBirthdayYear += 1L
+        }
+        for (year in nextBirthdayYear..(nextBirthdayYear + 2L)) {
+            val birthday = runCatching { birthDate.plusYears(year) }.getOrNull() ?: continue
+            add(Triple(if (year == 1L) "一周岁" else "$year 周岁", birthday, "生日"))
         }
     }
     return candidates
