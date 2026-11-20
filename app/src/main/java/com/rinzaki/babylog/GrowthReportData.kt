@@ -59,6 +59,7 @@ internal fun buildGrowthReportData(
     val birthDate = Instant.ofEpochMilli(baby.birthTime).atZone(zone).toLocalDate()
     fun ageLabelAt(date: LocalDate): String {
         if (date.isBefore(birthDate)) return "出生前"
+        if (date == birthDate) return "出生当天"
         val completedMonths = growthCompletedMonths(birthDate, date)
         return when {
             completedMonths < 1 -> "${ChronoUnit.DAYS.between(birthDate, date).coerceAtLeast(0)} 天"
