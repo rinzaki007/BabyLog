@@ -52,7 +52,8 @@ internal const val SYNC_CONFLICT_PAGE_SIZE = 20
 
 internal fun nextSyncConflictDisplayLimit(currentLimit: Int, total: Int): Int {
     require(currentLimit >= 0 && total >= 0)
-    return (currentLimit + SYNC_CONFLICT_PAGE_SIZE).coerceAtMost(total)
+    if (currentLimit >= total) return total
+    return currentLimit + minOf(SYNC_CONFLICT_PAGE_SIZE, total - currentLimit)
 }
 
 @Composable
