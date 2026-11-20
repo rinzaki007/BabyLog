@@ -52,6 +52,28 @@ class GrowthReportDataTest {
     }
 
     @Test
+    fun reportAgeUsesCompletedCalendarMonthsForMonthEndBirthdays() {
+        val monthEndBaby = baby.copy(
+            birthTime = LocalDate.of(2026, 1, 31).atStartOfDay(zone).toInstant().toEpochMilli()
+        )
+        val beforeFirstCompletedMonth = buildGrowthReportData(
+            monthEndBaby,
+            emptyList(),
+            LocalDate.of(2026, 2, 27).atStartOfDay(zone).toInstant().toEpochMilli(),
+            zone
+        )
+        val onFirstCompletedMonth = buildGrowthReportData(
+            monthEndBaby,
+            emptyList(),
+            LocalDate.of(2026, 2, 28).atStartOfDay(zone).toInstant().toEpochMilli(),
+            zone
+        )
+
+        assertEquals("27 天", beforeFirstCompletedMonth.ageLabel)
+        assertEquals("1 个月", onFirstCompletedMonth.ageLabel)
+    }
+
+    @Test
     fun reportExcludesDeletedFutureAndOtherBabyEvents() {
         val report = buildGrowthReportData(
             baby,
