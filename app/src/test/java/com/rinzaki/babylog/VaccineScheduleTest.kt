@@ -210,7 +210,6 @@ class VaccineScheduleTest {
         )
         assertTrue(!vaccineDoseIsRecorded(hibBooster, pentavalentWithoutDose))
     }
-}
 
     @Test
     fun vaccineScheduleWindowSeparatesOverdueUpcomingAndClinicReview() {
@@ -238,3 +237,4 @@ class VaccineScheduleTest {
         assertEquals(listOf(todayItem, boundaryItem),
             filterVaccineScheduleWindow(listOf(todayItem, boundaryItem), today, "未来30天"))
     }
+}
