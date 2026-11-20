@@ -67,12 +67,7 @@ internal fun buildGrowthReportData(
             else -> "${completedMonths / 12} 岁${completedMonths % 12} 个月"
         }
     }
-    val months = growthCompletedMonths(birthDate, today)
-    val ageLabel = when {
-        months < 1 -> "${ChronoUnit.DAYS.between(birthDate, today).coerceAtLeast(0)} 天"
-        months < 12 -> "${months} 个月"
-        else -> "${months / 12} 岁${months % 12} 个月"
-    }
+    val ageLabel = ageLabelAt(today)
     val active = events.asSequence()
         .filter { it.babyId == baby.id && it.deletedAt == null && it.occurredAt <= now }
         .sortedBy { it.occurredAt }
