@@ -6,7 +6,6 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
-import java.util.Locale
 
 internal data class AlbumPhotoGroup(
     val key: String,
