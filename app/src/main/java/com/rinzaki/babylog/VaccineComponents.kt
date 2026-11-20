@@ -28,6 +28,7 @@ internal fun VaccineScheduleSection(
 ) {
     var showAll by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf("待接种") }
+    var selectedWindow by remember { mutableStateOf("全部待接种") }
     var showCatalog by remember { mutableStateOf(false) }
     val records = remember(events) {
         events.sortedBy { it.occurredAt }.mapNotNull { event ->
@@ -56,10 +57,19 @@ internal fun VaccineScheduleSection(
     val pending = decorated.filter { it.third != VaccineDoseStatus.RECORDED }
     val completedCount = decorated.count { it.third == VaccineDoseStatus.RECORDED }
     val reviewCount = decorated.count { it.third == VaccineDoseStatus.REVIEW_REQUIRED }
-    val filtered = when (selectedCategory) {
+    val categoryFiltered = when (selectedCategory) {
         "待接种" -> pending
         "全部" -> decorated
         else -> decorated.filter { it.first.category == selectedCategory }
+    }
+    val filtered = if (selectedCategory == "待接种") {
+        filterVaccineScheduleWindow(categoryFiltered, today, selectedWindow)
+    } else categoryFiltered
+    val overdueCount = decorated.count { (_, date, status) ->
+        status == VaccineDoseStatus.PENDING && date.isBefore(today)
+    }
+    val dueSoonCount = decorated.count { (_, date, status) ->
+        status == VaccineDoseStatus.PENDING && !date.isBefore(today) && !date.isAfter(today.plusDays(30))
     }
     val visible = if (showAll) filtered else {
         if (selectedCategory == "待接种") filtered.take(8)
@@ -87,6 +97,17 @@ internal fun VaccineScheduleSection(
             SelectionRow(listOf("待接种", "全部", "国家免规", "自费常见", "流脑系列", "联合疫苗"), selectedCategory) {
                 selectedCategory = it
                 showAll = false
+            }
+            if (selectedCategory == "待接种") {
+                Text(
+                    "已逾期 $overdueCount 项 · 未来 30 天 $dueSoonCount 项",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SelectionRow(listOf("全部待接种", "已逾期", "未来30天", "待门诊核对"), selectedWindow) {
+                    selectedWindow = it
+                    showAll = false
+                }
             }
             if (reviewCount > 0) {
                 Text(
