@@ -30,6 +30,18 @@ class FamilyMemoriesTest {
     }
 
     @Test
+    fun upcomingBirthdaysContinueAfterTheFirstTenYears() {
+        val birth = LocalDate.of(2010, 1, 1)
+        val moments = familyMemoryMoments(birth, LocalDate.of(2021, 1, 2))
+        assertEquals(listOf("12 周岁", "13 周岁", "14 周岁"), moments.map { it.title })
+        assertEquals(listOf(
+            LocalDate.of(2022, 1, 1),
+            LocalDate.of(2023, 1, 1),
+            LocalDate.of(2024, 1, 1)
+        ), moments.map { it.date })
+    }
+
+    @Test
     fun recapCountsOnlyActiveMilestonesAndShowsNewestFirst() {
         val events = listOf(
             event("1", LocalDate.of(2026, 1, 1), "第一次翻身"),
