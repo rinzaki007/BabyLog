@@ -51,29 +51,29 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
     var breastMinutes by remember(editorStateKey) {
         mutableStateOf(if (existing == null) FeedingPreferences.lastBreastMinutes(context) else initialPayload.optInt("breastMinutes").takeIf { it > 0 }?.toString().orEmpty())
     }
-    var urine by remember(existing?.id) { mutableStateOf(if (existing == null) true else initialPayload.optBoolean("urine")) }
-    var stool by remember(existing?.id) { mutableStateOf(initialPayload.optBoolean("stool")) }
-    var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", "糊状")) }
-    var stoolColor by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolColor", "黄色")) }
-    var stoolAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolAmount", "中量")) }
-    var sleepMinutesText by remember(existing?.id) { mutableStateOf(initialPayload.optInt("durationMinutes", 60).coerceIn(10, 720).toString()) }
+    var urine by remember(existing?.id) { mutableStateOf(if (existing == null) RecordPreferences.getBoolean(context, RecordPreferences.DIAPER_URINE, true) else initialPayload.optBoolean("urine")) }
+    var stool by remember(existing?.id) { mutableStateOf(if (existing == null) RecordPreferences.getBoolean(context, RecordPreferences.DIAPER_STOOL, false) else initialPayload.optBoolean("stool")) }
+    var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", RecordPreferences.get(context, RecordPreferences.DIAPER_SHAPE, "糊状"))) }
+    var stoolColor by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolColor", RecordPreferences.get(context, RecordPreferences.DIAPER_COLOR, "黄色"))) }
+    var stoolAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolAmount", RecordPreferences.get(context, RecordPreferences.DIAPER_AMOUNT, "中量"))) }
+    var sleepMinutesText by remember(existing?.id) { mutableStateOf((if (existing == null) RecordPreferences.get(context, RecordPreferences.SLEEP_DURATION, "60").toIntOrNull() ?: 60 else initialPayload.optInt("durationMinutes", 60)).coerceIn(10, 720).toString()) }
     var weightKg by remember(existing?.id) { mutableStateOf(initialPayload.optInt("weightGrams").takeIf { it > 0 }?.div(1000.0)?.toString().orEmpty()) }
     var lengthCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("lengthCm").takeIf { it > 0 }?.toString().orEmpty()) }
     var headCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.toString().orEmpty()) }
-    val savedSupplementName = initialPayload.optString("supplementName", "维生素AD")
+    val savedSupplementName = initialPayload.optString("supplementName", RecordPreferences.get(context, RecordPreferences.SUPPLEMENT_NAME, "维生素AD"))
     var supplementName by remember(existing?.id) { mutableStateOf(if (savedSupplementName in supplementPresets) savedSupplementName else "其他") }
     var customSupplementName by remember(existing?.id) { mutableStateOf(savedSupplementName.takeIf { it !in supplementPresets } ?: "") }
     var supplementAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("amount")) }
-    var supplementUnit by remember(existing?.id) { mutableStateOf(initialPayload.optString("unit", "滴")) }
-    val savedFoodName = initialPayload.optString("foodName", "米粉")
+    var supplementUnit by remember(existing?.id) { mutableStateOf(initialPayload.optString("unit", RecordPreferences.get(context, RecordPreferences.SUPPLEMENT_UNIT, "滴"))) }
+    val savedFoodName = initialPayload.optString("foodName", RecordPreferences.get(context, RecordPreferences.FOOD_NAME, "米粉"))
     var foodName by remember(existing?.id) { mutableStateOf(if (savedFoodName in solidFoodPresets) savedFoodName else "其他") }
     var customFoodName by remember(existing?.id) { mutableStateOf(savedFoodName.takeIf { it !in solidFoodPresets } ?: "") }
     var foodAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("amount")) }
-    var foodUnit by remember(existing?.id) { mutableStateOf(initialPayload.optString("unit", "g")) }
-    var foodStatus by remember(existing?.id) { mutableStateOf(initialPayload.optString("eatingStatus", "正常")) }
-    var foodCategory by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodCategory", "未分类")) }
-    var foodStage by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodStage", if (existing == null) "首次尝试" else "未标记")) }
-    var foodReaction by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodReaction", if (existing == null) "待观察" else "未记录")) }
+    var foodUnit by remember(existing?.id) { mutableStateOf(initialPayload.optString("unit", RecordPreferences.get(context, RecordPreferences.FOOD_UNIT, "g"))) }
+    var foodStatus by remember(existing?.id) { mutableStateOf(initialPayload.optString("eatingStatus", RecordPreferences.get(context, RecordPreferences.FOOD_STATUS, "正常"))) }
+    var foodCategory by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodCategory", RecordPreferences.get(context, RecordPreferences.FOOD_CATEGORY, "未分类"))) }
+    var foodStage by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodStage", if (existing == null) RecordPreferences.get(context, RecordPreferences.FOOD_STAGE, "首次尝试") else "未标记")) }
+    var foodReaction by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodReaction", if (existing == null) RecordPreferences.get(context, RecordPreferences.FOOD_REACTION, "待观察") else "未记录")) }
     var foodReactionNote by remember(existing?.id) { mutableStateOf(initialPayload.optString("foodReactionNote")) }
     var note by remember(existing?.id) { mutableStateOf(initialPayload.optString("note")) }
     var milestoneTitle by remember(existing?.id) { mutableStateOf(initialPayload.optString("milestoneTitle")) }
@@ -316,6 +316,29 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                         length?.let { payload.put("lengthCm", it) }
                                         head?.let { payload.put("headCircumferenceCm", it) }
                                     }
+                                }
+                                when (eventType) {
+                                    "DIAPER" -> RecordPreferences.save(context, mapOf(
+                                        RecordPreferences.DIAPER_SHAPE to stoolShape,
+                                        RecordPreferences.DIAPER_COLOR to stoolColor,
+                                        RecordPreferences.DIAPER_AMOUNT to stoolAmount
+                                    ), mapOf(
+                                        RecordPreferences.DIAPER_URINE to urine,
+                                        RecordPreferences.DIAPER_STOOL to stool
+                                    ))
+                                    "SLEEP" -> RecordPreferences.save(context, mapOf(RecordPreferences.SLEEP_DURATION to sleepMinutesText))
+                                    "SOLID_FOOD" -> RecordPreferences.save(context, mapOf(
+                                        RecordPreferences.FOOD_NAME to if (foodName == "其他") customFoodName.trim() else foodName,
+                                        RecordPreferences.FOOD_UNIT to foodUnit,
+                                        RecordPreferences.FOOD_CATEGORY to foodCategory,
+                                        RecordPreferences.FOOD_STAGE to foodStage,
+                                        RecordPreferences.FOOD_STATUS to foodStatus,
+                                        RecordPreferences.FOOD_REACTION to foodReaction
+                                    ))
+                                    "SUPPLEMENT" -> RecordPreferences.save(context, mapOf(
+                                        RecordPreferences.SUPPLEMENT_NAME to if (supplementName == "其他") customSupplementName.trim() else supplementName,
+                                        RecordPreferences.SUPPLEMENT_UNIT to supplementUnit
+                                    ))
                                 }
                                 if (note.isNotBlank()) payload.put("note", note.trim())
                                 onSave(eventType, payload, timestamp, keepOpen)
