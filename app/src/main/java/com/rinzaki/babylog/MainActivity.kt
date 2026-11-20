@@ -677,7 +677,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             onOpenSyncSettings = { showSyncSettings = true }
                         )
                     }
-                    if (page == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp ->
+                    if (page == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp, onComplete ->
                         val now = System.currentTimeMillis()
                         scope.launch {
                             val vaccine = existing?.copy(occurredAt = timestamp, payloadJson = payload.toString(), updatedAt = now, syncStatus = "PENDING")
@@ -686,8 +686,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 dao.upsertEvent(vaccine)
                             } catch (error: Exception) {
                                 Toast.makeText(appContext, "保存接种记录失败，请稍后重试", Toast.LENGTH_LONG).show()
+                                onComplete(false)
                                 return@launch
                             }
+                            onComplete(true)
                             if (SyncPreferences.familyId(appContext).isNotBlank()) {
                                 try {
                                     dao.clearPendingOperations("event", vaccine.id)
