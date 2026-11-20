@@ -553,13 +553,23 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 OutlinedButton(onClick = { showEndDatePicker = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
                                     Text(selectedEndDate?.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))?.let { "至 $it" } ?: "结束日期", maxLines = 1)
                                 }
-                                if (selectedStartDate != null || selectedEndDate != null) TextButton(onClick = { selectedStartDate = null; selectedEndDate = null }) { Text("清除") }
+                                if (selectedStartDate != null || selectedEndDate != null || selectedEventFilter != "全部") {
+                                    TextButton(onClick = {
+                                        selectedStartDate = null
+                                        selectedEndDate = null
+                                        selectedEventFilter = "全部"
+                                    }) { Text("清除筛选") }
+                                }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 TextButton(onClick = { selectedStartDate = LocalDate.now(); selectedEndDate = LocalDate.now() }) { Text("今天") }
                                 TextButton(onClick = { selectedStartDate = LocalDate.now().minusDays(6); selectedEndDate = LocalDate.now() }) { Text("近7天") }
                                 TextButton(onClick = { selectedStartDate = LocalDate.now().minusDays(29); selectedEndDate = LocalDate.now() }) { Text("近30天") }
-                                TextButton(onClick = { selectedStartDate = null; selectedEndDate = null }) { Text("全部") }
+                                TextButton(onClick = {
+                                    selectedStartDate = null
+                                    selectedEndDate = null
+                                    selectedEventFilter = "全部"
+                                }) { Text("全部") }
                             }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "成长测量", "成长里程碑", "成长足迹", "其他")) { category ->
