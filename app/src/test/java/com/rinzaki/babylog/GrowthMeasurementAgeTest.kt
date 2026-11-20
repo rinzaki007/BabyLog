@@ -21,6 +21,7 @@ class GrowthMeasurementAgeTest {
     @Test
     fun handlesMonthEndBirthdaysWithoutUsingThirtyDayApproximation() {
         val monthEndBirth = at(LocalDate.of(2026, 1, 31))
+        assertEquals("27天", growthMeasurementAgeLabel(monthEndBirth, at(LocalDate.of(2026, 2, 27)), zone))
         assertEquals("1个月", growthMeasurementAgeLabel(monthEndBirth, at(LocalDate.of(2026, 2, 28)), zone))
         assertEquals("2个月", growthMeasurementAgeLabel(monthEndBirth, at(LocalDate.of(2026, 3, 31)), zone))
     }
