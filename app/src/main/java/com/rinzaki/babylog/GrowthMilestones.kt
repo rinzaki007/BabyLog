@@ -12,7 +12,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -23,7 +26,6 @@ import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -68,7 +70,16 @@ internal fun completedGrowthMilestones(events: List<BabyEventEntity>): Map<Strin
 
 internal fun growthAgeMonths(birthTime: Long, today: LocalDate, zone: ZoneId): Long {
     val birthDate = Instant.ofEpochMilli(birthTime).atZone(zone).toLocalDate()
-    return ChronoUnit.MONTHS.between(birthDate, today).coerceAtLeast(0L)
+    return growthCompletedMonths(birthDate, today)
+}
+
+/** Includes milestones in the current age window and those beginning within the next three months. */
+internal fun growthMilestonesForCurrentStage(
+    milestones: List<GrowthMilestone>,
+    ageMonths: Long
+): List<GrowthMilestone> = milestones.filter { milestone ->
+    ageMonths in milestone.minAgeMonths.toLong()..milestone.maxAgeMonths.toLong() ||
+        (milestone.minAgeMonths > ageMonths && milestone.minAgeMonths - ageMonths <= 3L)
 }
 
 @Composable
@@ -78,10 +89,21 @@ internal fun GrowthMilestonesSection(
     onRecord: (GrowthMilestone) -> Unit
 ) {
     val completed = remember(events) { completedGrowthMilestones(events) }
-    val ageMonths = remember(baby.birthTime) {
-        growthAgeMonths(baby.birthTime, LocalDate.now(), ZoneId.systemDefault())
+    val zone = ZoneId.systemDefault()
+    val today = LocalDate.now(zone)
+    val ageMonths = remember(baby.birthTime, today) { growthAgeMonths(baby.birthTime, today, zone) }
+    val ageLabel = growthMeasurementAgeLabel(
+        baby.birthTime,
+        today.atStartOfDay(zone).toInstant().toEpochMilli(),
+        zone
+    )
+    var filter by remember(baby.id) { mutableStateOf("当前阶段") }
+    val visibleMilestones = when (filter) {
+        "已记录" -> growthMilestones.filter { it.id in completed }
+        "待记录" -> growthMilestones.filter { it.id !in completed }
+        "全部" -> growthMilestones
+        else -> growthMilestonesForCurrentStage(growthMilestones, ageMonths)
     }
-    val ageLabel = if (ageMonths < 1) "未满 1 个月" else "${ageMonths} 个月"
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -98,28 +120,61 @@ internal fun GrowthMilestonesSection(
                 }
                 Text("${completed.size}/${growthMilestones.size}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
-            growthMilestones.forEach { milestone ->
-                val event = completed[milestone.id]
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(milestone.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        val detail = if (event == null) {
-                            "${milestone.ageRange} · ${milestone.category}"
-                        } else {
-                            val date = Instant.ofEpochMilli(event.occurredAt).atZone(ZoneId.systemDefault())
-                                .toLocalDate().format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA))
-                            "${milestone.ageRange} · ${milestone.category} · $date 已记录"
-                        }
-                        Text(detail, style = MaterialTheme.typography.labelSmall, color = if (event == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                listOf("当前阶段", "全部", "待记录", "已记录").forEach { option ->
+                    TextButton(
+                        onClick = { filter = option },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            option,
+                            color = if (filter == option) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (filter == option) FontWeight.Bold else FontWeight.Normal,
+                            style = MaterialTheme.typography.labelMedium
+                        )
                     }
-                    if (event == null) {
-                        TextButton(onClick = { onRecord(milestone) }) { Text("记录") }
-                    } else {
-                        Text("✓ 已记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            if (filter == "当前阶段") {
+                Text(
+                    "显示当前月龄范围内，以及未来 3 个月可以留意的成长瞬间。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (visibleMilestones.isEmpty()) {
+                Text(
+                    if (filter == "当前阶段") "这个月龄暂时没有对应条目，可以切换「全部」浏览成长清单。"
+                    else "这里还没有相关记录。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                visibleMilestones.forEach { milestone ->
+                    val event = completed[milestone.id]
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(milestone.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            val detail = if (event == null) {
+                                "${milestone.ageRange} · ${milestone.category}"
+                            } else {
+                                val date = Instant.ofEpochMilli(event.occurredAt).atZone(zone)
+                                    .toLocalDate().format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA))
+                                val ageAtEvent = growthMeasurementAgeLabel(baby.birthTime, event.occurredAt, zone)
+                                "${milestone.ageRange} · ${milestone.category} · ${date}（${ageAtEvent}）已记录"
+                            }
+                            Text(detail, style = MaterialTheme.typography.labelSmall, color = if (event == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary)
+                        }
+                        if (event == null) {
+                            TextButton(onClick = { onRecord(milestone) }) { Text("记录") }
+                        } else {
+                            Text("✓ 已记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }
