@@ -201,6 +201,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var showEndDatePicker by remember { mutableStateOf(false) }
     var timelineEvents by remember { mutableStateOf<List<BabyEventEntity>>(emptyList()) }
     var timelinePhotos by remember { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
+    var timelineLinkedPhotos by remember { mutableStateOf<Map<String, List<BabyPhotoEntity>>>(emptyMap()) }
     var selectedTimelinePhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var timelineTotal by remember { mutableStateOf(0) }
     var timelineLoading by remember { mutableStateOf(false) }
@@ -238,12 +239,21 @@ private fun BabyLogApp(dao: BabyLogDao) {
     LaunchedEffect(baby?.id, timelineEvents, photoRevision) {
         if (baby == null || timelineEvents.isEmpty()) {
             timelinePhotos = emptyList()
+            timelineLinkedPhotos = emptyMap()
         } else {
             val zone = ZoneId.systemDefault()
             val days = timelineEvents.map { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(zone).toLocalDate() }
             val startAt = days.minOrNull()!!.atStartOfDay(zone).toInstant().toEpochMilli()
             val endAt = days.maxOrNull()!!.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
             timelinePhotos = dao.getPhotosInRange(baby.id, startAt, endAt, 300)
+            val linkedByEvent = linkedMapOf<String, List<BabyPhotoEntity>>()
+            timelineEvents.forEach { event ->
+                val linked = PhotoEventAssociation.photoIds(event).mapNotNull { photoId ->
+                    dao.getPhoto(photoId)?.takeIf { it.babyId == baby.id && it.deletedAt == null }
+                }.distinctBy { it.id }
+                if (linked.isNotEmpty()) linkedByEvent[event.id] = linked
+            }
+            timelineLinkedPhotos = linkedByEvent
         }
     }
     // Pre-group once per data change instead of scanning the full lists for every row.
@@ -650,6 +660,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             if (index == 0 || previousDay != eventDay) TimelineDayHeader(eventDay, timelineDayCounts[eventDay] ?: 1)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                                 EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
+                            }
+                            timelineLinkedPhotos[event.id]?.let { linkedPhotos ->
+                                TimelinePhotoStrip(linkedPhotos, title = "关联照片") { photo ->
+                                    selectedTimelinePhoto = photo
+                                    selectedNav = 3
+                                }
                             }
                             if (isLastEventOfDay && dayPhotos.isNotEmpty()) {
                                 TimelinePhotoStrip(dayPhotos) { photo ->
