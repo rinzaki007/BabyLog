@@ -250,14 +250,15 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                         }
                                     }
                                     "DIAPER" -> {
-                                        if (!urine && !stool) { error = "请至少选择一项护理情况"; return }
+                                        if (!hasDiaperRecordSelection(urine, stool)) { error = "请至少选择一项护理情况"; return }
                                         payload.put("urine", urine).put("stool", stool)
                                         if (stool) payload.put("stoolShape", stoolShape).put("stoolColor", stoolColor).put("stoolAmount", stoolAmount)
                                     }
                                     "SLEEP" -> {
-                                        val duration = sleepMinutesText.toIntOrNull()
-                                        if (duration == null || duration !in 10..720) {
-                                            error = "睡眠时长请输入 10–720 分钟"
+                                        val duration = try {
+                                            parseSleepDuration(sleepMinutesText)
+                                        } catch (validation: IllegalArgumentException) {
+                                            error = validation.message
                                             return
                                         }
                                         payload.put("durationMinutes", duration)
