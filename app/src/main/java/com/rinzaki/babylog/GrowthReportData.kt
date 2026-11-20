@@ -55,7 +55,7 @@ internal fun buildGrowthReportData(
 ): GrowthReportData {
     val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
     val birthDate = Instant.ofEpochMilli(baby.birthTime).atZone(zone).toLocalDate()
-    val months = ChronoUnit.MONTHS.between(birthDate, today).coerceAtLeast(0)
+    val months = growthCompletedMonths(birthDate, today)
     val ageLabel = when {
         months < 1 -> "${ChronoUnit.DAYS.between(birthDate, today).coerceAtLeast(0)} 天"
         months < 12 -> "${months} 个月"
