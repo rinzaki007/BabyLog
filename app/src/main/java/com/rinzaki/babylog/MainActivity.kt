@@ -193,6 +193,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var editingProfile by remember { mutableStateOf(false) }
     var exportingGrowthReport by remember { mutableStateOf(false) }
     var showSyncSettings by remember { mutableStateOf(false) }
+    var showAppSettings by remember { mutableStateOf(false) }
     var addingEvent by remember { mutableStateOf<String?>(null) }
     var showRecordTypePicker by remember { mutableStateOf(false) }
     var editingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
@@ -200,7 +201,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var savingEvent by remember { mutableStateOf(false) }
     var showSyncDetails by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
+    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
@@ -355,11 +356,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                if (page == 0) item { HomeDashboardHeader(todayDate = todayDate, themeStyle = selectedTheme) { showSyncSettings = true } }
+                if (page == 0) item { HomeDashboardHeader(todayDate = todayDate, themeStyle = selectedTheme) { showAppSettings = true } }
                 if (page == 1) item { ThemePageBanner(selectedTheme, "成长足迹", "记录每一个值得珍藏的日常瞬间") }
                 if (page == 2) item { ThemePageBanner(selectedTheme, "成长记录", "陪伴宝宝一点点长大") }
                 if (page == 3) item { ThemePageBanner(selectedTheme, "成长相册", "把每个可爱的瞬间好好收藏") }
-                if (page == 4) item { ThemePageBanner(selectedTheme, "更多", "让每一次照护都充满温柔陪伴") }
                 if (page == 0) item {
                     val syncConfigured = SyncPreferences.familyId(appContext).isNotBlank()
                     val syncLabel = when {
@@ -746,20 +746,10 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
-                    if (page == 5) item { MorePageHeader() }
-                    if (page == 5) item {
-                        MoreSectionHeader("设置", "外观与皮肤、数据管理统一放在这里", selectedTheme)
-                    }
-                    if (page == 5) item {
-                        AppearanceSettingsCard(selectedStyle = selectedTheme) { style ->
-                            selectedTheme = style
-                            BabyLogThemePreferences.save(appContext, style)
-                        }
-                    }
-                    if (page == 4) item { MoreSectionHeader("健康管理", "疫苗接种计划与历史记录", selectedTheme) }
+                    if (page == 4) item { MoreSectionHeader("疫苗接种", "接种计划与历史记录", selectedTheme) }
                     if (page == 4) item {
                         CollapsibleSection(
-                            title = "疫苗接种",
+                            title = "接种计划与记录",
                             description = "查看接种计划、已完成项目与历史记录",
                             expandedInitially = true
                         ) {
@@ -809,26 +799,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     } })
                         }
                     }
-                    if (page == 5) item {
-                        val webPanelBase = SyncPreferences.server(appContext).trim().trimEnd('/')
-                        val webPanelConfigured = webPanelBase.startsWith("https://") || webPanelBase.startsWith("http://")
-                        MoreDataManagementCard(serverConfigured = webPanelConfigured) {
-                            if (!webPanelConfigured) {
-                                showSyncSettings = true
-                            } else {
-                                runCatching {
-                                    appContext.startActivity(
-                                        android.content.Intent(
-                                            android.content.Intent.ACTION_VIEW,
-                                            android.net.Uri.parse("$webPanelBase/")
-                                        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    )
-                                }.onFailure {
-                                    Toast.makeText(appContext, "无法打开 NAS 网页管理面板，请检查浏览器或服务器地址", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
-                    }
+
                 } else if (page == 0) item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             }
@@ -869,6 +840,41 @@ private fun BabyLogApp(dao: BabyLogDao) {
         )
     }
 
+    if (showAppSettings) {
+        val webPanelBase = SyncPreferences.server(appContext).trim().trimEnd('/')
+        val webPanelConfigured = webPanelBase.startsWith("https://") || webPanelBase.startsWith("http://")
+        AppSettingsDialog(
+            selectedStyle = selectedTheme,
+            onSelectStyle = { style ->
+                selectedTheme = style
+                BabyLogThemePreferences.save(appContext, style)
+            },
+            serverConfigured = webPanelConfigured,
+            onOpenDataManagement = {
+                if (!webPanelConfigured) {
+                    showAppSettings = false
+                    showSyncSettings = true
+                } else {
+                    runCatching {
+                        appContext.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("$webPanelBase/")
+                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                        showAppSettings = false
+                    }.onFailure {
+                        Toast.makeText(appContext, "无法打开 NAS 网页管理面板，请检查浏览器或服务器地址", Toast.LENGTH_LONG).show()
+                    }
+                }
+            },
+            onOpenSyncSettings = {
+                showAppSettings = false
+                showSyncSettings = true
+            },
+            onDismiss = { showAppSettings = false }
+        )
+    }
     if (showSyncSettings) {
         SyncSettingsDialog(dao = dao, onDismiss = { showSyncSettings = false })
     }
