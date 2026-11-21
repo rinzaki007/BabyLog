@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -18,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,17 +38,19 @@ internal fun updateLauncherIcon(context: Context, style: BabyLogThemeStyle) {
     val packageManager = context.packageManager
     val defaultIcon = ComponentName(context, "${context.packageName}.DefaultLauncher")
     val capybaraIcon = ComponentName(context, "${context.packageName}.CapybaraLauncher")
-    val selected = if (style == BabyLogThemeStyle.CAPYBARA) capybaraIcon else defaultIcon
-    val other = if (style == BabyLogThemeStyle.CAPYBARA) defaultIcon else capybaraIcon
-    packageManager.setComponentEnabledSetting(
-        selected,
-        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-        PackageManager.DONT_KILL_APP
+    val koalaIcon = ComponentName(context, "${context.packageName}.KoalaLauncher")
+    val icons = mapOf(
+        BabyLogThemeStyle.DEFAULT to defaultIcon,
+        BabyLogThemeStyle.CAPYBARA to capybaraIcon,
+        BabyLogThemeStyle.KOALA to koalaIcon
     )
+    icons.filterKeys { it != style }.values.forEach { component ->
+        packageManager.setComponentEnabledSetting(
+            component, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP
+        )
+    }
     packageManager.setComponentEnabledSetting(
-        other,
-        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-        PackageManager.DONT_KILL_APP
+        icons.getValue(style), PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP
     )
 }
 
@@ -67,12 +72,15 @@ internal fun AppearanceSettingsCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(if (selectedStyle == BabyLogThemeStyle.CAPYBARA) "🐹" else "🎨", style = MaterialTheme.typography.headlineLarge)
+                Text(when (selectedStyle) { BabyLogThemeStyle.DEFAULT -> "🎨"; BabyLogThemeStyle.CAPYBARA -> "🐹"; BabyLogThemeStyle.KOALA -> "🐨" }, style = MaterialTheme.typography.headlineLarge)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(selectedStyle.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
-                        if (selectedStyle == BabyLogThemeStyle.CAPYBARA) "奶油米色 · 焦糖棕 · 卡皮巴拉桌面图标"
-                        else "保留 BabyLog 原有的温暖简洁风格",
+                        when (selectedStyle) {
+                            BabyLogThemeStyle.DEFAULT -> "保留 BabyLog 原有的温暖简洁风格"
+                            BabyLogThemeStyle.CAPYBARA -> "奶油米色 · 焦糖棕 · 卡皮巴拉桌面图标"
+                            BabyLogThemeStyle.KOALA -> "桉树绿 · 雾霾蓝 · 考拉桌面图标"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -86,7 +94,7 @@ internal fun AppearanceSettingsCard(
             onDismissRequest = { showPicker = false },
             title = { Text("选择 App 主题") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     ThemePreviewOption(
                         title = "默认主题",
                         subtitle = "原有暖色风格",
@@ -100,6 +108,13 @@ internal fun AppearanceSettingsCard(
                         selected = selectedStyle == BabyLogThemeStyle.CAPYBARA,
                         colors = listOf(Color(0xFF9A6845), Color(0xFF71815C), Color(0xFFFFF7E9)),
                         onClick = { onSelectStyle(BabyLogThemeStyle.CAPYBARA); showPicker = false }
+                    )
+                    ThemePreviewOption(
+                        title = "考拉主题 🐨",
+                        subtitle = "桉树绿、雾霾蓝与奶油白",
+                        selected = selectedStyle == BabyLogThemeStyle.KOALA,
+                        colors = listOf(Color(0xFF58776A), Color(0xFF6F8790), Color(0xFFF2F7F2)),
+                        onClick = { onSelectStyle(BabyLogThemeStyle.KOALA); showPicker = false }
                     )
                 }
             },
