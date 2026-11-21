@@ -29,7 +29,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 @Composable
-internal fun HomeDashboardHeader(todayDate: LocalDate, onSettings: () -> Unit) {
+internal fun HomeDashboardHeader(todayDate: LocalDate, themeStyle: com.rinzaki.babylog.ui.theme.BabyLogThemeStyle = com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT, onSettings: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("BABYLOG", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -39,6 +39,9 @@ internal fun HomeDashboardHeader(todayDate: LocalDate, onSettings: () -> Unit) {
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        if (themeStyle != com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT) {
+            ThemeCharacterIllustration(themeStyle, Modifier.size(64.dp).padding(end = 4.dp))
         }
         androidx.compose.material3.OutlinedButton(
             onClick = onSettings,
