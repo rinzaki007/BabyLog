@@ -366,11 +366,36 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                 }
                             
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (existing == null) {
-                    TextButton(onClick = { submit(true) }, enabled = !saving) { Text(if (saving) "保存中…" else "保存并继续") }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp
+            ) {
+                Column {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (existing == null) {
+                            FilledTonalButton(
+                                onClick = { submit(true) },
+                                enabled = !saving,
+                                modifier = Modifier.weight(1f).height(52.dp)
+                            ) {
+                                Text(if (saving) "保存中…" else "保存并继续")
+                            }
+                        }
+                        Button(
+                            onClick = { submit(false) },
+                            enabled = !saving,
+                            modifier = Modifier.weight(1f).height(52.dp)
+                        ) {
+                            Text(if (saving) "保存中…" else "保存记录")
+                        }
+                    }
                 }
-                Button(onClick = { submit(false) }, enabled = !saving) { Text(if (saving) "保存中…" else "保存记录") }
             }
         }
     }
