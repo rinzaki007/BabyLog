@@ -10,7 +10,7 @@ BabyLog Android 客户端、NAS 同步服务和网页管理面板属于同一个
 2. **Sync API**：运行 FastAPI 接口测试，覆盖认证、家庭数据访问、增量同步、幂等、照片上传下载、网页面板、备份导出与安全导入。
 3. **Docker**：构建 NAS 同步服务镜像，执行容器健康检查并校验 Compose 配置。
 
-以上 Android、NAS API 与 Docker 检查全部通过，才视为该提交通过 CI。当前 CI 不要求启动 Android Emulator；Android Keystore 等依赖真实 Android 系统的行为仍需在目标设备上验证。Android APK 作为 Actions artifact 上传；Docker 镜像由 CI 构建验证，不代表 NAS 已自动更新。除非专门配置发布流程，合并代码后仍需由部署者在 NAS / Dockge 更新容器。
+以上 Android、NAS API 与 Docker 检查全部通过，才视为该提交通过 CI。当前 CI 不要求启动 Android Emulator；Android Keystore 等依赖真实 Android 系统的行为仍需在目标设备上验证。Android APK 作为 Actions artifact 上传；Docker 镜像由 CI 构建验证，不代表 NAS 已自动更新。合并代码后仍需由部署者在 NAS / Dockge 更新容器。
 
 ## Android UI 架构与约定
 
@@ -38,7 +38,52 @@ BabyLog Android 客户端、NAS 同步服务和网页管理面板属于同一个
 
 Dependabot 每周检查 Gradle / Android 依赖、`server/` 下的 Python 依赖以及 GitHub Actions 版本，并以 Pull Request 提交更新。依赖升级应先通过本仓库完整 CI，再合并；不要为了追新版本跳过兼容性验证。
 
-## 发布与部署
+## Android 正式发布流程
+
+正式签名 APK 发布由 `.github/workflows/release.yml`（GitHub Actions：**BabyLog Android Release**）负责。它与 PR / main 的日常 CI 是两套独立流程：
+
+1. **先完成代码整合**：所有待发布变更先通过 PR 的 Android、NAS API、NAS Docker 三项检查并合并到 `main`。不要把 PR 的 debug APK 当作正式发布包。
+2. **核对版本与发布内容**：检查 `CHANGELOG.md`、README 和用户可见更新说明。发布工作流使用输入的版本名覆盖 Gradle 默认值；`versionCode` 根据 GitHub Actions run number 生成。不要在多个地方手工填写不一致的版本号。
+3. **确认签名 Secrets**：仓库 Actions Secrets 必须配置 `BABYLOG_KEYSTORE_BASE64`、`BABYLOG_KEYSTORE_PASSWORD`、`BABYLOG_KEY_ALIAS`、`BABYLOG_KEY_PASSWORD`。工作流会验证四项并解码 PKCS#12 keystore。签名密钥必须长期妥善备份，不能提交到仓库。密钥生成和配置见 [RELEASE_SIGNING.md](RELEASE_SIGNING.md)。
+4. **触发 Release**：推荐在 Actions 中选择 **BabyLog Android Release**，点击 **Run workflow**，明确选择 `main`，填写 `version`（不带 `v`，例如 `1.9.1`）。也可以推送 `v*` 格式的 tag 触发发布；推送 tag 前必须确认它指向已合并并通过 CI 的提交。手动触发会使用输入版本创建对应的 `v<version>` tag。
+5. **等待并检查工作流步骤**：Release 会执行签名 APK 构建、APK 启动图标资源校验、GitHub Release 发布和公开更新清单发布。构建会临时提高 Gradle JVM 堆内存、关闭并行构建、限制单 Worker，并使用 Kotlin in-process 编译，以降低曾出现的 Kotlin 编译内存耗尽问题。不要因耗时较长而提前判定失败。
+6. **分别核验三类发布产物**：确认 `Build signed release APK`、图标校验、`Publish GitHub Release`、`Publish public update manifest` 全部成功；打开 GitHub Releases 检查 tag 和 APK 附件，再检查 `updates` 分支的 `latest.json` 中版本、下载 URL、文件大小和 SHA-256 与实际 Release APK 一致。
+7. **真实设备验证**：下载正式签名 APK，在 Android 设备上验证全新安装、覆盖升级、启动和核心记录流程。CI 的 debug APK 不能替代正式签名包的设备验证。
+
+### 发布失败时的处理规则
+
+- **编译阶段失败**：先查看失败 job 的具体 Gradle task 和完整错误日志。若是 Kotlin 编译 OOM，先核对 10G Gradle JVM、单 Worker、关闭并行和 Kotlin in-process 配置是否仍在工作流中生效；不要只因耗时长就盲目重跑。
+- **Release 已发布，但更新清单失败**：这是部分成功，不应把已成功的 APK 编译和 GitHub Release 误判为失败。先检查 Release 是否存在、APK 附件是否完整，再检查 `updates/latest.json`。不要未经检查就重复运行完整 Release；同一个 tag 可能已发布。优先基于已发布 APK 的真实文件名、大小和 SHA-256 修复更新清单，并验证更新源。
+- **切换更新分支失败**：工作流会临时修改 `gradle.properties` 设置构建内存。切换到 orphan 的 `update-feed` 分支前必须先执行 `git restore --source=HEAD -- gradle.properties`，清除构建阶段留下的工作区修改；否则分支切换可能因本地修改而失败。
+- **成功标准**：APK 构建、GitHub Release 和 `updates/latest.json` 三部分均核验完成，才算完整发布。仅 Release 成功不代表应用内更新源也已更新。
+
+正式 Release 构建耗时通常明显长于普通 PR CI：它需要重新进行签名构建、产物校验和发布。耗时受 runner 负载、依赖缓存和代码变更影响，不承诺固定分钟数。不要为了缩短时间而跳过签名、产物校验或更新清单核对。
+
+## NAS 更新与 App 发布的区别
+
+是否需要更新 NAS，按**实际变更文件和服务端行为**判断，而不是按版本号判断：
+
+| 变更范围 | 需要做什么 |
+| --- | --- |
+| 仅 Android 客户端（`app/`） | 合并后发布 / 安装新的 Android APK；无需更新 NAS Docker |
+| 仅文档、README、CHANGELOG 或 GitHub Actions 工作流 | 通常无需更新 NAS Docker；按需要更新 App 或重新运行对应工作流 |
+| `server/` API、数据库、备份逻辑 | 需要重新构建并更新 NAS Docker |
+| NAS 网页面板、服务端静态资源或 Docker 配置 | 需要更新 NAS Docker |
+| Android + NAS 服务端同时修改 | App 和 NAS Docker 都需要更新，并按兼容性要求安排升级顺序 |
+
+更新 NAS Docker 时必须保留原有数据卷（容器内通常为 `/data`）和原来的 `BABYLOG_JWT_SECRET`。不要删除数据目录，不要在普通升级时重新生成 JWT 密钥。部署步骤、备份恢复和代理配置详见 [FAMILY_SYNC.md](FAMILY_SYNC.md)。
+
+## 发布前后核对清单
+
+- [ ] PR 所需 CI 全部通过，变更已合并到 `main`。
+- [ ] App 版本名、自动生成的 versionCode、README 和 CHANGELOG 已核对。
+- [ ] Release Secrets 有效，触发的是 **BabyLog Android Release**，版本号正确。
+- [ ] 正式签名 APK、图标校验和 GitHub Release 发布成功。
+- [ ] `updates/latest.json` 已更新，且 SHA-256、大小、下载 URL 与 Release APK 一致。
+- [ ] 在实际 Android 设备上验证安装 / 升级和核心功能。
+- [ ] 根据改动范围判断是否更新 NAS；需要更新时保留数据卷和 JWT Secret。
+
+## 仓库维护约定
 
 - 代码合并到 `main` 不等于 NAS 容器已更新。
 - 服务端或网页面板改动需要重新构建 / 更新 NAS 容器；仅 Android 改动才需要重新安装 APK。
