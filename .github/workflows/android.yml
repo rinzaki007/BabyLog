@@ -81,13 +81,13 @@ jobs:
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           test -n "$AAPT"
           BADGING="$("$AAPT" dump badging "$APK")"
-          printf '%s\\n' "$BADGING" | grep -E "^application:.*icon="
-          printf '%s\\n' "$BADGING" | grep -Eq "^application-icon-[0-9]+:"
+          printf '%s\n' "$BADGING" | grep -E "^application:.*icon="
+          printf '%s\n' "$BADGING" | grep -Eq "^application-icon-[0-9]+:"
           RESOURCES="$("$AAPT" dump resources "$APK")"
-          printf '%s\\n' "$RESOURCES" | grep -q "mipmap/ic_launcher"
-          printf '%s\\n' "$RESOURCES" | grep -q "mipmap/ic_launcher_round"
-          printf '%s\\n' "$RESOURCES" | grep -q "drawable/theme_capybara_mascot"
-          printf '%s\\n' "$RESOURCES" | grep -q "drawable/theme_koala_mascot"
+          printf '%s\n' "$RESOURCES" | grep -q "mipmap/ic_launcher"
+          printf '%s\n' "$RESOURCES" | grep -q "mipmap/ic_launcher_round"
+          printf '%s\n' "$RESOURCES" | grep -q "drawable/theme_capybara_mascot"
+          printf '%s\n' "$RESOURCES" | grep -q "drawable/theme_koala_mascot"
       - uses: actions/upload-artifact@v4
         with:
           name: BabyLog-debug
