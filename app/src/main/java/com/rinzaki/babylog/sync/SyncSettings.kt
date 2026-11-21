@@ -48,6 +48,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+internal const val SYNC_CONFLICT_PAGE_SIZE = 20
+
+internal fun nextSyncConflictDisplayLimit(currentLimit: Int, total: Int): Int {
+    require(currentLimit >= 0 && total >= 0)
+    if (currentLimit >= total) return total
+    return currentLimit + minOf(SYNC_CONFLICT_PAGE_SIZE, total - currentLimit)
+}
+
 @Composable
 fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
@@ -65,6 +73,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
     var conflictCount by remember { mutableStateOf(0) }
     var cloudOnlyPhotoCount by remember { mutableStateOf(0) }
     var conflicts by remember { mutableStateOf(emptyList<SyncOperationEntity>()) }
+    var conflictDisplayLimit by remember { mutableStateOf(SYNC_CONFLICT_PAGE_SIZE) }
     var statusLoaded by remember { mutableStateOf(false) }
     var retryingConflictId by remember { mutableStateOf<String?>(null) }
     var showSecurity by remember { mutableStateOf(false) }
@@ -366,7 +375,7 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                         "这些项目仍保留在本机，没有被删除。请根据原因选择重试，或切回原家庭账号恢复。",
                         style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                     )
-                    conflicts.take(20).forEach { operation ->
+                    conflicts.take(conflictDisplayLimit).forEach { operation ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
@@ -434,11 +443,19 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                             }
                         }
                     }
-                    if (conflicts.size > 20) {
+                    if (conflicts.size > conflictDisplayLimit) {
                         Text(
-                            "还有 ${conflicts.size - 20} 条冲突未展开，以上显示最近 20 条。",
+                            "已显示最近 ${conflictDisplayLimit} 条，共 ${conflicts.size} 条冲突。",
                             style = androidx.compose.material3.MaterialTheme.typography.labelSmall
                         )
+                        TextButton(
+                            onClick = {
+                                conflictDisplayLimit = nextSyncConflictDisplayLimit(conflictDisplayLimit, conflicts.size)
+                            },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text("加载更多冲突（剩余 ${conflicts.size - conflictDisplayLimit} 条）")
+                        }
                     }
                 }
 
