@@ -192,7 +192,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var savingEvent by remember { mutableStateOf(false) }
     var showSyncDetails by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val pageListStates = List(BabyLogDestination.entries.size) { rememberLazyListState() }
+    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
