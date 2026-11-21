@@ -154,7 +154,7 @@ internal fun BabyAlbumSection(
             Column(Modifier.weight(1f)) {
                 Text("成长相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "共 ${photoCount} 张照片 · 按月份或月龄整理",
+                    "共 ${photoCount} 张照片 · 按每日时间线或月龄整理",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
