@@ -185,6 +185,8 @@ internal fun HomeSyncStatusCard(
     showDetails: Boolean,
     consistency: String?,
     syncError: String?,
+    pendingCount: Int,
+    conflictCount: Int,
     onToggleDetails: () -> Unit,
     onSyncNow: () -> Unit
 ) {
@@ -249,6 +251,20 @@ internal fun HomeSyncStatusCard(
                         ) {
                             Text(if (syncing) "同步中" else "立即同步")
                         }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "待同步 $pendingCount 项",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "冲突 $conflictCount 项",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (conflictCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (conflictCount > 0) FontWeight.SemiBold else FontWeight.Normal
+                        )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
