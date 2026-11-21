@@ -747,7 +747,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     }
-                    if (page == 4) item { MoreSectionHeader("健康管理", "疫苗接种计划与历史记录") }
+                    if (page == 4) item { MoreSectionHeader("健康管理", "疫苗接种计划与历史记录", selectedTheme) }
                     if (page == 4) item {
                         CollapsibleSection(
                             title = "疫苗接种",
