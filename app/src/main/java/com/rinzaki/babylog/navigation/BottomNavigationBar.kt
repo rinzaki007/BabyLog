@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rinzaki.babylog.ui.theme.BabyLogThemeStyle
 
 @Composable
@@ -42,7 +43,7 @@ fun BabyLogNavigationBar(selectedIndex: Int, themeStyle: BabyLogThemeStyle = Bab
                                 BabyLogDestination.GROWTH -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌿" else "🌱"
                                 BabyLogDestination.ALBUM -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌳" else "📷"
                                 BabyLogDestination.VACCINE -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌼" else "💉"
-                                BabyLogDestination.MORE -> if (themeStyle == BabyLogThemeStyle.KOALA) "🍃" else "⚙️"
+                                BabyLogDestination.SETTINGS -> if (themeStyle == BabyLogThemeStyle.KOALA) "🍃" else "⚙️"
                             },
                             style = MaterialTheme.typography.titleMedium
                         )
@@ -54,7 +55,7 @@ fun BabyLogNavigationBar(selectedIndex: Int, themeStyle: BabyLogThemeStyle = Bab
                                 BabyLogDestination.GROWTH -> Icons.Filled.ShowChart
                                 BabyLogDestination.ALBUM -> Icons.Filled.Photo
                                 BabyLogDestination.VACCINE -> Icons.Filled.Favorite
-                                BabyLogDestination.MORE -> Icons.Filled.MoreHoriz
+                                BabyLogDestination.SETTINGS -> Icons.Filled.MoreHoriz
                             },
                             contentDescription = destination.label
                         )
@@ -64,9 +65,11 @@ fun BabyLogNavigationBar(selectedIndex: Int, themeStyle: BabyLogThemeStyle = Bab
                     Text(
                         destination.label,
                         style = MaterialTheme.typography.labelMedium.copy(
+                            fontSize = if (destination == BabyLogDestination.VACCINE) 10.sp else 11.sp,
                             fontWeight = if (selectedIndex == index) FontWeight.SemiBold else FontWeight.Medium
                         ),
-                        maxLines = 1
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             )
