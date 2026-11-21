@@ -363,6 +363,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         showDetails = showSyncDetails,
                         consistency = syncConsistency,
                         syncError = syncError,
+                        pendingCount = pendingSyncCount,
+                        conflictCount = syncConflictCount,
                         onToggleDetails = { showSyncDetails = !showSyncDetails },
                         onSyncNow = { SyncScheduler.enqueue(appContext) }
                     )
