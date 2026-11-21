@@ -359,7 +359,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 if (page == 1) item { ThemePageBanner(selectedTheme, "成长足迹", "记录每一个值得珍藏的日常瞬间") }
                 if (page == 2) item { ThemePageBanner(selectedTheme, "成长记录", "陪伴宝宝一点点长大") }
                 if (page == 3) item { ThemePageBanner(selectedTheme, "成长相册", "把每个可爱的瞬间好好收藏") }
-                if (page == 4) item { ThemePageBanner(selectedTheme, "更多", "让每一次照护都充满温柔陪伴") }
+                if (page == 4) item { ThemePageBanner(selectedTheme, "疫苗接种", "查看接种计划、记录每一次守护") }
+                if (page == 5) item { ThemePageBanner(selectedTheme, "设置", "管理应用外观、数据与使用偏好") }
                 if (page == 0) item {
                     val syncConfigured = SyncPreferences.familyId(appContext).isNotBlank()
                     val syncLabel = when {
@@ -746,17 +747,14 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
-                    if (page == 5) item { MorePageHeader() }
-                    if (page == 5) item {
-                        MoreSectionHeader("设置", "外观与皮肤、数据管理统一放在这里", selectedTheme)
-                    }
+                    if (page == 5) item { SettingsPageHeader() }
                     if (page == 5) item {
                         AppearanceSettingsCard(selectedStyle = selectedTheme) { style ->
                             selectedTheme = style
                             BabyLogThemePreferences.save(appContext, style)
                         }
                     }
-                    if (page == 4) item { MoreSectionHeader("健康管理", "疫苗接种计划与历史记录", selectedTheme) }
+                    if (page == 4) item { MoreSectionHeader("疫苗接种", "接种计划、完成进度与历史记录", selectedTheme) }
                     if (page == 4) item {
                         CollapsibleSection(
                             title = "疫苗接种",
