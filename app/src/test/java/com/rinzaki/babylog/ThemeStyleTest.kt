@@ -1,0 +1,19 @@
+package com.rinzaki.babylog
+
+import com.rinzaki.babylog.ui.theme.BabyLogThemeStyle
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class ThemeStyleTest {
+    @Test
+    fun unknownStoredThemeFallsBackToDefault() {
+        assertEquals(BabyLogThemeStyle.DEFAULT, BabyLogThemeStyle.fromStorage("unknown"))
+        assertEquals(BabyLogThemeStyle.DEFAULT, BabyLogThemeStyle.fromStorage(null))
+    }
+
+    @Test
+    fun bothSupportedThemesRestoreFromStorage() {
+        assertEquals(BabyLogThemeStyle.DEFAULT, BabyLogThemeStyle.fromStorage("default"))
+        assertEquals(BabyLogThemeStyle.CAPYBARA, BabyLogThemeStyle.fromStorage("capybara"))
+    }
+}
