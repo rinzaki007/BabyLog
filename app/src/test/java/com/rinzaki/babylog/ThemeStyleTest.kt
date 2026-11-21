@@ -12,8 +12,9 @@ class ThemeStyleTest {
     }
 
     @Test
-    fun bothSupportedThemesRestoreFromStorage() {
+    fun allSupportedThemesRestoreFromStorage() {
         assertEquals(BabyLogThemeStyle.DEFAULT, BabyLogThemeStyle.fromStorage("default"))
         assertEquals(BabyLogThemeStyle.CAPYBARA, BabyLogThemeStyle.fromStorage("capybara"))
+        assertEquals(BabyLogThemeStyle.KOALA, BabyLogThemeStyle.fromStorage("koala"))
     }
 }
