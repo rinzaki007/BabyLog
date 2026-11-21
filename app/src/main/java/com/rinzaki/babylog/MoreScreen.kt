@@ -34,10 +34,6 @@ internal fun MorePageHeader() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        MoreSectionHeader(
-            title = "健康管理",
-            description = "疫苗接种计划与历史记录"
-        )
     }
 }
 

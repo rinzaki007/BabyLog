@@ -85,6 +85,8 @@ import androidx.compose.ui.Modifier
 import com.rinzaki.babylog.navigation.BabyLogDestination
 import com.rinzaki.babylog.navigation.BabyLogNavigationBar
 import com.rinzaki.babylog.ui.theme.BabyLogTheme
+import com.rinzaki.babylog.ui.theme.BabyLogThemePreferences
+import com.rinzaki.babylog.ui.theme.BabyLogThemeStyle
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
@@ -140,6 +142,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun BabyLogApp(dao: BabyLogDao) {
     val appContext = LocalContext.current.applicationContext
+    var selectedTheme by remember { mutableStateOf(BabyLogThemePreferences.read(appContext)) }
+    LaunchedEffect(selectedTheme) {
+        runCatching { updateLauncherIcon(appContext, selectedTheme) }
+    }
     val babies by dao.observeBabies().collectAsState(initial = emptyList())
     val baby = babies.firstOrNull()
     val todayDate = LocalDate.now()
@@ -326,11 +332,11 @@ private fun BabyLogApp(dao: BabyLogDao) {
         snapshotFlow { pagerState.settledPage }.collect { page -> selectedNav = page }
     }
 
-    BabyLogTheme {
+    BabyLogTheme(style = selectedTheme) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
-                BabyLogNavigationBar(selectedIndex = selectedNav, onSelect = { selectedNav = it })
+                BabyLogNavigationBar(selectedIndex = selectedNav, themeStyle = selectedTheme, onSelect = { selectedNav = it })
             },
         ) { scaffoldPadding ->
             HorizontalPager(
@@ -728,6 +734,16 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
                     if (page == 4) item { MorePageHeader() }
+                    if (page == 4) item {
+                        AppearanceSettingsCard(selectedStyle = selectedTheme) { style ->
+                            selectedTheme = style
+                            BabyLogThemePreferences.save(appContext, style)
+                            runCatching { updateLauncherIcon(appContext, style) }.onFailure {
+                                Toast.makeText(appContext, "主题已切换，桌面图标可能需要稍后刷新", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                    if (page == 4) item { MoreSectionHeader("健康管理", "疫苗接种计划与历史记录") }
                     if (page == 4) item {
                         CollapsibleSection(
                             title = "疫苗接种",

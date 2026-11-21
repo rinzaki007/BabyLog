@@ -18,9 +18,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.rinzaki.babylog.ui.theme.BabyLogThemeStyle
 
 @Composable
-fun BabyLogNavigationBar(selectedIndex: Int, onSelect: (Int) -> Unit) {
+fun BabyLogNavigationBar(selectedIndex: Int, themeStyle: BabyLogThemeStyle = BabyLogThemeStyle.DEFAULT, onSelect: (Int) -> Unit) {
     NavigationBar(
         modifier = Modifier.navigationBarsPadding().height(68.dp),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -32,16 +33,29 @@ fun BabyLogNavigationBar(selectedIndex: Int, onSelect: (Int) -> Unit) {
                 selected = selectedIndex == index,
                 onClick = { onSelect(index) },
                 icon = {
-                    Icon(
-                        imageVector = when (destination) {
-                            BabyLogDestination.HOME -> Icons.Filled.Home
-                            BabyLogDestination.RECORDS -> Icons.Filled.Add
-                            BabyLogDestination.GROWTH -> Icons.Filled.ShowChart
-                            BabyLogDestination.ALBUM -> Icons.Filled.Photo
-                            BabyLogDestination.MORE -> Icons.Filled.MoreHoriz
-                        },
-                        contentDescription = destination.label
-                    )
+                    if (themeStyle != BabyLogThemeStyle.DEFAULT) {
+                        Text(
+                            text = when (destination) {
+                                BabyLogDestination.HOME -> if (themeStyle == BabyLogThemeStyle.KOALA) "🐨" else "🐾"
+                                BabyLogDestination.RECORDS -> if (themeStyle == BabyLogThemeStyle.KOALA) "🥛" else "🍼"
+                                BabyLogDestination.GROWTH -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌿" else "🌱"
+                                BabyLogDestination.ALBUM -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌳" else "📷"
+                                BabyLogDestination.MORE -> if (themeStyle == BabyLogThemeStyle.KOALA) "🍃" else "🐹"
+                            },
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    } else {
+                        Icon(
+                            imageVector = when (destination) {
+                                BabyLogDestination.HOME -> Icons.Filled.Home
+                                BabyLogDestination.RECORDS -> Icons.Filled.Add
+                                BabyLogDestination.GROWTH -> Icons.Filled.ShowChart
+                                BabyLogDestination.ALBUM -> Icons.Filled.Photo
+                                BabyLogDestination.MORE -> Icons.Filled.MoreHoriz
+                            },
+                            contentDescription = destination.label
+                        )
+                    }
                 },
                 label = {
                     Text(

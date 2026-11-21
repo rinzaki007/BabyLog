@@ -1,5 +1,6 @@
 package com.rinzaki.babylog.ui.theme
 
+import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
@@ -9,19 +10,60 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-private val BabyLogColors = lightColorScheme(
-    primary = Color(0xFF955D50),
-    onPrimary = Color.White,
-    secondary = Color(0xFF58715D),
-    onSecondary = Color.White,
-    tertiary = Color(0xFF86613A),
-    background = Color(0xFFFFF9F4),
-    surface = Color(0xFFFFFEFC),
-    surfaceVariant = Color(0xFFF3EBE4),
-    onSurface = Color(0xFF352E2A),
-    onSurfaceVariant = Color(0xFF71655D),
-    outline = Color(0xFF96877D),
-    outlineVariant = Color(0xFFECE3DC)
+enum class BabyLogThemeStyle(val storageValue: String, val displayName: String) {
+    DEFAULT("default", "默认主题"),
+    CAPYBARA("capybara", "卡皮巴拉主题"),
+    KOALA("koala", "考拉主题");
+
+    companion object {
+        fun fromStorage(value: String?): BabyLogThemeStyle =
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+    }
+}
+
+object BabyLogThemePreferences {
+    private const val PREFS_NAME = "babylog_appearance"
+    private const val KEY_THEME = "theme_style"
+
+    fun read(context: Context): BabyLogThemeStyle {
+        val value = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_THEME, BabyLogThemeStyle.DEFAULT.storageValue)
+        return BabyLogThemeStyle.fromStorage(value)
+    }
+
+    fun save(context: Context, style: BabyLogThemeStyle) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_THEME, style.storageValue)
+            .apply()
+    }
+}
+
+private val DefaultColors = lightColorScheme(
+    primary = Color(0xFF955D50), onPrimary = Color.White,
+    secondary = Color(0xFF58715D), onSecondary = Color.White,
+    tertiary = Color(0xFF86613A), background = Color(0xFFFFF9F4),
+    surface = Color(0xFFFFFEFC), surfaceVariant = Color(0xFFF3EBE4),
+    onSurface = Color(0xFF352E2A), onSurfaceVariant = Color(0xFF71655D),
+    outline = Color(0xFF96877D), outlineVariant = Color(0xFFECE3DC)
+)
+
+private val CapybaraColors = lightColorScheme(
+    primary = Color(0xFF9A6845), onPrimary = Color.White,
+    secondary = Color(0xFF71815C), onSecondary = Color.White,
+    tertiary = Color(0xFFC18A52), background = Color(0xFFFFF7E9),
+    surface = Color(0xFFFFFCF4), surfaceVariant = Color(0xFFF3E6D1),
+    onSurface = Color(0xFF493729), onSurfaceVariant = Color(0xFF806C58),
+    outline = Color(0xFFAA9278), outlineVariant = Color(0xFFE9D9C2)
+)
+
+private val KoalaColors = lightColorScheme(
+    primary = Color(0xFF58776A), onPrimary = Color.White,
+    secondary = Color(0xFF6F8790), onSecondary = Color.White,
+    tertiary = Color(0xFF9A8065), background = Color(0xFFF2F7F2),
+    surface = Color(0xFFFCFEFA), surfaceVariant = Color(0xFFE5EEE7),
+    onSurface = Color(0xFF2F4038), onSurfaceVariant = Color(0xFF68786E),
+    outline = Color(0xFF8B9B8F), outlineVariant = Color(0xFFD8E3DA)
 )
 
 private val BabyLogTypography = Typography().copy(
@@ -43,9 +85,13 @@ private val BabyLogTypography = Typography().copy(
 )
 
 @Composable
-fun BabyLogTheme(content: @Composable () -> Unit) {
+fun BabyLogTheme(style: BabyLogThemeStyle = BabyLogThemeStyle.DEFAULT, content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = BabyLogColors,
+        colorScheme = when (style) {
+            BabyLogThemeStyle.CAPYBARA -> CapybaraColors
+            BabyLogThemeStyle.KOALA -> KoalaColors
+            BabyLogThemeStyle.DEFAULT -> DefaultColors
+        },
         typography = BabyLogTypography,
         content = content
     )
