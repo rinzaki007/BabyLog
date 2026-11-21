@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.rinzaki.babylog.ui.theme.BabyLogThemeStyle
 
 @Composable
 fun BabyLogNavigationBar(selectedIndex: Int, themeStyle: BabyLogThemeStyle = BabyLogThemeStyle.DEFAULT, onSelect: (Int) -> Unit) {
