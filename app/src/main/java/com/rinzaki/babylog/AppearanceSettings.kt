@@ -61,7 +61,7 @@ internal fun AppearanceSettingsCard(
 ) {
     var showPicker by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        MoreSectionHeader("外观与皮肤", "选择喜欢的 BabyLog 风格，切换后立即生效")
+        MoreSectionHeader("外观与皮肤", "选择喜欢的 BabyLog 风格，切换后立即生效", selectedStyle)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
