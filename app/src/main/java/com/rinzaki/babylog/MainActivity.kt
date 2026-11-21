@@ -143,6 +143,9 @@ class MainActivity : ComponentActivity() {
 private fun BabyLogApp(dao: BabyLogDao) {
     val appContext = LocalContext.current.applicationContext
     var selectedTheme by remember { mutableStateOf(BabyLogThemePreferences.read(appContext)) }
+    LaunchedEffect(selectedTheme) {
+        runCatching { updateLauncherIcon(appContext, selectedTheme) }
+    }
     val babies by dao.observeBabies().collectAsState(initial = emptyList())
     val baby = babies.firstOrNull()
     val todayDate = LocalDate.now()
@@ -333,7 +336,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
-                BabyLogNavigationBar(selectedIndex = selectedNav, capybaraStyle = selectedTheme == BabyLogThemeStyle.CAPYBARA, onSelect = { selectedNav = it })
+                BabyLogNavigationBar(selectedIndex = selectedNav, themeStyle = selectedTheme, onSelect = { selectedNav = it })
             },
         ) { scaffoldPadding ->
             HorizontalPager(
