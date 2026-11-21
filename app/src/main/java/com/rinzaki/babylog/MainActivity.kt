@@ -726,7 +726,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
                     if (page == 4) item { MorePageHeader() }
-                    if (page == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp, onComplete ->
+                    if (page == 4) item {
+                        CollapsibleSection(
+                            title = "疫苗接种",
+                            description = "查看接种计划、已完成项目与历史记录"
+                        ) {
+                            VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp, onComplete ->
                         val now = System.currentTimeMillis()
                         scope.launch {
                             val vaccine = existing?.copy(occurredAt = timestamp, payloadJson = payload.toString(), updatedAt = now, syncStatus = "PENDING")
@@ -770,6 +775,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     } }) }
+                        }
+                    }
                     if (page == 4) item {
                         val webPanelBase = SyncPreferences.server(appContext).trim().trimEnd('/')
                         val webPanelConfigured = webPanelBase.startsWith("https://") || webPanelBase.startsWith("http://")
