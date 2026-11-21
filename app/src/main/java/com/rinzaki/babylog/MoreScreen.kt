@@ -29,7 +29,7 @@ internal fun MorePageHeader() {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text("更多", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "健康管理与数据管理",
+                "疫苗接种、主题与数据管理设置",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

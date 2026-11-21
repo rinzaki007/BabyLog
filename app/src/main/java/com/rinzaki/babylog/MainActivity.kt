@@ -143,9 +143,6 @@ class MainActivity : ComponentActivity() {
 private fun BabyLogApp(dao: BabyLogDao) {
     val appContext = LocalContext.current.applicationContext
     var selectedTheme by remember { mutableStateOf(BabyLogThemePreferences.read(appContext)) }
-    LaunchedEffect(selectedTheme) {
-        runCatching { updateLauncherIcon(appContext, selectedTheme) }
-    }
     val babies by dao.observeBabies().collectAsState(initial = emptyList())
     val baby = babies.firstOrNull()
     val todayDate = LocalDate.now()
@@ -195,7 +192,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var savingEvent by remember { mutableStateOf(false) }
     var showSyncDetails by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
+    val pageListStates = List(BabyLogDestination.entries.size) { rememberLazyListState() }
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
@@ -741,8 +738,11 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
-                    if (page == 4) item { MorePageHeader() }
-                    if (page == 4) item {
+                    if (page == 5) item { MorePageHeader() }
+                    if (page == 5) item {
+                        MoreSectionHeader("设置", "外观与皮肤、数据管理统一放在这里", selectedTheme)
+                    }
+                    if (page == 5) item {
                         AppearanceSettingsCard(selectedStyle = selectedTheme) { style ->
                             selectedTheme = style
                             BabyLogThemePreferences.save(appContext, style)
@@ -803,7 +803,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     } })
                         }
                     }
-                    if (page == 4) item {
+                    if (page == 5) item {
                         val webPanelBase = SyncPreferences.server(appContext).trim().trimEnd('/')
                         val webPanelConfigured = webPanelBase.startsWith("https://") || webPanelBase.startsWith("http://")
                         MoreDataManagementCard(serverConfigured = webPanelConfigured) {

@@ -3,6 +3,7 @@ package com.rinzaki.babylog
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -34,24 +35,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.ui.theme.BabyLogThemeStyle
 
+internal fun launcherComponentEnabledStates(style: BabyLogThemeStyle): List<Boolean> =
+    BabyLogThemeStyle.entries.map { it == style }
+
 internal fun updateLauncherIcon(context: Context, style: BabyLogThemeStyle) {
     val packageManager = context.packageManager
-    val defaultIcon = ComponentName(context, "${context.packageName}.DefaultLauncher")
-    val capybaraIcon = ComponentName(context, "${context.packageName}.CapybaraLauncher")
-    val koalaIcon = ComponentName(context, "${context.packageName}.KoalaLauncher")
-    val icons = mapOf(
-        BabyLogThemeStyle.DEFAULT to defaultIcon,
-        BabyLogThemeStyle.CAPYBARA to capybaraIcon,
-        BabyLogThemeStyle.KOALA to koalaIcon
+    val components = listOf(
+        ComponentName(context, "${context.packageName}.DefaultLauncher"),
+        ComponentName(context, "${context.packageName}.CapybaraLauncher"),
+        ComponentName(context, "${context.packageName}.KoalaLauncher")
     )
-    icons.filterKeys { it != style }.values.forEach { component ->
-        packageManager.setComponentEnabledSetting(
-            component, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP
+    val states = launcherComponentEnabledStates(style)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        packageManager.setComponentEnabledSettings(
+            components.mapIndexed { index, component ->
+                PackageManager.ComponentEnabledSetting(
+                    component,
+                    if (states[index]) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                    else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
         )
+    } else {
+        val selectedIndex = states.indexOf(true)
+        packageManager.setComponentEnabledSetting(
+            components[selectedIndex], PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP
+        )
+        components.forEachIndexed { index, component ->
+            if (index != selectedIndex) packageManager.setComponentEnabledSetting(
+                component, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP
+            )
+        }
     }
-    packageManager.setComponentEnabledSetting(
-        icons.getValue(style), PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP
-    )
 }
 
 @Composable
@@ -72,7 +88,8 @@ internal fun AppearanceSettingsCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(when (selectedStyle) { BabyLogThemeStyle.DEFAULT -> "🎨"; BabyLogThemeStyle.CAPYBARA -> "🐹"; BabyLogThemeStyle.KOALA -> "🐨" }, style = MaterialTheme.typography.headlineLarge)
+                if (selectedStyle == BabyLogThemeStyle.DEFAULT) Text("🎨", style = MaterialTheme.typography.headlineLarge)
+                else ThemeCharacterIllustration(selectedStyle, Modifier.size(52.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(selectedStyle.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
@@ -97,20 +114,23 @@ internal fun AppearanceSettingsCard(
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     ThemePreviewOption(
                         title = "默认主题",
+                        style = BabyLogThemeStyle.DEFAULT,
                         subtitle = "原有暖色风格",
                         selected = selectedStyle == BabyLogThemeStyle.DEFAULT,
                         colors = listOf(Color(0xFF955D50), Color(0xFF58715D), Color(0xFFFFF9F4)),
                         onClick = { onSelectStyle(BabyLogThemeStyle.DEFAULT); showPicker = false }
                     )
                     ThemePreviewOption(
-                        title = "卡皮巴拉主题 🐹",
+                        title = "卡皮巴拉主题",
+                        style = BabyLogThemeStyle.CAPYBARA,
                         subtitle = "奶油米色、焦糖棕与自然绿",
                         selected = selectedStyle == BabyLogThemeStyle.CAPYBARA,
                         colors = listOf(Color(0xFF9A6845), Color(0xFF71815C), Color(0xFFFFF7E9)),
                         onClick = { onSelectStyle(BabyLogThemeStyle.CAPYBARA); showPicker = false }
                     )
                     ThemePreviewOption(
-                        title = "考拉主题 🐨",
+                        title = "考拉主题",
+                        style = BabyLogThemeStyle.KOALA,
                         subtitle = "桉树绿、雾霾蓝与奶油白",
                         selected = selectedStyle == BabyLogThemeStyle.KOALA,
                         colors = listOf(Color(0xFF58776A), Color(0xFF6F8790), Color(0xFFF2F7F2)),
@@ -126,6 +146,7 @@ internal fun AppearanceSettingsCard(
 @Composable
 private fun ThemePreviewOption(
     title: String,
+    style: BabyLogThemeStyle,
     subtitle: String,
     selected: Boolean,
     colors: List<Color>,
@@ -142,6 +163,8 @@ private fun ThemePreviewOption(
             verticalAlignment = Alignment.CenterVertically
         ) {
             RadioButton(selected = selected, onClick = onClick)
+            if (style == BabyLogThemeStyle.DEFAULT) Text("🎨", style = MaterialTheme.typography.headlineMedium)
+            else ThemeCharacterIllustration(style, Modifier.size(52.dp))
             Column(Modifier.weight(1f).padding(start = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(title, fontWeight = FontWeight.SemiBold)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
