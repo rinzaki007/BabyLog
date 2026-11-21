@@ -755,7 +755,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     if (page == 4) item {
                         CollapsibleSection(
                             title = "疫苗接种",
-                            description = "查看接种计划、已完成项目与历史记录"
+                            description = "查看接种计划、已完成项目与历史记录",
+                            expandedInitially = true
                         ) {
                             VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp, onComplete ->
                         val now = System.currentTimeMillis()
