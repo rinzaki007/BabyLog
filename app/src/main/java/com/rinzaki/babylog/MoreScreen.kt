@@ -38,12 +38,15 @@ internal fun MorePageHeader() {
 }
 
 @Composable
-internal fun MoreSectionHeader(title: String, description: String) {
+internal fun MoreSectionHeader(title: String, description: String, themeStyle: com.rinzaki.babylog.ui.theme.BabyLogThemeStyle = com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            ThemeSectionDecoration(themeStyle)
+        }
         Text(
             description,
             style = MaterialTheme.typography.bodySmall,
