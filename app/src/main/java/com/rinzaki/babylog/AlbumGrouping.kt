@@ -15,7 +15,7 @@ internal data class AlbumPhotoGroup(
 )
 
 /**
- * Groups the currently loaded album page without changing its contents or pagination cursor.
+ * Groups photos by capture date by default, without changing album contents or pagination cursor.
  * Age groups use completed calendar months; photos taken before birth remain visible in their
  * own group rather than being assigned a negative age.
  */
@@ -37,7 +37,7 @@ internal fun groupAlbumPhotos(
             if (date.isBefore(birthDate)) "before-birth"
             else "age:${ChronoUnit.MONTHS.between(birthDate, date)}"
         } else {
-            "month:${YearMonth.from(date)}"
+            "date:$date"
         }
     }.map { (key, groupedPhotos) ->
         val dates = groupedPhotos.map { Instant.ofEpochMilli(it.takenAt).atZone(zone).toLocalDate() }
@@ -51,10 +51,11 @@ internal fun groupAlbumPhotos(
         val title = when {
             key == "before-birth" -> "出生前"
             key.startsWith("age:") -> "月龄 ${key.removePrefix("age:")} 个月"
-            else -> {
-                val month = YearMonth.parse(key.removePrefix("month:"))
-                "${month.year}年${month.monthValue}月"
+            key.startsWith("date:") -> {
+                val date = LocalDate.parse(key.removePrefix("date:"))
+                "${date.year}年${date.monthValue}月${date.dayOfMonth}日"
             }
+            else -> key
         }
         val subtitle = if (byAge) {
             val first = dates.minOrNull()
