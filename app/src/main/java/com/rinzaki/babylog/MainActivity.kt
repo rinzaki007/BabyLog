@@ -679,7 +679,11 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         item {
                             Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("🌱", style = MaterialTheme.typography.headlineLarge)
+                                    if (selectedTheme == BabyLogThemeStyle.DEFAULT) {
+                                        Text("🌱", style = MaterialTheme.typography.headlineLarge)
+                                    } else {
+                                        ThemeCharacterIllustration(selectedTheme, Modifier.size(84.dp))
+                                    }
                                     val emptyState = timelineEmptyState(
                                         hasDateFilter = selectedStartDate != null || selectedEndDate != null,
                                         selectedFilter = selectedEventFilter
