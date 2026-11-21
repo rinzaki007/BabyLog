@@ -46,6 +46,13 @@ internal fun updateLauncherIcon(context: Context, style: BabyLogThemeStyle) {
         ComponentName(context, "${context.packageName}.KoalaLauncher")
     )
     val states = launcherComponentEnabledStates(style)
+    val currentStates = components.mapIndexed { index, component ->
+        val componentState = packageManager.getComponentEnabledSetting(component)
+        componentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ||
+            (index == 0 && componentState == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+    }
+    if (currentStates == states) return
+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         packageManager.setComponentEnabledSettings(
             components.mapIndexed { index, component ->
