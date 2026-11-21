@@ -46,11 +46,11 @@ Recommended manual process:
 
 1. Merge the intended release changes into `main` and confirm all three CI checks pass.
 2. Open **GitHub → Actions → BabyLog Android Release → Run workflow**.
-3. Select the `main` branch and enter the version without the `v` prefix, for example `1.9.1`.
+3. Select the `main` branch and enter the version without the `v` prefix, for example `2.0.0`.
 4. Start the workflow and wait for the signed APK build, launcher-icon validation, GitHub Release publication, and update-manifest publication to finish.
 5. Verify the GitHub Release attachment and the `updates` branch's `latest.json`; the tag, version, download URL, file size, and SHA-256 must match the actual APK.
 
-A pushed tag matching `v*` (for example `v1.9.1`) also triggers the workflow. Only create such a tag after confirming it points to a commit already merged into `main` and validated by CI. Manual dispatch creates the corresponding `v<version>` tag and GitHub Release.
+A pushed tag matching `v*` (for example `v2.0.0`) also triggers the workflow. Only create such a tag after confirming it points to a commit already merged into `main` and validated by CI. Manual dispatch creates the corresponding `v<version>` tag and GitHub Release.
 
 The workflow generates `versionCode` from the GitHub Actions run number. The version name comes from the manual input or the pushed tag. Do not reuse a version tag or assume that rerunning a partially successful release is harmless.
 
