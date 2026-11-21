@@ -350,7 +350,11 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                if (page == 0) item { HomeDashboardHeader(todayDate = todayDate) { showSyncSettings = true } }
+                if (page == 0) item { HomeDashboardHeader(todayDate = todayDate, themeStyle = selectedTheme) { showSyncSettings = true } }
+                if (page == 1) item { ThemePageBanner(selectedTheme, "成长足迹", "记录每一个值得珍藏的日常瞬间") }
+                if (page == 2) item { ThemePageBanner(selectedTheme, "成长记录", "陪伴宝宝一点点长大") }
+                if (page == 3) item { ThemePageBanner(selectedTheme, "成长相册", "把每个可爱的瞬间好好收藏") }
+                if (page == 4) item { ThemePageBanner(selectedTheme, "更多", "让每一次照护都充满温柔陪伴") }
                 if (page == 0) item {
                     val syncConfigured = SyncPreferences.familyId(appContext).isNotBlank()
                     val syncLabel = when {
