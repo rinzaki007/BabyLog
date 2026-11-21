@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun BabyLogNavigationBar(selectedIndex: Int, capybaraStyle: Boolean = false, onSelect: (Int) -> Unit) {
+fun BabyLogNavigationBar(selectedIndex: Int, themeStyle: BabyLogThemeStyle = BabyLogThemeStyle.DEFAULT, onSelect: (Int) -> Unit) {
     NavigationBar(
         modifier = Modifier.navigationBarsPadding().height(68.dp),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -32,14 +32,14 @@ fun BabyLogNavigationBar(selectedIndex: Int, capybaraStyle: Boolean = false, onS
                 selected = selectedIndex == index,
                 onClick = { onSelect(index) },
                 icon = {
-                    if (capybaraStyle) {
+                    if (themeStyle != BabyLogThemeStyle.DEFAULT) {
                         Text(
                             text = when (destination) {
-                                BabyLogDestination.HOME -> "🐾"
-                                BabyLogDestination.RECORDS -> "🍼"
-                                BabyLogDestination.GROWTH -> "🌱"
-                                BabyLogDestination.ALBUM -> "📷"
-                                BabyLogDestination.MORE -> "🐹"
+                                BabyLogDestination.HOME -> if (themeStyle == BabyLogThemeStyle.KOALA) "🐨" else "🐾"
+                                BabyLogDestination.RECORDS -> if (themeStyle == BabyLogThemeStyle.KOALA) "🥛" else "🍼"
+                                BabyLogDestination.GROWTH -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌿" else "🌱"
+                                BabyLogDestination.ALBUM -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌳" else "📷"
+                                BabyLogDestination.MORE -> if (themeStyle == BabyLogThemeStyle.KOALA) "🍃" else "🐹"
                             },
                             style = MaterialTheme.typography.titleMedium
                         )
