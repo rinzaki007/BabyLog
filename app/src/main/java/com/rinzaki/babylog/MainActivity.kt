@@ -133,6 +133,14 @@ class MainActivity : ComponentActivity() {
             .enableMultiInstanceInvalidation().build()
         setContent { BabyLogApp(database.babyLogDao()) }
     }
+    override fun onStop() {
+        super.onStop()
+        // Update the launcher alias only after the UI has left the foreground.
+        // Some launchers briefly restart their task while refreshing activity aliases.
+        runCatching {
+            updateLauncherIcon(applicationContext, BabyLogThemePreferences.read(applicationContext))
+        }
+    }
     override fun onDestroy() {
         if (::database.isInitialized) database.close()
         super.onDestroy()
@@ -746,9 +754,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         AppearanceSettingsCard(selectedStyle = selectedTheme) { style ->
                             selectedTheme = style
                             BabyLogThemePreferences.save(appContext, style)
-                            runCatching { updateLauncherIcon(appContext, style) }.onFailure {
-                                Toast.makeText(appContext, "主题已切换，桌面图标可能需要稍后刷新", Toast.LENGTH_LONG).show()
-                            }
                         }
                     }
                     if (page == 4) item { MoreSectionHeader("健康管理", "疫苗接种计划与历史记录", selectedTheme) }
