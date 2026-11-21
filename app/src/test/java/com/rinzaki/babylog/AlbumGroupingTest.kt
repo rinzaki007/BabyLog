@@ -24,7 +24,7 @@ class AlbumGroupingTest {
     private val birthTime = at(LocalDate.of(2026, 1, 15))
 
     @Test
-    fun groupsPhotosByCalendarMonthAndShowsAgeRange() {
+    fun groupsPhotosByDayAndShowsAgeLabel() {
         val groups = groupAlbumPhotos(
             listOf(
                 photo("march", LocalDate.of(2026, 3, 16)),
@@ -36,9 +36,10 @@ class AlbumGroupingTest {
             zone = zone
         )
 
-        assertEquals(listOf("2026年3月", "2026年2月", "2026年1月"), groups.map { it.title })
+        assertEquals(listOf("2026年3月16日", "2026年2月14日", "2026年1月20日"), groups.map { it.title })
         assertEquals("月龄 2 个月", groups.first().subtitle)
         assertEquals(3, groups.sumOf { it.photos.size })
+        assertTrue(groups.all { it.photos.size == 1 })
     }
 
     @Test

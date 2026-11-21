@@ -106,7 +106,7 @@ internal fun BabyAlbumSection(
     var pendingPhotoUris by remember { mutableStateOf<List<android.net.Uri>>(emptyList()) }
     var showPhotoTimePicker by remember { mutableStateOf(false) }
     var albumFilter by remember { mutableStateOf("全部") }
-    var albumGrouping by remember(baby.id) { mutableStateOf("按月份") }
+    var albumGrouping by remember(baby.id) { mutableStateOf("按日期") }
     var selectedPhotoDate by remember { mutableStateOf<LocalDate?>(null) }
     var showPhotoDatePicker by remember { mutableStateOf(false) }
     var extraPhotos by remember(baby.id, photoCount) { mutableStateOf<List<BabyPhotoEntity>>(emptyList()) }
@@ -154,7 +154,7 @@ internal fun BabyAlbumSection(
             Column(Modifier.weight(1f)) {
                 Text("成长相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "共 ${photoCount} 张照片 · 按月份或月龄整理",
+                    "共 ${photoCount} 张照片 · 按每日时间线或月龄整理",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -172,7 +172,7 @@ internal fun BabyAlbumSection(
             albumFilter = selected
             if (selected == "指定日期") showPhotoDatePicker = true
         }
-        SelectionRow(listOf("按月份", "按月龄"), albumGrouping) { albumGrouping = it }
+        SelectionRow(listOf("按日期", "按月龄"), albumGrouping) { albumGrouping = it }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -345,7 +345,7 @@ internal fun BabyAlbumSection(
             onDismissRequest = closeViewer,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            var showViewerChrome by remember(photo.id) { mutableStateOf(true) }
+            var showViewerChrome by remember(photo.id) { mutableStateOf(false) }
             var zoom by remember(photo.id) { mutableStateOf(1f) }
             val zoomAnimation = remember(photo.id) { Animatable(1f) }
             var panX by remember(photo.id) { mutableStateOf(0f) }
@@ -476,7 +476,7 @@ internal fun BabyAlbumSection(
                 }
             ) {
                 Column(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxWidth().height(58.dp)) {
+                    Box(Modifier.fillMaxWidth().height(if (showViewerChrome) 58.dp else 0.dp)) {
                     this@Column.AnimatedVisibility(
                         visible = showViewerChrome,
                         enter = fadeIn(animationSpec = tween(180)),
@@ -581,7 +581,7 @@ internal fun BabyAlbumSection(
                             )
                         }
                     }
-                    Box(Modifier.fillMaxWidth().height(190.dp)) {
+                    Box(Modifier.fillMaxWidth().wrapContentHeight()) {
                     this@Column.AnimatedVisibility(
                         visible = showViewerChrome,
                         enter = fadeIn(animationSpec = tween(180)),
@@ -590,45 +590,39 @@ internal fun BabyAlbumSection(
                         Column {
                             Column(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(activePhoto.caption?.takeIf { it.isNotBlank() } ?: "还没有添加照片备注", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    val sourceLabel = if (localOriginalAvailable == true) {
-                                        "本地原图"
-                                    } else if (photoOriginalCache[activePhoto.id]?.let { File(it).isFile } == true) {
-                                        "云端原图 · 已缓存"
-                                    } else {
-                                        "云端原图"
-                                    }
-                                    Icon(
-                                        if (localOriginalAvailable == true) Icons.Filled.PhoneAndroid else Icons.Filled.Cloud,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(13.dp),
-                                        tint = Color.LightGray
-                                    )
-                                    Text(sourceLabel, color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
-                                }
-                                galleryMessage?.let { Text(it, color = Color(0xFFFFCC80), style = MaterialTheme.typography.bodySmall) }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("关联成长记录", color = Color.LightGray, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-                                    TextButton(onClick = { showEventPicker = true }) { Text("＋ 选择记录", color = Color.White) }
-                                }
                                 if (linkedEvents.isEmpty()) {
-                                    Text("尚未关联成长记录", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                                    Text(
+                                        "还没有关联成长记录。关联后，可以从成长记录找到这张照片，也能按事件回看当时的照片。",
+                                        color = Color.LightGray,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
                                 } else {
-                                    linkedEvents.take(2).forEach { linked ->
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            val typeName = when (linked.eventType) {
-                                                "GROWTH" -> "成长测量"
-                                                "MILESTONE" -> "成长里程碑"
-                                                "SOLID_FOOD" -> "辅食记录"
-                                                "VACCINE" -> "接种记录"
-                                                else -> "成长足迹"
-                                            }
-                                            Text("$typeName · ${SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(linked.occurredAt))}", color = Color.LightGray, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-                                            TextButton(onClick = { onLinkEvent(activePhoto, linked, false) }) { Text("取消关联", color = Color(0xFFFFCC80), style = MaterialTheme.typography.labelSmall) }
+                                    val linked = linkedEvents.first()
+                                    val typeName = when (linked.eventType) {
+                                        "GROWTH" -> "成长测量"
+                                        "MILESTONE" -> "成长里程碑"
+                                        "SOLID_FOOD" -> "辅食记录"
+                                        "VACCINE" -> "接种记录"
+                                        else -> "成长足迹"
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            "已关联：$typeName · ${SimpleDateFormat("M月d日", Locale.CHINA).format(Date(linked.occurredAt))}" +
+                                                if (linkedEvents.size > 1) " 等${linkedEvents.size}条" else "",
+                                            color = Color.LightGray,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        TextButton(onClick = { onLinkEvent(activePhoto, linked, false) }) {
+                                            Text("取消", color = Color(0xFFFFCC80), style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
-                                    if (linkedEvents.size > 2) Text("还有 ${linkedEvents.size - 2} 条关联", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                                 }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("成长记录关联", color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                                    TextButton(onClick = { showEventPicker = true }) { Text("管理", color = Color.White) }
+                                }
+                                galleryMessage?.let { Text(it, color = Color(0xFFFFCC80), style = MaterialTheme.typography.bodySmall) }
                             }
                             Row(Modifier.fillMaxWidth().background(Color(0xFF171717)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                                 TextButton(onClick = { editingCaption = activePhoto; closeViewer() }) { Text("编辑备注", color = Color.White) }
