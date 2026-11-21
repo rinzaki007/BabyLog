@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun BabyLogNavigationBar(selectedIndex: Int, onSelect: (Int) -> Unit) {
+fun BabyLogNavigationBar(selectedIndex: Int, capybaraStyle: Boolean = false, onSelect: (Int) -> Unit) {
     NavigationBar(
         modifier = Modifier.navigationBarsPadding().height(68.dp),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -32,16 +32,29 @@ fun BabyLogNavigationBar(selectedIndex: Int, onSelect: (Int) -> Unit) {
                 selected = selectedIndex == index,
                 onClick = { onSelect(index) },
                 icon = {
-                    Icon(
-                        imageVector = when (destination) {
-                            BabyLogDestination.HOME -> Icons.Filled.Home
-                            BabyLogDestination.RECORDS -> Icons.Filled.Add
-                            BabyLogDestination.GROWTH -> Icons.Filled.ShowChart
-                            BabyLogDestination.ALBUM -> Icons.Filled.Photo
-                            BabyLogDestination.MORE -> Icons.Filled.MoreHoriz
-                        },
-                        contentDescription = destination.label
-                    )
+                    if (capybaraStyle) {
+                        Text(
+                            text = when (destination) {
+                                BabyLogDestination.HOME -> "🐾"
+                                BabyLogDestination.RECORDS -> "🍼"
+                                BabyLogDestination.GROWTH -> "🌱"
+                                BabyLogDestination.ALBUM -> "📷"
+                                BabyLogDestination.MORE -> "🐹"
+                            },
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    } else {
+                        Icon(
+                            imageVector = when (destination) {
+                                BabyLogDestination.HOME -> Icons.Filled.Home
+                                BabyLogDestination.RECORDS -> Icons.Filled.Add
+                                BabyLogDestination.GROWTH -> Icons.Filled.ShowChart
+                                BabyLogDestination.ALBUM -> Icons.Filled.Photo
+                                BabyLogDestination.MORE -> Icons.Filled.MoreHoriz
+                            },
+                            contentDescription = destination.label
+                        )
+                    }
                 },
                 label = {
                     Text(
