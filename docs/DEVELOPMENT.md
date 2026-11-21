@@ -14,8 +14,8 @@ BabyLog Android 客户端、NAS 同步服务和网页管理面板属于同一个
 
 ## Android UI 架构与约定
 
-- `ui/theme/Theme.kt` 统一维护默认暖色与卡皮巴拉两套 Material 3 配色、主题偏好和 Typography；页面颜色优先使用 `MaterialTheme.colorScheme` 的语义角色，不在普通页面散落硬编码颜色。
-- 外观主题偏好只保存在 Android 本机 SharedPreferences，不进入 Room、备份或家庭同步；切换主题时同步切换 Launcher activity-alias 图标。
+- `ui/theme/Theme.kt` 统一维护默认暖色、卡皮巴拉与考拉三套 Material 3 配色、主题偏好和 Typography；页面颜色优先使用 `MaterialTheme.colorScheme` 的语义角色，不在普通页面散落硬编码颜色。
+- 外观主题偏好只保存在 Android 本机 SharedPreferences，不进入 Room、备份或家庭同步；切换主题时同步切换对应的 Launcher activity-alias 图标。
 - `navigation/` 维护首页、记录、成长、相册、更多五个一级目的地；首页、成长、相册、疫苗和更多页面的展示组件分别放在对应组件文件中。
 - `BabyProfileComponents.kt`、`EventEditor.kt`、`DateTimePickerDialog.kt`、`FormSelectionRow.kt` 与 `TimelineComponents.kt` 承载可复用的档案、表单、日期和时间线 UI。
 - `MainActivity` 负责组合 Room 数据流、页面导航和现有同步操作；新的完整表单或可复用展示组件应优先放到独立文件，避免继续堆积在 Activity 中。
