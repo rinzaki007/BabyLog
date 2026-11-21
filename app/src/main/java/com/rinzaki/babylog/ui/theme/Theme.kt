@@ -12,7 +12,8 @@ import androidx.compose.ui.unit.sp
 
 enum class BabyLogThemeStyle(val storageValue: String, val displayName: String) {
     DEFAULT("default", "默认主题"),
-    CAPYBARA("capybara", "卡皮巴拉主题");
+    CAPYBARA("capybara", "卡皮巴拉主题"),
+    KOALA("koala", "考拉主题");
 
     companion object {
         fun fromStorage(value: String?): BabyLogThemeStyle =
@@ -56,6 +57,15 @@ private val CapybaraColors = lightColorScheme(
     outline = Color(0xFFAA9278), outlineVariant = Color(0xFFE9D9C2)
 )
 
+private val KoalaColors = lightColorScheme(
+    primary = Color(0xFF58776A), onPrimary = Color.White,
+    secondary = Color(0xFF6F8790), onSecondary = Color.White,
+    tertiary = Color(0xFF9A8065), background = Color(0xFFF2F7F2),
+    surface = Color(0xFFFCFEFA), surfaceVariant = Color(0xFFE5EEE7),
+    onSurface = Color(0xFF2F4038), onSurfaceVariant = Color(0xFF68786E),
+    outline = Color(0xFF8B9B8F), outlineVariant = Color(0xFFD8E3DA)
+)
+
 private val BabyLogTypography = Typography().copy(
     displayLarge = TextStyle(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold),
     displayMedium = TextStyle(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold),
@@ -77,7 +87,11 @@ private val BabyLogTypography = Typography().copy(
 @Composable
 fun BabyLogTheme(style: BabyLogThemeStyle = BabyLogThemeStyle.DEFAULT, content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (style == BabyLogThemeStyle.CAPYBARA) CapybaraColors else DefaultColors,
+        colorScheme = when (style) {
+            BabyLogThemeStyle.CAPYBARA -> CapybaraColors
+            BabyLogThemeStyle.KOALA -> KoalaColors
+            BabyLogThemeStyle.DEFAULT -> DefaultColors
+        },
         typography = BabyLogTypography,
         content = content
     )
