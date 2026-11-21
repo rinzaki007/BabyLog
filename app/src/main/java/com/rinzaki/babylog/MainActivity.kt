@@ -776,7 +776,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 Toast.makeText(appContext, "接种记录已在本机删除，但同步任务创建失败，请稍后重试", Toast.LENGTH_LONG).show()
                             }
                         }
-                    } }) }
+                    } })
                         }
                     }
                     if (page == 4) item {
