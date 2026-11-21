@@ -5,9 +5,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 0.2.0"
+        description: "Release version, for example 2.1.0"
         required: true
         type: string
+      publish:
+        description: "Publish the GitHub Release and update manifest (leave off for build testing)"
+        required: true
+        default: false
+        type: boolean
 permissions:
   contents: write
 jobs:
@@ -37,6 +42,7 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/babylog-release.jks"
           echo "BABYLOG_KEYSTORE_FILE=$RUNNER_TEMP/babylog-release.jks" >> "$GITHUB_ENV"
       - name: Build signed release APK
+        id: build_release
         env:
           BABYLOG_KEYSTORE_PASSWORD: ${{ secrets.BABYLOG_KEYSTORE_PASSWORD }}
           BABYLOG_KEY_ALIAS: ${{ secrets.BABYLOG_KEY_ALIAS }}
@@ -51,8 +57,33 @@ jobs:
             echo 'org.gradle.workers.max=1'
             echo 'kotlin.compiler.execution.strategy=in-process'
           } >> gradle.properties
-          gradle --no-daemon --max-workers=1 assembleRelease -PappVersionName="$VERSION" -PappVersionCode="$VERSION_CODE"
-      - name: Verify launcher icon is packaged in the release APK
+          echo "Building signed APK: version=$VERSION versionCode=$VERSION_CODE"
+          echo "Runner memory:"
+          grep -E 'MemTotal|MemAvailable' /proc/meminfo || true
+          echo "Runner disk:"
+          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
+          gradle --no-daemon --max-workers=1 --stacktrace assembleRelease -PappVersionName="$VERSION" -PappVersionCode="$VERSION_CODE"
+
+      - name: Collect release build diagnostics
+        if: failure() && steps.build_release.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::group::Runner resources"
+          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP" || true
+          df -i "$GITHUB_WORKSPACE" "$RUNNER_TEMP" || true
+          grep -E 'MemTotal|MemAvailable|SwapTotal|SwapFree' /proc/meminfo || true
+          echo "::endgroup::"
+          echo "::group::Release outputs"
+          find app/build/outputs -maxdepth 5 -type f -printf '%p (%s bytes)\n' 2>/dev/null | sort || true
+          echo "::endgroup::"
+          echo "::group::Gradle daemon logs"
+          find "$HOME/.gradle/daemon" -type f -name '*.out.log' -print 2>/dev/null | tail -n 3 | while read -r log; do
+            echo "--- $log (last 160 lines) ---"
+            tail -n 160 "$log"
+          done
+          echo "::endgroup::"
+
+      - name: Verify launcher icon is packaged in the release APK"
         shell: bash
         run: |
           set -euo pipefail
@@ -66,6 +97,7 @@ jobs:
           "$AAPT" dump resources "$APK" | grep -q "mipmap/ic_launcher"
           "$AAPT" dump resources "$APK" | grep -q "mipmap/ic_launcher_round"
       - name: Publish GitHub Release
+        if: github.event_name == 'push' || inputs.publish
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
@@ -73,6 +105,7 @@ jobs:
           generate_release_notes: true
           files: app/build/outputs/apk/release/*.apk
       - name: Publish public update manifest
+        if: github.event_name == 'push' || inputs.publish
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
