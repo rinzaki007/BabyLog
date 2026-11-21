@@ -445,35 +445,55 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
 
-                    if (page == 2) item { TrendsSummary(baby.id, dao) }
-                    if (page == 2) item { GrowthSection(baby, growthEvents) }
                     if (page == 2) item {
-                        GrowthMilestonesSection(baby, milestoneEvents) { milestone ->
-                            val now = System.currentTimeMillis()
-                            val payload = JSONObject()
-                                .put("milestoneId", milestone.id)
-                                .put("milestoneTitle", milestone.title)
-                                .put("category", milestone.category)
-                            val event = BabyEventEntity(
-                                UUID.randomUUID().toString(), baby.id, "MILESTONE",
-                                now, payload.toString(), null, now
-                            )
-                            scope.launch {
-                                dao.upsertEvent(event)
-                                if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                                    dao.enqueueOperation(
-                                        SyncOperationEntity(
-                                            UUID.randomUUID().toString(), "event", event.id, "upsert",
-                                            eventSyncPayload(event).toString(), event.serverVersion, now
-                                        )
-                                    )
-                                    SyncScheduler.enqueue(appContext)
-                                }
-                            }
+                        CollapsibleSection(
+                            title = "成长数据与趋势",
+                            description = "身高、体重、头围及日常照护统计",
+                            expandedInitially = true
+                        ) {
+                            GrowthSection(baby, growthEvents)
+                            TrendsSummary(baby.id, dao)
                         }
                     }
-                    if (page == 2) item { FamilyMemorySection(baby, milestoneEvents) }
-                    if (page == 2) item { SolidFoodJourneySection(solidFoodEvents) }
+                    if (page == 2) item {
+                        CollapsibleSection(
+                            title = "成长足迹与家庭纪念",
+                            description = "里程碑、重要时刻与家庭纪念日"
+                        ) {
+                            GrowthMilestonesSection(baby, milestoneEvents) { milestone ->
+                                val now = System.currentTimeMillis()
+                                val payload = JSONObject()
+                                    .put("milestoneId", milestone.id)
+                                    .put("milestoneTitle", milestone.title)
+                                    .put("category", milestone.category)
+                                val event = BabyEventEntity(
+                                    UUID.randomUUID().toString(), baby.id, "MILESTONE",
+                                    now, payload.toString(), null, now
+                                )
+                                scope.launch {
+                                    dao.upsertEvent(event)
+                                    if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                                        dao.enqueueOperation(
+                                            SyncOperationEntity(
+                                                UUID.randomUUID().toString(), "event", event.id, "upsert",
+                                                eventSyncPayload(event).toString(), event.serverVersion, now
+                                            )
+                                        )
+                                        SyncScheduler.enqueue(appContext)
+                                    }
+                                }
+                            }
+                            FamilyMemorySection(baby, milestoneEvents)
+                        }
+                    }
+                    if (page == 2) item {
+                        CollapsibleSection(
+                            title = "辅食成长记录",
+                            description = "回顾尝试过的食物与进食历程"
+                        ) {
+                            SolidFoodJourneySection(solidFoodEvents)
+                        }
+                    }
                     if (page == 2) item {
                         GrowthReportCard(isExporting = exportingGrowthReport) {
                             scope.launch {
@@ -705,36 +725,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
-                    if (page == 4) item {
-                        val syncConfigured = SyncPreferences.familyId(appContext).isNotBlank()
-                        val syncStatus = familySyncStatusLabel(
-                            configured = syncConfigured,
-                            syncing = syncing,
-                            hasError = !syncError.isNullOrBlank(),
-                            pendingCount = pendingSyncCount,
-                            conflictCount = syncConflictCount,
-                            lastSyncAt = lastSyncAt
-                        )
-                        val syncDescription = when {
-                            !syncConfigured -> "配置家庭空间，在设备间安全同步记录"
-                            !syncError.isNullOrBlank() -> syncError ?: "同步遇到问题，请检查设置"
-                            lastSyncAt > 0L -> "最近同步：" + SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(lastSyncAt))
-                            else -> "家庭空间已连接，等待首次同步"
-                        }
-                        MorePageHeader(
-                            syncStatus = syncStatus,
-                            syncDescription = syncDescription,
-                            syncHasError = !syncError.isNullOrBlank(),
-                            pendingCount = pendingSyncCount,
-                            conflictCount = syncConflictCount,
-                            lastSyncLabel = if (lastSyncAt > 0L) SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).format(Date(lastSyncAt)) else "暂无记录",
-                            consistency = syncConsistency,
-                            syncError = syncError,
-                            syncing = syncing,
-                            onSyncNow = { SyncScheduler.enqueue(appContext) },
-                            onOpenSyncSettings = { showSyncSettings = true }
-                        )
-                    }
+                    if (page == 4) item { MorePageHeader() }
                     if (page == 4) item { VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp, onComplete ->
                         val now = System.currentTimeMillis()
                         scope.launch {
