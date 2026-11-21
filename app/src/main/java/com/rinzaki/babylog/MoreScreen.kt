@@ -1,5 +1,7 @@
 package com.rinzaki.babylog
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,103 +12,31 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun MorePageHeader(
-    syncStatus: String,
-    syncDescription: String,
-    syncHasError: Boolean,
-    pendingCount: Int,
-    conflictCount: Int,
-    lastSyncLabel: String,
-    consistency: String?,
-    syncError: String?,
-    syncing: Boolean,
-    onSyncNow: () -> Unit,
-    onOpenSyncSettings: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+internal fun MorePageHeader() {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text("更多", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "家庭设置与健康管理",
+                "健康、数据与应用管理",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("☁️", style = MaterialTheme.typography.headlineMedium)
-                    Column(
-                        modifier = Modifier.weight(1f).padding(start = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Text("家庭同步", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            syncDescription,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        syncStatus,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (syncHasError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(
-                        if (pendingCount == 0 && conflictCount == 0) "同步队列已清空"
-                        else "待同步 $pendingCount 项 · 冲突 $conflictCount 项",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (conflictCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("最近成功同步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                        Text(lastSyncLabel, style = MaterialTheme.typography.labelSmall)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("本地与云端校验", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                        Text(
-                            consistency ?: "尚未校验",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (consistency == "一致") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    if (!syncError.isNullOrBlank()) {
-                        Text("同步提示：$syncError", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-                OutlinedButton(onClick = onSyncNow, enabled = !syncing && syncStatus != "未配置", modifier = Modifier.fillMaxWidth()) {
-                    Text(if (syncing) "同步中…" else "立即同步")
-                }
-                Button(onClick = onOpenSyncSettings, modifier = Modifier.fillMaxWidth()) {
-                    Text("管理家庭同步与冲突")
-                }
-            }
-        }
         MoreSectionHeader(
             title = "健康管理",
-            description = "查看疫苗接种计划与宝宝的接种记录"
+            description = "疫苗接种计划与历史记录"
         )
     }
 }
@@ -126,6 +56,38 @@ internal fun MoreSectionHeader(title: String, description: String) {
     }
 }
 
+@Composable
+internal fun CollapsibleSection(
+    title: String,
+    description: String,
+    expandedInitially: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember(title) { mutableStateOf(expandedInitially) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(if (expanded) "收起 －" else "展开 ＋", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
+                    content()
+                }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun MoreDataManagementCard(
@@ -155,7 +117,7 @@ internal fun MoreDataManagementCard(
                         Text("备份与恢复", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(
                             if (serverConfigured) {
-                                "可导出宝宝档案和记录；完整迁移时可选择包含照片与头像。导入前会先校验，并以增量方式恢复，不覆盖已有记录。"
+                                "导出宝宝档案和记录；完整迁移时可选择照片与头像。导入前会校验，并以增量方式恢复，不覆盖已有记录。"
                             } else {
                                 "连接 NAS 后，可在网页面板导出备份、检查备份内容并安全恢复数据。"
                             },
