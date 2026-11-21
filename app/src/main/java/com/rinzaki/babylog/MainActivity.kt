@@ -133,6 +133,14 @@ class MainActivity : ComponentActivity() {
             .enableMultiInstanceInvalidation().build()
         setContent { BabyLogApp(database.babyLogDao()) }
     }
+    override fun onStop() {
+        super.onStop()
+        // Update the launcher alias only after the UI has left the foreground.
+        // Some launchers briefly restart their task while refreshing activity aliases.
+        runCatching {
+            updateLauncherIcon(applicationContext, BabyLogThemePreferences.read(applicationContext))
+        }
+    }
     override fun onDestroy() {
         if (::database.isInitialized) database.close()
         super.onDestroy()
@@ -143,9 +151,6 @@ class MainActivity : ComponentActivity() {
 private fun BabyLogApp(dao: BabyLogDao) {
     val appContext = LocalContext.current.applicationContext
     var selectedTheme by remember { mutableStateOf(BabyLogThemePreferences.read(appContext)) }
-    LaunchedEffect(selectedTheme) {
-        runCatching { updateLauncherIcon(appContext, selectedTheme) }
-    }
     val babies by dao.observeBabies().collectAsState(initial = emptyList())
     val baby = babies.firstOrNull()
     val todayDate = LocalDate.now()
@@ -195,7 +200,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var savingEvent by remember { mutableStateOf(false) }
     var showSyncDetails by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
+    val pageListStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     var lastSyncAt by remember { mutableStateOf(SyncPreferences.lastSyncAt(appContext)) }
     var syncError by remember { mutableStateOf(SyncPreferences.lastSyncError(appContext)) }
     var syncing by remember { mutableStateOf(SyncPreferences.isSyncing(appContext)) }
@@ -741,21 +746,22 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
-                    if (page == 4) item { MorePageHeader() }
-                    if (page == 4) item {
+                    if (page == 5) item { MorePageHeader() }
+                    if (page == 5) item {
+                        MoreSectionHeader("设置", "外观与皮肤、数据管理统一放在这里", selectedTheme)
+                    }
+                    if (page == 5) item {
                         AppearanceSettingsCard(selectedStyle = selectedTheme) { style ->
                             selectedTheme = style
                             BabyLogThemePreferences.save(appContext, style)
-                            runCatching { updateLauncherIcon(appContext, style) }.onFailure {
-                                Toast.makeText(appContext, "主题已切换，桌面图标可能需要稍后刷新", Toast.LENGTH_LONG).show()
-                            }
                         }
                     }
                     if (page == 4) item { MoreSectionHeader("健康管理", "疫苗接种计划与历史记录", selectedTheme) }
                     if (page == 4) item {
                         CollapsibleSection(
                             title = "疫苗接种",
-                            description = "查看接种计划、已完成项目与历史记录"
+                            description = "查看接种计划、已完成项目与历史记录",
+                            expandedInitially = true
                         ) {
                             VaccinePage(vaccineEvents, birthDate = java.time.Instant.ofEpochMilli(baby.birthTime).atZone(ZoneId.systemDefault()).toLocalDate(), sex = baby.sex, onSave = { existing, payload, timestamp, onComplete ->
                         val now = System.currentTimeMillis()
@@ -803,7 +809,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     } })
                         }
                     }
-                    if (page == 4) item {
+                    if (page == 5) item {
                         val webPanelBase = SyncPreferences.server(appContext).trim().trimEnd('/')
                         val webPanelConfigured = webPanelBase.startsWith("https://") || webPanelBase.startsWith("http://")
                         MoreDataManagementCard(serverConfigured = webPanelConfigured) {

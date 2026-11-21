@@ -12,6 +12,16 @@ class ThemeStyleTest {
     }
 
     @Test
+    fun eachThemeEnablesExactlyOneLauncherComponent() {
+        BabyLogThemeStyle.entries.forEach { style ->
+            val enabled = launcherComponentEnabledStates(style)
+            assertEquals(3, enabled.size)
+            assertEquals(1, enabled.count { it })
+            assertEquals(style.ordinal, enabled.indexOf(true))
+        }
+    }
+
+    @Test
     fun allSupportedThemesRestoreFromStorage() {
         assertEquals(BabyLogThemeStyle.DEFAULT, BabyLogThemeStyle.fromStorage("default"))
         assertEquals(BabyLogThemeStyle.CAPYBARA, BabyLogThemeStyle.fromStorage("capybara"))

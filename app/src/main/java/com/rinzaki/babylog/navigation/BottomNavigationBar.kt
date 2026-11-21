@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.ShowChart
@@ -40,7 +41,8 @@ fun BabyLogNavigationBar(selectedIndex: Int, themeStyle: BabyLogThemeStyle = Bab
                                 BabyLogDestination.RECORDS -> if (themeStyle == BabyLogThemeStyle.KOALA) "🥛" else "🍼"
                                 BabyLogDestination.GROWTH -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌿" else "🌱"
                                 BabyLogDestination.ALBUM -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌳" else "📷"
-                                BabyLogDestination.MORE -> if (themeStyle == BabyLogThemeStyle.KOALA) "🍃" else "🐹"
+                                BabyLogDestination.VACCINE -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌼" else "💉"
+                                BabyLogDestination.MORE -> if (themeStyle == BabyLogThemeStyle.KOALA) "🍃" else "⚙️"
                             },
                             style = MaterialTheme.typography.titleMedium
                         )
@@ -51,6 +53,7 @@ fun BabyLogNavigationBar(selectedIndex: Int, themeStyle: BabyLogThemeStyle = Bab
                                 BabyLogDestination.RECORDS -> Icons.Filled.Add
                                 BabyLogDestination.GROWTH -> Icons.Filled.ShowChart
                                 BabyLogDestination.ALBUM -> Icons.Filled.Photo
+                                BabyLogDestination.VACCINE -> Icons.Filled.Favorite
                                 BabyLogDestination.MORE -> Icons.Filled.MoreHoriz
                             },
                             contentDescription = destination.label
