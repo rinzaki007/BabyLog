@@ -9,6 +9,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -333,16 +335,49 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                Text("${points.size} 次测量 · 最新记录 ${SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(latest!!.first))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                points.takeLast(5).asReversed().forEach { point ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(point.first)), modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("${"%.2f".format(Locale.CHINA, point.second)} $unit", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "${points.size} 次测量 · 最新记录 ${SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(latest!!.first))}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text("最近测量", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                points.takeLast(5).asReversed().forEachIndexed { index, point ->
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (index == 0) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(point.first)),
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "${"%.2f".format(Locale.CHINA, point.second)} $unit",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (index == 0) {
+                                Text(
+                                    "最新",
+                                    modifier = Modifier.padding(start = 8.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
             }
             val longTerm = remember(allPoints) { growthMonthlySummaries(allPoints) }
             val interval = remember(allPoints) { growthMeasurementInterval(allPoints) }
+            var showAllMonths by remember(allPoints) { mutableStateOf(false) }
             Spacer(Modifier.height(4.dp))
             Text("长期变化", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text("按自然月汇总已有测量；没有记录的月份不会补值。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -352,31 +387,54 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     val rateSign = if (value > 0f) "+" else ""
                     " · 约 $rateSign${"%.2f".format(Locale.CHINA, value)} $unit/30天"
                 } ?: ""
-                Text(
-                    "最近两次：间隔 ${observed.elapsedDays} 天，变化 $sign${"%.2f".format(Locale.CHINA, observed.change)} $unit$rate",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)
+                ) {
+                    Text(
+                        "最近两次：间隔 ${observed.elapsedDays} 天，变化 $sign${"%.2f".format(Locale.CHINA, observed.change)} $unit$rate",
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
             if (longTerm.isEmpty()) {
                 Text("累计测量后，这里会显示每月变化。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                longTerm.asReversed().forEach { month ->
+                val newestFirst = longTerm.asReversed()
+                val visibleMonths = if (showAllMonths) newestFirst else newestFirst.take(3)
+                visibleMonths.forEach { month ->
                     val changeSign = if (month.change > 0f) "+" else ""
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("${month.month.year}年${month.month.monthValue}月", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                            Text("${month.measurementCount} 次测量", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("${month.month.year}年${month.month.monthValue}月", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("${month.measurementCount} 次测量", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("${"%.2f".format(Locale.CHINA, month.latestValue)} $unit", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    if (month.measurementCount > 1) "月内 $changeSign${"%.2f".format(Locale.CHINA, month.change)} $unit" else "单次记录",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("${"%.2f".format(Locale.CHINA, month.latestValue)} $unit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                if (month.measurementCount > 1) "月内 $changeSign${"%.2f".format(Locale.CHINA, month.change)} $unit" else "单次记录",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    }
+                }
+                if (longTerm.size > 3) {
+                    TextButton(
+                        onClick = { showAllMonths = !showAllMonths },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text(if (showAllMonths) "收起" else "查看全部 · ${longTerm.size} 个月")
                     }
                 }
             }
