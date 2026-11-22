@@ -109,6 +109,7 @@ import com.rinzaki.babylog.sync.mimeTypeForPath
 import com.rinzaki.babylog.sync.deletePhotoLocalArtifacts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -184,6 +185,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
         if (baby == null) flowOf(emptyList()) else dao.observeEvents(baby.id)
     }
     val allEvents by allEventsFlow.collectAsState(initial = emptyList())
+    val feedingIntervalNow by produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            delay(60_000L)
+            value = System.currentTimeMillis()
+        }
+    }
     val photosFlow = remember(baby?.id) { if (baby == null) flowOf(emptyList()) else dao.observePhotoPage(baby.id, 60, 0) }
     val photos by photosFlow.collectAsState(initial = emptyList())
     val photoCountFlow = remember(baby?.id) { if (baby == null) flowOf(0) else dao.observePhotoCount(baby.id) }
@@ -438,6 +445,15 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
                 }
                 if (baby != null) {
+                    if (page == 0) item {
+                        val lastFeedingAt = remember(allEvents, feedingIntervalNow) {
+                            lastFeedingTimeToday(allEvents, feedingIntervalNow, ZoneId.systemDefault())
+                        }
+                        HomeFeedingIntervalCard(
+                            lastFeedingAt = lastFeedingAt,
+                            elapsedMinutes = lastFeedingAt?.let { ((feedingIntervalNow - it).coerceAtLeast(0L) / 60_000L) }
+                        ) { selectedNav = 1; selectedEventFilter = "喂养" }
+                    }
                     if (page == 0) item {
                         TodaySummary(todayEvents) { category ->
                             selectedEventFilter = category
