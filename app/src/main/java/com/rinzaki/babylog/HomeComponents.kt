@@ -27,6 +27,8 @@ import com.rinzaki.babylog.data.BabyEventEntity
 import org.json.JSONObject
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 
 @Composable
 internal fun HomeDashboardHeader(todayDate: LocalDate, themeStyle: com.rinzaki.babylog.ui.theme.BabyLogThemeStyle = com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT, onSettings: () -> Unit) {
@@ -48,6 +50,59 @@ internal fun HomeDashboardHeader(todayDate: LocalDate, themeStyle: com.rinzaki.b
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 13.dp, vertical = 7.dp)
         ) {
             Text("⚙ 设置")
+        }
+    }
+}
+
+
+@Composable
+internal fun HomeFeedingIntervalCard(
+    lastFeedingAt: Long?,
+    elapsedMinutes: Long?,
+    onClick: () -> Unit = {}
+) {
+    val timeLabel = lastFeedingAt?.let {
+        DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it))
+    }
+    val elapsedLabel = elapsedMinutes?.coerceAtLeast(0L)?.let { minutes ->
+        val hours = minutes / 60
+        val remainder = minutes % 60
+        when {
+            hours > 0L -> "已过去 ${hours} 小时 ${remainder} 分钟"
+            else -> "已过去 ${remainder} 分钟"
+        }
+    }
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("🍼", style = MaterialTheme.typography.headlineMedium)
+                }
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("距离上次喂奶", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                if (lastFeedingAt == null || elapsedLabel == null) {
+                    Text("今天还没有喂奶记录", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("记录一次喂养后，这里会开始计时", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f))
+                } else {
+                    Text(elapsedLabel, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("上次喂奶时间 $timeLabel", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f))
+                }
+            }
+            Text("›", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
 }

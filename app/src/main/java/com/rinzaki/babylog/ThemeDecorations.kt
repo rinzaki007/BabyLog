@@ -88,7 +88,24 @@ internal fun ThemePageBanner(
     subtitle: String,
     pose: ThemeCharacterPose = ThemeCharacterPose.HOME
 ) {
-    if (style == BabyLogThemeStyle.DEFAULT) return
+    if (style == BabyLogThemeStyle.DEFAULT) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(44.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(pose.accessory, style = MaterialTheme.typography.titleLarge)
+                }
+            }
+        }
+        return
+    }
 
     val motif = if (style == BabyLogThemeStyle.CAPYBARA) "🐾" else "🍃"
     Surface(
