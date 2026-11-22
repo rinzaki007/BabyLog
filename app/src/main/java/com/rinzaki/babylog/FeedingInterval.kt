@@ -18,7 +18,7 @@ internal fun lastFeedingTimeToday(
     val start = today.atStartOfDay(zone).toInstant().toEpochMilli()
     val end = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
     return events.asSequence()
-        .filter { it.eventType == "FEEDING" }
+        .filter { it.eventType == "FEEDING" && it.deletedAt == null }
         .map { it.occurredAt }
         .filter { it >= start && it < end && it <= nowEpochMs }
         .maxOrNull()
