@@ -1,21 +1,94 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp" android:height="108dp"
-    android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#78877F" android:pathData="M31,43 C17,49 8,40 10,28 C12,14 25,8 37,15 C45,20 47,31 44,42 Z"/>
-    <path android:fillColor="#78877F" android:pathData="M64,42 C61,30 64,20 72,15 C84,8 97,14 99,28 C101,40 92,49 78,43 Z"/>
-    <path android:fillColor="#C6A9A1" android:pathData="M18,29 C18,20 26,16 33,21 C38,25 38,33 33,38 C26,42 19,37 18,29 Z"/>
-    <path android:fillColor="#C6A9A1" android:pathData="M75,21 C82,16 90,20 90,29 C89,37 82,42 75,38 C70,33 70,25 75,21 Z"/>
-    <path android:fillColor="#9EAAA2" android:pathData="M20,52 C20,32 34,21 54,21 C74,21 88,32 88,52 C88,76 74,94 54,94 C34,94 20,76 20,52 Z"/>
-    <path android:fillColor="#B6C0B8" android:pathData="M25,50 C27,34 38,27 54,27 C70,27 81,35 83,51 C84,70 72,87 54,88 C36,87 24,70 25,50 Z"/>
-    <path android:fillColor="#E8E4D8" android:pathData="M29,62 C31,51 40,44 54,44 C68,44 77,51 79,62 C77,77 67,85 54,85 C41,85 31,77 29,62 Z"/>
-    <path android:fillColor="#D6D8CE" android:pathData="M35,62 C38,54 45,51 54,51 C63,51 70,55 73,63 C70,73 63,79 54,79 C45,79 38,73 35,62 Z"/>
-    <path android:fillColor="#34413D" android:pathData="M37,48 C37,45 40,43 43,44 C46,45 47,48 45,51 C43,54 39,53 37,50 Z"/>
-    <path android:fillColor="#34413D" android:pathData="M63,48 C63,45 66,43 69,44 C72,45 73,48 71,51 C69,54 65,53 63,50 Z"/>
-    <path android:fillColor="#F7F5ED" android:pathData="M40,45 C41,44 43,45 43,47 C42,48 41,48 40,47 Z M66,45 C67,44 69,45 69,47 C68,48 67,48 66,47 Z"/>
-    <path android:fillColor="#303A39" android:pathData="M47,52 C49,47 59,47 62,52 C65,60 62,70 55,74 C53,75 51,74 49,72 C43,66 44,58 47,52 Z"/>
-    <path android:fillColor="#4B5754" android:pathData="M49,53 C51,50 58,50 60,53 C61,58 59,64 55,67 C50,64 48,58 49,53 Z"/>
-    <path android:strokeColor="#7E8C83" android:strokeWidth="1.2" android:strokeLineCap="round" android:fillColor="#00000000" android:pathData="M24,45 L29,40 M29,36 L33,32 M39,29 L42,27 M67,28 L71,31 M77,34 L80,39 M83,46 L86,50 M25,72 L29,77 M34,84 L39,88 M68,88 L73,84 M79,77 L83,72"/>
-    <path android:strokeColor="#D7DED6" android:strokeWidth="1" android:strokeLineCap="round" android:fillColor="#00000000" android:pathData="M15,29 L18,26 M20,18 L24,17 M31,18 L35,21 M91,27 L95,30 M88,18 L84,17 M77,18 L73,21 M28,57 L32,54 M76,55 L80,58"/>
-    <path android:fillColor="#8E9D94" android:pathData="M29,43 C31,39 34,37 38,36 C36,40 34,43 31,46 Z M70,36 C74,37 77,39 79,43 L77,46 C74,43 72,40 70,36 Z"/>
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Branch behind the paws -->
+    <path
+        android:strokeColor="#302D2C"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M9,88 L99,88"/>
+
+    <!-- Big rounded ears -->
+    <path
+        android:fillColor="#9DA8B0"
+        android:strokeColor="#17191B"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M29,48 C17,52 8,44 9,31 C10,17 21,10 34,14 C43,17 48,26 47,38 Z"/>
+    <path
+        android:fillColor="#9DA8B0"
+        android:strokeColor="#17191B"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M61,38 C60,26 65,17 74,14 C87,10 98,17 99,31 C100,44 91,52 79,48 Z"/>
+
+    <!-- Soft inner ears -->
+    <path
+        android:fillColor="#E9E9E7"
+        android:pathData="M17,31 C18,22 25,18 32,21 C37,24 39,31 35,37 C29,43 19,40 17,31 Z"/>
+    <path
+        android:fillColor="#E9E9E7"
+        android:pathData="M73,21 C80,18 87,22 91,31 C89,40 79,43 73,37 C69,31 70,24 73,21 Z"/>
+
+    <!-- Head and compact body -->
+    <path
+        android:fillColor="#AAB4BC"
+        android:strokeColor="#17191B"
+        android:strokeWidth="3.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M22,48 C22,31 35,22 54,22 C73,22 86,31 86,48 C86,68 76,80 67,82 C78,81 84,86 83,92 C82,98 68,98 58,94 C55,92 53,89 54,86 C55,91 51,95 45,96 C33,98 22,94 23,88 C24,84 29,82 36,82 C27,78 22,66 22,48 Z"/>
+
+    <!-- Pale face patch -->
+    <path
+        android:fillColor="#E7E8E7"
+        android:pathData="M34,61 C37,53 44,49 54,49 C64,49 71,53 74,61 C72,74 64,80 54,80 C44,80 36,74 34,61 Z"/>
+
+    <!-- Bright simple eyes -->
+    <path
+        android:fillColor="#111315"
+        android:pathData="M35,51 C35,46 39,43 44,44 C49,45 51,50 48,54 C45,58 39,58 36,54 Z"/>
+    <path
+        android:fillColor="#111315"
+        android:pathData="M60,54 C57,50 59,45 64,44 C69,43 73,46 73,51 C72,58 64,58 60,54 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M41,46 C43,45 45,47 44,49 C42,50 40,49 41,46 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M65,46 C67,45 69,47 68,49 C66,50 64,49 65,46 Z"/>
+
+    <!-- Large oval nose -->
+    <path
+        android:fillColor="#152A32"
+        android:strokeColor="#17191B"
+        android:strokeWidth="2.8"
+        android:strokeLineJoin="round"
+        android:pathData="M47,57 C49,51 59,51 61,57 C64,66 60,75 54,76 C48,75 44,66 47,57 Z"/>
+    <path
+        android:fillColor="#40545B"
+        android:pathData="M50,58 C52,55 57,55 59,58 C60,64 58,69 54,71 C50,69 48,64 50,58 Z"/>
+
+    <!-- Front paws resting on the branch -->
+    <path
+        android:fillColor="#AAB4BC"
+        android:strokeColor="#17191B"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M31,77 C37,75 45,77 50,83 C54,88 51,93 44,93 C35,93 27,89 27,84 C27,81 28,79 31,77 Z"/>
+    <path
+        android:fillColor="#AAB4BC"
+        android:strokeColor="#17191B"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M77,77 C71,75 63,77 58,83 C54,88 57,93 64,93 C73,93 81,89 81,84 C81,81 80,79 77,77 Z"/>
 </vector>
