@@ -366,7 +366,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 if (page == 0) item { HomeDashboardHeader(todayDate = todayDate, themeStyle = selectedTheme) { showAppSettings = true } }
                 if (page == 1) item { ThemePageBanner(selectedTheme, "成长足迹", "记录每一个值得珍藏的日常瞬间", ThemeCharacterPose.TIMELINE) }
                 if (page == 2) item { ThemePageBanner(selectedTheme, "成长记录", "陪伴宝宝一点点长大", ThemeCharacterPose.GROWTH) }
-                if (page == 3) item { ThemePageBanner(selectedTheme, "成长相册", "把每个可爱的瞬间好好收藏", ThemeCharacterPose.ALBUM) }
+                if (page == 3) item { ThemePageBanner(selectedTheme, "照片时光", "按日期或月龄，收藏成长的每个瞬间", ThemeCharacterPose.ALBUM) }
                 if (page == 4) item { ThemePageBanner(selectedTheme, "疫苗接种", "记录每一次安心守护", ThemeCharacterPose.VACCINE) }
                 if (page == 0) item {
                     val syncConfigured = SyncPreferences.familyId(appContext).isNotBlank()
@@ -635,8 +635,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     if (page == 1) item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text("成长足迹", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                Text("共 ${timelineTotal} 条记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("记录列表", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("共 ${timelineTotal} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             FilledTonalButton(onClick = { showRecordTypePicker = true }) {
                                 Text("＋ 记一笔")
@@ -763,7 +763,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
                     }
-                    if (page == 4) item { MoreSectionHeader("疫苗接种", "接种计划与历史记录", selectedTheme) }
                     if (page == 4) item {
                         CollapsibleSection(
                             title = "接种计划与记录",
