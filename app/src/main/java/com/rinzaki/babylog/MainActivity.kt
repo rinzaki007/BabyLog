@@ -60,6 +60,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -645,42 +646,80 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                     if (page == 1) item {
-                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                OutlinedButton(onClick = { showStartDatePicker = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
-                                    Text(selectedStartDate?.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))?.let { "从 $it" } ?: "开始日期", maxLines = 1)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showStartDatePicker = true },
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)
+                                ) {
+                                    Text(
+                                        selectedStartDate?.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))?.let { "从 $it" } ?: "开始日期",
+                                        maxLines = 1
+                                    )
                                 }
-                                OutlinedButton(onClick = { showEndDatePicker = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
-                                    Text(selectedEndDate?.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))?.let { "至 $it" } ?: "结束日期", maxLines = 1)
+                                OutlinedButton(
+                                    onClick = { showEndDatePicker = true },
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)
+                                ) {
+                                    Text(
+                                        selectedEndDate?.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))?.let { "至 $it" } ?: "结束日期",
+                                        maxLines = 1
+                                    )
                                 }
                                 if (selectedStartDate != null || selectedEndDate != null || selectedEventFilter != "全部") {
-                                    TextButton(onClick = {
-                                        selectedStartDate = null
-                                        selectedEndDate = null
-                                        selectedEventFilter = "全部"
-                                    }) { Text("清除筛选") }
+                                    TextButton(
+                                        onClick = {
+                                            selectedStartDate = null
+                                            selectedEndDate = null
+                                            selectedEventFilter = "全部"
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 7.dp)
+                                    ) { Text("重置") }
                                 }
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                TextButton(onClick = { selectedStartDate = LocalDate.now(); selectedEndDate = LocalDate.now() }) { Text("今天") }
-                                TextButton(onClick = { selectedStartDate = LocalDate.now().minusDays(6); selectedEndDate = LocalDate.now() }) { Text("近7天") }
-                                TextButton(onClick = { selectedStartDate = LocalDate.now().minusDays(29); selectedEndDate = LocalDate.now() }) { Text("近30天") }
-                                TextButton(onClick = {
-                                    selectedStartDate = null
-                                    selectedEndDate = null
-                                    selectedEventFilter = "全部"
-                                }) { Text("全部") }
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                items(listOf("今天", "近7天", "近30天", "全部")) { preset ->
+                                    TextButton(
+                                        onClick = {
+                                            when (preset) {
+                                                "今天" -> {
+                                                    selectedStartDate = LocalDate.now()
+                                                    selectedEndDate = LocalDate.now()
+                                                }
+                                                "近7天" -> {
+                                                    selectedStartDate = LocalDate.now().minusDays(6)
+                                                    selectedEndDate = LocalDate.now()
+                                                }
+                                                "近30天" -> {
+                                                    selectedStartDate = LocalDate.now().minusDays(29)
+                                                    selectedEndDate = LocalDate.now()
+                                                }
+                                                else -> {
+                                                    selectedStartDate = null
+                                                    selectedEndDate = null
+                                                    selectedEventFilter = "全部"
+                                                }
+                                            }
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 9.dp, vertical = 5.dp)
+                                    ) { Text(preset, style = MaterialTheme.typography.labelLarge) }
+                                }
                             }
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "成长测量", "成长里程碑", "成长足迹", "其他")) { category ->
-                                if (selectedEventFilter == category) {
-                                    FilledTonalButton(onClick = { selectedEventFilter = category }) { Text(category) }
-                                } else {
-                                    OutlinedButton(onClick = { selectedEventFilter = category }) { Text(category) }
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "成长测量", "成长里程碑", "成长足迹", "其他")) { category ->
+                                    FilterChip(
+                                        selected = selectedEventFilter == category,
+                                        onClick = { selectedEventFilter = category },
+                                        label = { Text(category) }
+                                    )
                                 }
                             }
                         }
-                    }
                     }
                     if (page == 1 && timelineError != null) item {
                         Card(shape = RoundedCornerShape(18.dp)) {

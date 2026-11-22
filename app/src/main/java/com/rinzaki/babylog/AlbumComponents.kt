@@ -12,6 +12,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -168,11 +170,35 @@ internal fun BabyAlbumSection(
             }
         }
 
-        SelectionRow(listOf("全部", "近7天", "近30天", "本月", "指定日期"), albumFilter) { selected ->
-            albumFilter = selected
-            if (selected == "指定日期") showPhotoDatePicker = true
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            listOf("全部", "近7天", "近30天", "本月", "指定日期").forEach { option ->
+                FilterChip(
+                    selected = albumFilter == option,
+                    onClick = {
+                        albumFilter = option
+                        if (option == "指定日期") showPhotoDatePicker = true
+                    },
+                    label = { Text(option, maxLines = 1) }
+                )
+            }
         }
-        SelectionRow(listOf("按日期", "按月龄"), albumGrouping) { albumGrouping = it }
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            listOf("按日期", "按月龄").forEach { option ->
+                FilterChip(
+                    selected = albumGrouping == option,
+                    onClick = { albumGrouping = option },
+                    label = { Text(option) }
+                )
+            }
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
