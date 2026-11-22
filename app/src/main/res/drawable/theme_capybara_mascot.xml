@@ -1,24 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp" android:height="108dp"
-    android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#70482F" android:pathData="M28,35 C22,29 23,19 30,16 C37,13 44,20 43,30 L40,41 Z"/>
-    <path android:fillColor="#70482F" android:pathData="M67,30 C66,20 73,13 80,16 C87,19 88,29 81,36 L69,41 Z"/>
-    <path android:fillColor="#B77D5A" android:pathData="M30,31 C27,26 29,21 33,21 C37,21 39,26 37,31 Z"/>
-    <path android:fillColor="#B77D5A" android:pathData="M72,31 C70,26 72,21 76,21 C80,21 82,26 79,31 Z"/>
-    <path android:fillColor="#8A5A3D" android:pathData="M21,47 C23,31 36,24 54,24 C72,24 85,32 87,48 C90,65 84,83 71,91 C62,97 45,97 36,91 C23,83 18,65 21,47 Z"/>
-    <path android:fillColor="#A87550" android:pathData="M25,48 C27,35 38,29 54,29 C69,29 80,36 82,49 C84,64 78,80 68,87 C60,92 47,92 39,87 C29,80 23,64 25,48 Z"/>
-    <path android:fillColor="#C18A62" android:pathData="M31,43 C36,33 45,30 55,31 C67,32 76,39 78,51 C79,57 77,61 74,65 C67,57 60,55 50,56 C42,57 35,61 30,66 C27,59 28,50 31,43 Z"/>
-    <path android:fillColor="#D9AD87" android:pathData="M28,62 C34,54 43,51 54,51 C66,51 75,55 80,64 C78,77 68,85 54,86 C40,86 30,78 28,62 Z"/>
-    <path android:fillColor="#E8C5A5" android:pathData="M31,66 C37,59 45,57 54,57 C64,57 71,60 77,67 C73,78 65,83 54,83 C43,83 35,78 31,66 Z"/>
-    <path android:fillColor="#4A3328" android:pathData="M39,49 C39,46 41,44 44,44 C47,44 49,47 48,50 C47,53 44,54 41,52 Z"/>
-    <path android:fillColor="#4A3328" android:pathData="M61,49 C60,46 63,44 66,44 C69,44 71,47 70,50 C69,53 66,54 63,52 Z"/>
-    <path android:fillColor="#F8EBDD" android:pathData="M42,46 C43,45 45,46 45,48 C44,49 43,49 42,48 Z"/>
-    <path android:fillColor="#F8EBDD" android:pathData="M64,46 C65,45 67,46 67,48 C66,49 65,49 64,48 Z"/>
-    <path android:fillColor="#563A2C" android:pathData="M47,65 C49,61 59,61 62,65 C63,69 59,73 54,73 C49,73 45,69 47,65 Z"/>
-    <path android:fillColor="#34251F" android:pathData="M49,65 C51,63 57,63 60,65 C59,68 56,69 54,69 C51,69 49,68 49,65 Z"/>
-    <path android:strokeColor="#704A36" android:strokeWidth="1.1" android:strokeLineCap="round" android:fillColor="#00000000" android:pathData="M54,72 C53,76 49,77 46,76 M54,72 C55,76 59,77 62,76"/>
-    <path android:fillColor="#65442F" android:pathData="M35,58 C36,56 38,56 39,58 C39,60 37,61 35,60 Z M43,57 C44,55 46,56 46,58 C45,60 43,60 43,57 Z M63,57 C64,55 66,56 66,58 C65,60 63,60 63,57 Z M70,59 C71,57 73,58 73,60 C72,62 70,61 70,59 Z"/>
-    <path android:strokeColor="#D8B18F" android:strokeWidth="1" android:strokeLineCap="round" android:fillColor="#00000000" android:pathData="M30,42 L34,38 M36,35 L39,33 M68,34 L72,36 M76,39 L79,43 M27,72 L31,76 M77,76 L81,72 M38,85 L42,88 M66,88 L70,85"/>
-    <path android:fillColor="#E9C9A9" android:pathData="M28,55 C29,52 31,51 33,52 C31,55 30,57 29,60 Z M75,52 C78,51 80,53 80,56 L79,60 C77,57 76,55 75,52 Z"/>
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Rounded ears -->
+    <path
+        android:fillColor="#B8795B"
+        android:strokeColor="#563B30"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M29,37 C25,29 27,20 34,18 C41,16 47,23 46,34 Z"/>
+    <path
+        android:fillColor="#B8795B"
+        android:strokeColor="#563B30"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M64,32 C65,23 72,18 79,21 C85,24 86,32 81,39 Z"/>
+
+    <!-- Plump seated body and head -->
+    <path
+        android:fillColor="#DDA47F"
+        android:strokeColor="#563B30"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M18,62 C19,48 28,37 42,33 C54,29 72,31 82,40 C91,48 91,59 88,68 C96,78 91,91 79,94 C67,98 43,97 29,92 C17,88 12,77 18,62 Z"/>
+
+    <!-- Muzzle -->
+    <path
+        android:fillColor="#C98769"
+        android:pathData="M69,48 C81,43 91,50 92,61 C93,72 85,78 73,76 C64,75 60,67 62,58 C63,53 65,50 69,48 Z"/>
+
+    <!-- Tiny sleepy eye and nose/mouth -->
+    <path
+        android:fillColor="#49352D"
+        android:pathData="M48,48 C52,45 57,45 60,47 C58,50 53,52 49,51 C46,51 46,49 48,48 Z"/>
+    <path
+        android:fillColor="#49352D"
+        android:pathData="M80,55 C83,55 85,57 85,60 C85,63 82,65 79,64 C76,63 76,59 78,57 Z"/>
+    <path
+        android:strokeColor="#49352D"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M80,64 C80,68 78,70 75,71 M80,64 C83,67 85,67 87,66"/>
+
+    <!-- Little tucked paws -->
+    <path
+        android:fillColor="#C98769"
+        android:strokeColor="#563B30"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M43,79 C48,82 52,87 51,91 C48,94 40,92 37,87 Z"/>
+    <path
+        android:fillColor="#C98769"
+        android:strokeColor="#563B30"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M65,82 C70,80 76,82 77,87 C76,91 68,93 63,90 Z"/>
 </vector>
