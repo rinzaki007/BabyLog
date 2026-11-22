@@ -166,6 +166,11 @@ internal fun AppSettingsDialog(
                         Text("设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Text("外观、数据与家庭同步", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    if (selectedStyle == com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT) {
+                        Text("⚙️", style = MaterialTheme.typography.headlineMedium)
+                    } else {
+                        ThemeCharacterIllustration(selectedStyle, androidx.compose.ui.Modifier.size(44.dp), ThemeCharacterPose.HOME)
+                    }
                     TextButton(onClick = onDismiss) { Text("完成") }
                 }
                 AppearanceSettingsCard(selectedStyle = selectedStyle, onSelectStyle = onSelectStyle)
