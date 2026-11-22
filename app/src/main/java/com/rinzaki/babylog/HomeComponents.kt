@@ -41,7 +41,7 @@ internal fun HomeDashboardHeader(todayDate: LocalDate, themeStyle: com.rinzaki.b
             )
         }
         if (themeStyle != com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT) {
-            ThemeCharacterIllustration(themeStyle, Modifier.size(64.dp).padding(end = 4.dp))
+            ThemeCharacterIllustration(themeStyle, Modifier.size(64.dp).padding(end = 4.dp), ThemeCharacterPose.HOME)
         }
         androidx.compose.material3.OutlinedButton(
             onClick = onSettings,
