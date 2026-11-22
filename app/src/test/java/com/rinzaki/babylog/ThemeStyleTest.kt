@@ -22,6 +22,12 @@ class ThemeStyleTest {
     }
 
     @Test
+    fun eachPrimarySectionHasItsOwnMascotPose() {
+        assertEquals(5, ThemeCharacterPose.entries.size)
+        assertEquals(5, ThemeCharacterPose.entries.map { it.accessory }.toSet().size)
+    }
+
+    @Test
     fun allSupportedThemesRestoreFromStorage() {
         assertEquals(BabyLogThemeStyle.DEFAULT, BabyLogThemeStyle.fromStorage("default"))
         assertEquals(BabyLogThemeStyle.CAPYBARA, BabyLogThemeStyle.fromStorage("capybara"))
