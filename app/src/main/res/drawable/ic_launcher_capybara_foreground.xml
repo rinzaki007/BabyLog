@@ -5,63 +5,63 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Rounded ears -->
+    <!-- Centered, launcher-safe capybara artwork matching the in-app sticker style. -->
     <path
         android:fillColor="#B8795B"
-        android:strokeColor="#563B30"
-        android:strokeWidth="2.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M29,37 C25,29 27,20 34,18 C41,16 47,23 46,34 Z"/>
-    <path
-        android:fillColor="#B8795B"
-        android:strokeColor="#563B30"
-        android:strokeWidth="2.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M64,32 C65,23 72,18 79,21 C85,24 86,32 81,39 Z"/>
-
-    <!-- Plump seated body and head -->
-    <path
-        android:fillColor="#DDA47F"
         android:strokeColor="#563B30"
         android:strokeWidth="3.2"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M18,62 C19,48 28,37 42,33 C54,29 72,31 82,40 C91,48 91,59 88,68 C96,78 91,91 79,94 C67,98 43,97 29,92 C17,88 12,77 18,62 Z"/>
+        android:pathData="M27,37 C23,28 27,20 34,19 C41,18 47,25 46,35 Z"/>
+    <path
+        android:fillColor="#B8795B"
+        android:strokeColor="#563B30"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M64,34 C64,25 70,19 77,20 C85,21 87,30 82,39 Z"/>
 
-    <!-- Muzzle -->
+    <path
+        android:fillColor="#DDA47F"
+        android:strokeColor="#563B30"
+        android:strokeWidth="3.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M18,63 C19,48 29,37 43,33 C57,28 75,32 84,43 C91,51 92,62 87,71 C95,81 89,91 78,94 C63,98 39,96 27,91 C15,86 12,75 18,63 Z"/>
+
     <path
         android:fillColor="#C98769"
-        android:pathData="M69,48 C81,43 91,50 92,61 C93,72 85,78 73,76 C64,75 60,67 62,58 C63,53 65,50 69,48 Z"/>
+        android:strokeColor="#563B30"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M69,49 C81,44 90,51 91,62 C92,73 84,79 73,77 C63,76 59,68 62,58 C63,54 65,51 69,49 Z"/>
 
-    <!-- Tiny sleepy eye and nose/mouth -->
     <path
         android:fillColor="#49352D"
-        android:pathData="M48,48 C52,45 57,45 60,47 C58,50 53,52 49,51 C46,51 46,49 48,48 Z"/>
+        android:pathData="M47,48 C51,45 57,45 60,47 C58,51 53,52 49,52 C46,51 45,49 47,48 Z"/>
     <path
         android:fillColor="#49352D"
-        android:pathData="M80,55 C83,55 85,57 85,60 C85,63 82,65 79,64 C76,63 76,59 78,57 Z"/>
+        android:pathData="M80,56 C83,56 85,58 85,61 C85,64 82,66 79,65 C76,64 76,60 78,58 Z"/>
     <path
         android:strokeColor="#49352D"
-        android:strokeWidth="2.4"
+        android:strokeWidth="2.6"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
         android:fillColor="#00000000"
-        android:pathData="M80,64 C80,68 78,70 75,71 M80,64 C83,67 85,67 87,66"/>
+        android:pathData="M80,65 C80,69 78,71 75,72 M80,65 C83,68 85,68 87,67"/>
 
-    <!-- Little tucked paws -->
     <path
         android:fillColor="#C98769"
         android:strokeColor="#563B30"
-        android:strokeWidth="2.6"
+        android:strokeWidth="2.8"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M43,79 C48,82 52,87 51,91 C48,94 40,92 37,87 Z"/>
+        android:pathData="M42,80 C48,82 52,87 51,91 C48,94 40,92 37,87 Z"/>
     <path
         android:fillColor="#C98769"
         android:strokeColor="#563B30"
-        android:strokeWidth="2.6"
+        android:strokeWidth="2.8"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
         android:pathData="M65,82 C70,80 76,82 77,87 C76,91 68,93 63,90 Z"/>
