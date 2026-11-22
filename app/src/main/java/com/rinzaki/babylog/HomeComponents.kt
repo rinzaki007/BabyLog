@@ -12,8 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -31,29 +35,59 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 
 @Composable
-internal fun HomeDashboardHeader(todayDate: LocalDate, themeStyle: com.rinzaki.babylog.ui.theme.BabyLogThemeStyle = com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT, onSettings: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("BABYLOG", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-            Text("今天也要好好记录", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(
-                todayDate.format(java.time.format.DateTimeFormatter.ofPattern("M月d日 · EEEE", java.util.Locale.CHINA)),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (themeStyle != com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT) {
-            ThemeCharacterIllustration(themeStyle, Modifier.size(64.dp).padding(end = 4.dp), ThemeCharacterPose.HOME)
-        }
-        androidx.compose.material3.OutlinedButton(
-            onClick = onSettings,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 13.dp, vertical = 7.dp)
+internal fun HomeDashboardHeader(
+    todayDate: LocalDate,
+    themeStyle: com.rinzaki.babylog.ui.theme.BabyLogThemeStyle = com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT,
+    onSettings: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("⚙ 设置")
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(
+                    "BABYLOG",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "今天也要好好记录",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                ) {
+                    Text(
+                        todayDate.format(DateTimeFormatter.ofPattern("M月d日 · EEEE", java.util.Locale.CHINA)),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (themeStyle != com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT) {
+                ThemeCharacterIllustration(themeStyle, Modifier.size(60.dp), ThemeCharacterPose.HOME)
+            }
+            IconButton(onClick = onSettings) {
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = "设置",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
-
 
 @Composable
 internal fun HomeFeedingIntervalCard(

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,7 +36,7 @@ internal fun MorePageHeader() {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text("更多", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "疫苗接种、主题与数据管理设置",
+                "外观与皮肤、数据管理和家庭同步",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -166,23 +167,48 @@ internal fun AppSettingsDialog(
                         Text("设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Text("外观、数据与家庭同步", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    if (selectedStyle == com.rinzaki.babylog.ui.theme.BabyLogThemeStyle.DEFAULT) {
+                        Text("⚙️", style = MaterialTheme.typography.headlineMedium)
+                    } else {
+                        ThemeCharacterIllustration(selectedStyle, androidx.compose.ui.Modifier.size(44.dp), ThemeCharacterPose.HOME)
+                    }
                     TextButton(onClick = onDismiss) { Text("完成") }
                 }
                 AppearanceSettingsCard(selectedStyle = selectedStyle, onSelectStyle = onSelectStyle)
                 MoreDataManagementCard(serverConfigured = serverConfigured, onOpenDataManagement = onOpenDataManagement)
-                Card(
-                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MoreSectionHeader(
+                        title = "家庭同步",
+                        description = "连接家庭设备，在多台设备间安全同步记录",
+                        themeStyle = selectedStyle
+                    )
+                    Card(
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
-                        Text("家庭同步", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text("配置 NAS 服务地址、家庭连接与同步选项", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(onClick = onOpenSyncSettings, modifier = androidx.compose.ui.Modifier.fillMaxWidth()) {
-                            Text("同步设置")
+                        Row(
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("☁️", style = MaterialTheme.typography.headlineMedium)
+                            Column(
+                                modifier = androidx.compose.ui.Modifier.weight(1f).padding(start = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text("家庭数据同步", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "配置 NAS 服务地址、家庭连接与同步选项",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Button(
+                            onClick = onOpenSyncSettings,
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)
+                        ) {
+                            Text("打开同步设置")
                         }
                     }
                 }
