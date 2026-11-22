@@ -56,6 +56,12 @@ class FeedingIntervalTest {
     }
 
     @Test
+    fun ignoresSoftDeletedFeedingEvents() {
+        val deleted = event("FEEDING", today, 14).copy(deletedAt = now)
+        assertNull(lastFeedingTimeToday(listOf(deleted), now, zone))
+    }
+
+    @Test
     fun returnsNullWhenThereAreNoFeedingEvents() {
         assertNull(lastFeedingTimeToday(listOf(event("SLEEP", today, 12)), now, zone))
     }
