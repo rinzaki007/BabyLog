@@ -187,7 +187,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val allEvents by allEventsFlow.collectAsState(initial = emptyList())
     val feedingIntervalNow by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
-            delay(60_000L)
+            val untilNextMinute = 60_000L - (System.currentTimeMillis() % 60_000L)
+            delay(untilNextMinute)
             value = System.currentTimeMillis()
         }
     }
