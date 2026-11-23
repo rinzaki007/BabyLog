@@ -135,13 +135,24 @@ internal suspend fun enqueueUnassignedFamilyData(
     require(familyId.isNotBlank()) { "当前家庭空间标识无效" }
     if (unassignedBabies.isEmpty()) return 0
 
+    // Re-read each profile and only claim it if it is still unassigned. This avoids
+    // queueing children for a profile that another operation has already moved.
+    val eligibleBabies = unassignedBabies.mapNotNull { original ->
+        val current = dao.getBaby(original.id) ?: return@mapNotNull null
+        if (current.familyId.isBlank() || current.familyId == UNASSIGNED_FAMILY_ID) {
+            current.copy(familyId = familyId)
+        } else {
+            null
+        }
+    }
+    if (eligibleBabies.isEmpty()) return 0
+
     // Queue every unassigned record before changing its owner. If the process is
     // interrupted midway, the next login can still find the unassigned profile and
     // finish the missing queue entries without losing the offline data.
-    val claimedBabyIds = unassignedBabies.map { it.id }.toSet()
+    val claimedBabyIds = eligibleBabies.map { it.id }.toSet()
     val now = System.currentTimeMillis()
-    unassignedBabies.forEach { original ->
-        val baby = original.copy(familyId = familyId)
+    eligibleBabies.forEach { baby ->
         val babyPayload = babySyncPayload(baby).toString()
         if (dao.hasLocalOperation("baby", baby.id)) {
             // Refresh a pre-login payload that may still contain the unassigned family ID.
@@ -173,11 +184,13 @@ internal suspend fun enqueueUnassignedFamilyData(
         }
     }
 
-    // Assign ownership last: once a profile stops being "unassigned", future logins
-    // no longer discover it as a candidate for completing its first-upload queue.
-    return dao.assignUnassignedBabiesToFamily(familyId, UNASSIGNED_FAMILY_ID)
+    // Assign only the profiles whose queue entries were prepared above.
+    return dao.assignUnassignedBabiesToFamily(
+        familyId,
+        UNASSIGNED_FAMILY_ID,
+        eligibleBabies.map { it.id }
+    )
 }
-
 internal fun isFamilyOwnershipConflict(reason: String?): Boolean =
     reason == FAMILY_OWNERSHIP_CONFLICT_REASON
 
