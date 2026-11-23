@@ -206,10 +206,15 @@ interface BabyLogDao {
         """
         UPDATE babies
         SET familyId = :familyId
-        WHERE TRIM(familyId) = '' OR familyId = :unassignedFamilyId
+        WHERE id IN (:babyIds)
+          AND (TRIM(familyId) = '' OR familyId = :unassignedFamilyId)
         """
     )
-    suspend fun assignUnassignedBabiesToFamily(familyId: String, unassignedFamilyId: String): Int
+    suspend fun assignUnassignedBabiesToFamily(
+        familyId: String,
+        unassignedFamilyId: String,
+        babyIds: List<String>
+    ): Int
 
     @Query("UPDATE babies SET familyId = :familyId WHERE id = :babyId")
     suspend fun setBabyFamily(babyId: String, familyId: String)
