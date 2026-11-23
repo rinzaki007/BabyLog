@@ -61,6 +61,28 @@ object SyncPreferences {
     fun familyId(context: Context) = prefs(context).getString("family_id", "") ?: ""
     fun cursor(context: Context) = prefs(context).getLong("cursor", 0L)
     fun saveServer(context: Context, value: String) { prefs(context).edit().putString("server", value.trim().trimEnd('/')).apply() }
+    fun saveAuthenticatedSession(
+        context: Context,
+        server: String,
+        token: String,
+        accountEmail: String,
+        familyId: String,
+        encrypt: (String) -> String = SecureTokenStore::encrypt
+    ) {
+        val normalizedServer = server.trim().trimEnd('/')
+        require(normalizedServer.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) {
+            "登录信息不完整，无法安全保存家庭会话"
+        }
+        val encrypted = encrypt(token)
+        check(prefs(context).edit()
+            .putString("server", normalizedServer)
+            .putString("token_encrypted", encrypted)
+            .remove("token")
+            .putString("account_email", accountEmail.trim().lowercase())
+            .putString("family_id", familyId)
+            .putLong("cursor", 0L)
+            .commit()) { "无法安全保存登录凭据，请重试" }
+    }
     fun saveSession(context: Context, token: String) {
         val encrypted = SecureTokenStore.encrypt(token)
         check(prefs(context).edit().putString("token_encrypted", encrypted).remove("token")
