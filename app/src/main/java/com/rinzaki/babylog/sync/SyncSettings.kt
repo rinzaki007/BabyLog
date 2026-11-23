@@ -139,17 +139,21 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
 
     LaunchedEffect(Unit) { refreshSyncStatus() }
 
-    fun runAction(action: suspend () -> String) {
+    fun runAction(onSuccess: () -> Unit = {}, action: suspend () -> String) {
         if (busy) return
         busy = true
         scope.launch {
+            var actionSucceeded = false
             message = try {
-                withContext(Dispatchers.IO) { action() }
+                val result = withContext(Dispatchers.IO) { action() }
+                actionSucceeded = true
+                result
             } catch (error: Exception) {
                 error.message ?: "操作失败，请检查服务器地址和网络"
             } finally {
                 busy = false
             }
+            if (actionSucceeded) onSuccess()
             token = SyncPreferences.token(context)
             accountEmail = SyncPreferences.accountEmail(context)
             server = SyncPreferences.server(context)
@@ -157,6 +161,8 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 showAccountForm = false
                 editingServer = false
                 password = ""
+            } else if (server.isNotBlank()) {
+                showAccountForm = true
             }
             refreshSyncStatus()
         }
@@ -164,50 +170,47 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
 
     fun authenticate(path: String, successMessage: String) {
         runAction {
-            val base = server.trim().trimEnd('/')
-            require(base.startsWith("https://") || base.startsWith("http://10.") ||
-                base.startsWith("http://192.168.") || base.startsWith("http://127.0.0.1") ||
-                base.startsWith("http://localhost")) { "请先填写有效的 NAS 同步地址" }
-            val result = SyncHttp.request(
-                base, path, "POST",
-                body = JSONObject()
-                    .put(if (path == "/api/auth/register" && accountIdentifier.contains("@")) "email" else "username", accountIdentifier.trim())
-                    .put("password", password)
-            )
-            SyncPreferences.saveServer(context, base)
-            SyncPreferences.saveAccountEmail(context, accountIdentifier)
-            val accessToken = result.getString("access_token")
-            val previousFamilyId = SyncPreferences.familyId(context)
-            SyncPreferences.saveSession(context, accessToken)
-            val profile = SyncHttp.request(base, "/api/me", token = accessToken)
-            SyncPreferences.saveAccountEmail(context, profile.optString("username", accountIdentifier.trim()))
-            val linkedFamilies = profile.optJSONArray("families")
-            require(linkedFamilies != null && linkedFamilies.length() > 0) {
-                "账号初始化失败，请检查 NAS 服务端版本后重试。"
+            withSyncExecutionLock {
+                val base = server.trim().trimEnd('/')
+                require(base.startsWith("https://") || base.startsWith("http://10.") ||
+                    base.startsWith("http://192.168.") || base.startsWith("http://127.0.0.1") ||
+                    base.startsWith("http://localhost")) { "请先填写有效的 NAS 同步地址" }
+                val result = SyncHttp.request(
+                    base, path, "POST",
+                    body = JSONObject()
+                        .put(if (path == "/api/auth/register" && accountIdentifier.contains("@")) "email" else "username", accountIdentifier.trim())
+                        .put("password", password)
+                )
+                val accessToken = result.getString("access_token")
+                // Validate the new session completely before replacing the current one.
+                val profile = SyncHttp.request(base, "/api/me", token = accessToken)
+                val linkedFamilies = profile.optJSONArray("families")
+                require(linkedFamilies != null && linkedFamilies.length() > 0) {
+                    "账号初始化失败，请检查 NAS 服务端版本后重试。"
+                }
+                // One account maps to one shared data space. Every device signing in
+                // with this account receives the same family ID from /api/me.
+                val familyId = linkedFamilies.getJSONObject(0).getString("id")
+                val username = profile.optString("username", accountIdentifier.trim())
+
+                // Always inspect unassigned profiles. This also resumes a first-link
+                // operation interrupted after the family session was last saved.
+                val unassignedBabies = dao.getUnassignedBabies(UNASSIGNED_FAMILY_ID)
+                val claimedLocalBabies = enqueueUnassignedFamilyData(dao, unassignedBabies, familyId)
+                val restoredConflicts = dao.restoreFamilyOwnershipConflicts(
+                    familyId,
+                    FAMILY_OWNERSHIP_CONFLICT_REASON
+                )
+
+                // Commit server, encrypted token, account, family and cursor together.
+                SyncPreferences.saveAuthenticatedSession(context, base, accessToken, username, familyId)
+                SyncScheduler.schedule(context)
+                val recoveryNotes = buildList {
+                    if (claimedLocalBabies > 0) add("已将 $claimedLocalBabies 份此前离线创建的档案关联到当前家庭")
+                    if (restoredConflicts > 0) add("已恢复 $restoredConflicts 条属于当前家庭的冲突记录")
+                }
+                if (recoveryNotes.isNotEmpty()) "$successMessage ${recoveryNotes.joinToString("；")}，正在重新同步。" else successMessage
             }
-            // One account maps to one shared data space. Every device signing in
-            // with this account receives the same family ID from /api/me.
-            val familyId = linkedFamilies.getJSONObject(0).getString("id")
-            SyncPreferences.saveFamily(context, familyId)
-            // A profile created while the app was offline has no family owner yet.
-            // Claim only these unassigned profiles on the first account link; never
-            // reassign records that already belong to another family.
-            val unassignedBabies = if (previousFamilyId.isBlank()) {
-                dao.getUnassignedBabies(UNASSIGNED_FAMILY_ID)
-            } else {
-                emptyList()
-            }
-            val claimedLocalBabies = enqueueUnassignedFamilyData(dao, unassignedBabies, familyId)
-            val restoredConflicts = dao.restoreFamilyOwnershipConflicts(
-                familyId,
-                FAMILY_OWNERSHIP_CONFLICT_REASON
-            )
-            SyncScheduler.schedule(context)
-            val recoveryNotes = buildList {
-                if (claimedLocalBabies > 0) add("已将 $claimedLocalBabies 份此前离线创建的档案关联到当前家庭")
-                if (restoredConflicts > 0) add("已恢复 $restoredConflicts 条属于当前家庭的冲突记录")
-            }
-            if (recoveryNotes.isNotEmpty()) "$successMessage ${recoveryNotes.joinToString("；")}，正在重新同步。" else successMessage
         }
     }
 
@@ -493,28 +496,35 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                                 normalized.startsWith("http://localhost"))) {
                                 message = "请填写 HTTPS 地址；局域网测试可使用内网 HTTP 地址。"
                             } else {
-                                val serverChanged = SyncPreferences.server(context).trimEnd('/') != normalized
-                                if (serverChanged && cloudOnlyPhotoCount > 0) {
-                                    message = "本机还有 $cloudOnlyPhotoCount 张照片只保留预览。请先连接原 NAS、关闭云端原图存储并等待原图恢复，再更换服务器。"
-                                } else if (serverChanged && !canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
-                                    message = if (pendingCount > 0) {
-                                        "本机还有待同步项目，请先联网完成同步，再更换服务器。"
-                                    } else {
-                                        "还有非家庭归属类冲突，请先查看详情并处理后再更换服务器。"
-                                    }
-                                } else {
-                                    SyncPreferences.saveServer(context, normalized)
-                                    server = normalized
-                                    editingServer = false
-                                    if (serverChanged && token.isNotBlank()) {
-                                        SyncScheduler.cancel(context)
-                                        SyncPreferences.clearSession(context)
-                                        token = ""
-                                        accountEmail = ""
-                                        showAccountForm = true
-                                        message = "服务器地址已更换，请重新登录。"
-                                    } else {
-                                        message = "服务器地址已保存。"
+                                runAction(onSuccess = { editingServer = false }) {
+                                    withSyncExecutionLock {
+                                        val serverChanged = SyncPreferences.server(context).trimEnd('/') != normalized
+                                        if (serverChanged) {
+                                            val latestCloudOnlyPhotos = dao.getAllPhotos().count {
+                                                it.deletedAt == null && !it.originalOnDevice && it.syncStatus == "SYNCED"
+                                            }
+                                            require(latestCloudOnlyPhotos == 0) {
+                                                "本机还有 $latestCloudOnlyPhotos 张照片只保留预览。请先连接原 NAS、关闭云端原图存储并等待原图恢复，再更换服务器。"
+                                            }
+                                            val latestPendingCount = dao.pendingOperationCount()
+                                            val latestConflicts = dao.conflictOperations()
+                                            require(canSwitchAccountWithConflicts(latestPendingCount, latestConflicts.map { it.error })) {
+                                                if (latestPendingCount > 0) {
+                                                    "本机还有待同步项目，请先联网完成同步，再更换服务器。"
+                                                } else {
+                                                    "还有非家庭归属类冲突，请先查看详情并处理后再更换服务器。"
+                                                }
+                                            }
+                                        }
+                                        val wasLoggedIn = SyncPreferences.token(context).isNotBlank()
+                                        SyncPreferences.saveServer(context, normalized)
+                                        if (serverChanged) {
+                                            SyncScheduler.cancel(context)
+                                            SyncPreferences.clearSession(context)
+                                            if (wasLoggedIn) "服务器地址已更换，请重新登录。" else "服务器地址已保存。"
+                                        } else {
+                                            "服务器地址已保存。"
+                                        }
                                     }
                                 }
                             }
@@ -637,24 +647,30 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                     }
                     OutlinedButton(
                         onClick = {
-                            if (cloudOnlyPhotoCount > 0) {
-                                message = "本机还有 $cloudOnlyPhotoCount 张照片只保留预览。请先连接原 NAS、关闭云端原图存储并等待原图恢复，再退出或切换账号，避免离线后无法读取原图。"
-                            } else if (!canSwitchAccountWithConflicts(pendingCount, conflicts.map { it.error })) {
-                                message = if (pendingCount > 0) {
-                                    "本机还有待同步项目，请联网完成同步后再退出登录。"
-                                } else {
-                                    "还有非家庭归属类冲突，请先查看详情并处理后再切换账号。"
-                                }
-                            } else {
-                                SyncScheduler.cancel(context)
-                                SyncPreferences.clearSession(context)
-                                token = ""
-                                accountEmail = ""
-                                showAccountForm = true
-                                message = if (conflicts.isNotEmpty()) {
-                                    "已退出账号。本机数据和冲突队列均已保留；登录原家庭账号后，匹配的项目会自动恢复。"
-                                } else {
-                                    "已退出账号。本机数据不会删除。"
+                            runAction(onSuccess = { showAccountForm = true }) {
+                                withSyncExecutionLock {
+                                    val latestCloudOnlyPhotos = dao.getAllPhotos().count {
+                                        it.deletedAt == null && !it.originalOnDevice && it.syncStatus == "SYNCED"
+                                    }
+                                    require(latestCloudOnlyPhotos == 0) {
+                                        "本机还有 $latestCloudOnlyPhotos 张照片只保留预览。请先连接原 NAS、关闭云端原图存储并等待原图恢复，再退出或切换账号，避免离线后无法读取原图。"
+                                    }
+                                    val latestPendingCount = dao.pendingOperationCount()
+                                    val latestConflicts = dao.conflictOperations()
+                                    require(canSwitchAccountWithConflicts(latestPendingCount, latestConflicts.map { it.error })) {
+                                        if (latestPendingCount > 0) {
+                                            "本机还有待同步项目，请联网完成同步后再退出登录。"
+                                        } else {
+                                            "还有非家庭归属类冲突，请先查看详情并处理后再切换账号。"
+                                        }
+                                    }
+                                    SyncScheduler.cancel(context)
+                                    SyncPreferences.clearSession(context)
+                                    if (latestConflicts.isNotEmpty()) {
+                                        "已退出账号。本机数据和冲突队列均已保留；登录原家庭账号后，匹配的项目会自动恢复。"
+                                    } else {
+                                        "已退出账号。本机数据不会删除。"
+                                    }
                                 }
                             }
                         },
