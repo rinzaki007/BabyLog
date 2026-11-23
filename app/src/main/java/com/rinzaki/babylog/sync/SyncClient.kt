@@ -28,7 +28,6 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 object SyncPreferences {
     private const val FILE = "babylog_sync"
@@ -114,17 +113,16 @@ internal suspend fun enqueueUnassignedFamilyData(
     require(familyId.isNotBlank()) { "当前家庭空间标识无效" }
     if (unassignedBabies.isEmpty()) return 0
 
-    val claimedCount = dao.assignUnassignedBabiesToFamily(familyId, UNASSIGNED_FAMILY_ID)
-    if (claimedCount == 0) return 0
-
+    // Queue every unassigned record before changing its owner. If the process is
+    // interrupted midway, the next login can still find the unassigned profile and
+    // finish the missing queue entries without losing the offline data.
     val claimedBabyIds = unassignedBabies.map { it.id }.toSet()
     val now = System.currentTimeMillis()
     unassignedBabies.forEach { original ->
-        val baby = dao.getBaby(original.id) ?: return@forEach
+        val baby = original.copy(familyId = familyId)
         val babyPayload = babySyncPayload(baby).toString()
         if (dao.hasLocalOperation("baby", baby.id)) {
-            // A pre-login queued payload may still carry the unassigned placeholder ID.
-            // Refresh it before the worker uploads this profile to the newly linked family.
+            // Refresh a pre-login payload that may still contain the unassigned family ID.
             dao.updateBabyOperationPayload(baby.id, babyPayload)
         } else {
             dao.enqueueOperation(SyncOperationEntity(
@@ -152,7 +150,10 @@ internal suspend fun enqueueUnassignedFamilyData(
             ))
         }
     }
-    return claimedCount
+
+    // Assign ownership last: once a profile stops being "unassigned", future logins
+    // no longer discover it as a candidate for completing its first-upload queue.
+    return dao.assignUnassignedBabiesToFamily(familyId, UNASSIGNED_FAMILY_ID)
 }
 
 internal fun isFamilyOwnershipConflict(reason: String?): Boolean =
@@ -187,6 +188,15 @@ internal fun shouldRetrySyncStatus(statusCode: Int): Boolean =
 
 private object SyncExecutionMutex {
     val mutex = Mutex()
+}
+
+internal suspend fun <T> withSyncExecutionLock(action: suspend () -> T): T {
+    SyncExecutionMutex.mutex.lock()
+    return try {
+        action()
+    } finally {
+        SyncExecutionMutex.mutex.unlock()
+    }
 }
 
 private fun replaceDownloadedFile(temp: File, destination: File) {
@@ -512,11 +522,15 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
         photos.count { it.deletedAt == null } + " 张照片设为家庭云端权威数据。"
 }
 
-internal fun syncOperationBelongsToFamily(ownerFamilyId: String?, activeFamilyId: String): Boolean =
+internal fun syncOperationBelongsToFamily(
+    entityType: String,
+    ownerFamilyId: String?,
+    activeFamilyId: String
+): Boolean = entityType in setOf("baby", "event", "photo") &&
     activeFamilyId.isNotBlank() && ownerFamilyId != null && ownerFamilyId == activeFamilyId
 
 class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result = SyncExecutionMutex.mutex.withLock { runSync() }
+    override suspend fun doWork(): Result = withSyncExecutionLock { runSync() }
 
     private suspend fun runSync(): Result {
         val base = SyncPreferences.server(applicationContext)
@@ -536,9 +550,10 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         "baby" -> dao.getBaby(operation.entityId)?.familyId
                         "event" -> dao.getEvent(operation.entityId)?.let { dao.getBaby(it.babyId)?.familyId }
                         "photo" -> dao.getPhoto(operation.entityId)?.let { dao.getBaby(it.babyId)?.familyId }
-                        else -> familyId
+                        // Unknown entity types have no verifiable owner; fail closed.
+                        else -> null
                     }
-                    if (!syncOperationBelongsToFamily(ownerFamilyId, familyId)) {
+                    if (!syncOperationBelongsToFamily(operation.entityType, ownerFamilyId, familyId)) {
                         dao.markOperationConflict(operation.operationId, FAMILY_OWNERSHIP_CONFLICT_REASON)
                         return@forEach
                     }
