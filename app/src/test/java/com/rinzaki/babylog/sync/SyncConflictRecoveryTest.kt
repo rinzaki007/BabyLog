@@ -77,11 +77,20 @@ class SyncConflictRecoveryTest {
             val dao = database.babyLogDao()
             dao.upsertBaby(BabyEntity("offline-placeholder", UNASSIGNED_FAMILY_ID, "离线宝宝", 1_000L, 1_000L, 1_000L))
             dao.upsertBaby(BabyEntity("offline-empty", "", "未归属宝宝", 1_000L, 1_000L, 1_000L))
+            dao.upsertBaby(BabyEntity("offline-not-in-snapshot", UNASSIGNED_FAMILY_ID, "稍后创建的宝宝", 1_000L, 1_000L, 1_000L))
             dao.upsertBaby(BabyEntity("other-family", "family-b", "其他家庭宝宝", 1_000L, 1_000L, 1_000L))
 
-            assertEquals(2, dao.assignUnassignedBabiesToFamily("family-a", UNASSIGNED_FAMILY_ID))
+            assertEquals(
+                2,
+                dao.assignUnassignedBabiesToFamily(
+                    "family-a",
+                    UNASSIGNED_FAMILY_ID,
+                    listOf("offline-placeholder", "offline-empty")
+                )
+            )
             assertEquals("family-a", dao.getBaby("offline-placeholder")?.familyId)
             assertEquals("family-a", dao.getBaby("offline-empty")?.familyId)
+            assertEquals(UNASSIGNED_FAMILY_ID, dao.getBaby("offline-not-in-snapshot")?.familyId)
             assertEquals("family-b", dao.getBaby("other-family")?.familyId)
         } finally {
             database.close()
