@@ -61,6 +61,11 @@ internal fun homeTimelinePresentation(event: BabyEventEntity): HomeTimelinePrese
             }
             HomeTimelinePresentation("睡眠", duration, "🌙")
         }
+        "TEMPERATURE" -> {
+            val value = payload.optDouble("temperatureC")
+            val method = payload.optString("measurementMethod").ifBlank { "测量" }
+            HomeTimelinePresentation("体温记录", if (value > 0.0) "${"%.1f".format(Locale.getDefault(), value)} ℃ · $method" else "体温数据记录", "🌡️")
+        }
         "GROWTH" -> {
             val parts = buildList {
                 payload.optInt("weightGrams").takeIf { it > 0 }?.let { add("${"%.2f".format(Locale.getDefault(), it / 1000.0)} kg") }
