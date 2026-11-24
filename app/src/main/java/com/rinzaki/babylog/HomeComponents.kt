@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.data.BabyEventEntity
 import org.json.JSONObject
@@ -188,7 +189,7 @@ internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> U
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp)
+            verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -210,19 +211,19 @@ internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> U
                 }
             }
             SummaryGroupLabel("🍼", "喂养与休息")
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 SummaryPill("🍼", "喂养", "${feeding.size} 次", Modifier.weight(1f)) { onSelect("喂养") }
                 SummaryPill("🥛", "记录奶量", "${milk} ml", Modifier.weight(1f)) { onSelect("喂养") }
                 SummaryPill("🌙", "睡眠", sleepLabel, Modifier.weight(1f)) { onSelect("睡眠") }
             }
             SummaryGroupLabel("🧷", "日常护理")
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 SummaryPill("💧", "小便", "${pee} 次", Modifier.weight(1f)) { onSelect("大小便") }
                 SummaryPill("🌿", "大便", "${stool} 次", Modifier.weight(1f)) { onSelect("大小便") }
                 SummaryPill("📏", "成长测量", "${today.count { it.eventType == "GROWTH" }} 次", Modifier.weight(1f)) { onSelect("成长测量") }
             }
             SummaryGroupLabel("🥣", "营养与成长")
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 SummaryPill("🧴", "补充记录", "${supplements.size} 次", Modifier.weight(1f)) { onSelect("补充记录") }
                 SummaryPill("🚰", "饮水", "${waterMl} ml", Modifier.weight(1f)) { onSelect("补充记录") }
                 SummaryPill("🥣", "辅食", "${solidFoods.size} 次", Modifier.weight(1f)) { onSelect("辅食记录") }
@@ -234,17 +235,17 @@ internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> U
 @Composable
 internal fun SummaryPill(emoji: String, label: String, value: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     Column(
-        modifier.fillMaxWidth().heightIn(min = 82.dp)
+        modifier.fillMaxWidth().heightIn(min = 76.dp)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f), RoundedCornerShape(16.dp))
-            .padding(horizontal = 4.dp, vertical = 8.dp),
+            .padding(horizontal = 4.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
     ) {
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-            modifier = Modifier.size(30.dp)
+            modifier = Modifier.size(28.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Text(emoji, style = MaterialTheme.typography.bodyMedium)
@@ -254,13 +255,15 @@ internal fun SummaryPill(emoji: String, label: String, value: String, modifier: 
             value,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
