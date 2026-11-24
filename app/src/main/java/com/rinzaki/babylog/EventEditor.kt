@@ -158,28 +158,63 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                         }
                     }
                     "DIAPER" -> {
-                        Text("护理情况", fontWeight = FontWeight.SemiBold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (urine) FilledTonalButton(onClick = { urine = false }) { Text("✓ 有小便") } else OutlinedButton(onClick = { urine = true }) { Text("有小便") }
-                            if (stool) FilledTonalButton(onClick = { stool = false }) { Text("✓ 有大便") } else OutlinedButton(onClick = { stool = true }) { Text("有大便") }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("护理情况", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (urine) FilledTonalButton(onClick = { urine = false }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("✓ 有小便") }
+                                    else OutlinedButton(onClick = { urine = true }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("有小便") }
+                                    if (stool) FilledTonalButton(onClick = { stool = false }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("✓ 有大便") }
+                                    else OutlinedButton(onClick = { stool = true }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("有大便") }
+                                }
+                                Text("可同时选择小便和大便；至少选择一项。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                         if (stool) {
-                            Text("大便性状"); SelectionRow(listOf("稀水样", "糊状", "软便", "成形", "干硬"), stoolShape) { stoolShape = it }
-                            Text("颜色"); SelectionRow(listOf("黄色", "金黄色", "绿色", "棕色", "灰白色", "黑色", "红色", "其他"), stoolColor) { stoolColor = it }
-                            Text("大便量"); SelectionRow(listOf("少量", "中量", "大量"), stoolAmount) { stoolAmount = it }
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("大便情况", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                    Text("性状", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    SelectionRow(listOf("稀水样", "糊状", "软便", "成形", "干硬"), stoolShape) { stoolShape = it }
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    Text("颜色", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    SelectionRow(listOf("黄色", "金黄色", "绿色", "棕色", "灰白色", "黑色", "红色", "其他"), stoolColor) { stoolColor = it }
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    Text("大便量", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    SelectionRow(listOf("少量", "中量", "大量"), stoolAmount) { stoolAmount = it }
+                                }
+                            }
                         }
                     }
                     "SLEEP" -> {
-                        Text("睡眠时长", fontWeight = FontWeight.SemiBold)
-                        OutlinedTextField(
-                            value = sleepMinutesText,
-                            onValueChange = { raw -> sleepMinutesText = raw.filter(Char::isDigit).take(3) },
+                        Card(
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("时长（分钟）") },
-                            supportingText = { Text("可直接输入 10–720 分钟") },
-                            singleLine = true
-                        )
-                        SelectionRow(listOf("30", "60", "90", "120", "180", "240"), sleepMinutesText) { sleepMinutesText = it }
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("睡眠时长", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                OutlinedTextField(
+                                    value = sleepMinutesText,
+                                    onValueChange = { raw -> sleepMinutesText = raw.filter(Char::isDigit).take(3) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("时长（分钟）") },
+                                    supportingText = { Text("可直接输入 10–720 分钟") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true
+                                )
+                                Text("常用时长 · 分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                SelectionRow(listOf("30", "60", "90", "120", "180", "240"), sleepMinutesText) { sleepMinutesText = it }
+                            }
+                        }
                     }
                     "SOLID_FOOD" -> {
                         SolidFoodEditorFields(
