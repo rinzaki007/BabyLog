@@ -280,23 +280,65 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                         Text("记录宝宝第一次做到这件事的日期，也可以补充备注。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     "GROWTH" -> {
-                        OutlinedTextField(
-                            value = weightKg,
-                            onValueChange = { raw -> weightKg = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
+                        Text(
+                            "按本次实际测量填写即可，体重、身长和头围可以单独记录，不必每次都测齐。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Card(
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("当前体重（kg）") },
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = lengthCm,
-                            onValueChange = { raw -> lengthCm = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
-                            modifier = Modifier.fillMaxWidth(), label = { Text("身长（cm）") }, singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = headCm,
-                            onValueChange = { raw -> headCm = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
-                            modifier = Modifier.fillMaxWidth(), label = { Text("头围（cm）") }, singleLine = true
-                        )
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("体重", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                OutlinedTextField(
+                                    value = weightKg,
+                                    onValueChange = { raw -> weightKg = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("体重（kg）") },
+                                    supportingText = { Text("例如 5.8 kg") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true
+                                )
+                            }
+                        }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("身长", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                OutlinedTextField(
+                                    value = lengthCm,
+                                    onValueChange = { raw -> lengthCm = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("身长（cm）") },
+                                    supportingText = { Text("例如 60.5 cm") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true
+                                )
+                            }
+                        }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("头围", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                OutlinedTextField(
+                                    value = headCm,
+                                    onValueChange = { raw -> headCm = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("头围（cm）") },
+                                    supportingText = { Text("例如 39.0 cm") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true
+                                )
+                            }
+                        }
                     }
                 }
                 OutlinedTextField(note, { note = it.take(120) }, Modifier.fillMaxWidth(), label = { Text("备注（可选）") }, minLines = 1, maxLines = 2)
