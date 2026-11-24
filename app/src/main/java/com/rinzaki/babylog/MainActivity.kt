@@ -206,6 +206,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var addingEvent by remember { mutableStateOf<String?>(null) }
     var showRecordTypePicker by remember { mutableStateOf(false) }
     var editingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
+    var viewingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
     var deletingEvent by remember { mutableStateOf<BabyEventEntity?>(null) }
     var savingEvent by remember { mutableStateOf(false) }
     var showSyncDetails by remember { mutableStateOf(false) }
@@ -750,7 +751,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             if (index == 0 || previousDay != eventDay) TimelineDayHeader(eventDay, timelineDayCounts[eventDay] ?: 1)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                                EventCard(event, modifier = Modifier.fillMaxWidth(), onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
+                                EventCard(event, modifier = Modifier.fillMaxWidth(), onClick = { viewingEvent = event }, onEdit = { editingEvent = event }, onDelete = { deletingEvent = event })
                             }
                             timelineLinkedPhotos[event.id]?.let { linkedPhotos ->
                                 TimelinePhotoStrip(linkedPhotos, title = "关联照片") { photo ->
@@ -903,6 +904,18 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 }) { Text("确认删除", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { deletingEvent = null }) { Text("取消") } }
+        )
+    }
+
+    if (viewingEvent != null) {
+        val target = viewingEvent!!
+        TimelineEventDetailDialog(
+            event = target,
+            onDismiss = { viewingEvent = null },
+            onEdit = {
+                viewingEvent = null
+                editingEvent = target
+            }
         )
     }
 
