@@ -670,28 +670,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                items(listOf("今天", "近7天", "近30天", "全部")) { preset ->
+                                items(listOf("今天", "昨天", "本周", "近7天", "近30天", "全部日期")) { preset ->
                                     TextButton(
                                         onClick = {
-                                            when (preset) {
-                                                "今天" -> {
-                                                    selectedStartDate = LocalDate.now()
-                                                    selectedEndDate = LocalDate.now()
-                                                }
-                                                "近7天" -> {
-                                                    selectedStartDate = LocalDate.now().minusDays(6)
-                                                    selectedEndDate = LocalDate.now()
-                                                }
-                                                "近30天" -> {
-                                                    selectedStartDate = LocalDate.now().minusDays(29)
-                                                    selectedEndDate = LocalDate.now()
-                                                }
-                                                else -> {
-                                                    selectedStartDate = null
-                                                    selectedEndDate = null
-                                                    selectedEventFilter = "全部"
-                                                }
-                                            }
+                                            val range = timelineDateRangeForPreset(preset, LocalDate.now())
+                                            selectedStartDate = range.first
+                                            selectedEndDate = range.second
                                         },
                                         contentPadding = PaddingValues(horizontal = 9.dp, vertical = 5.dp)
                                     ) { Text(preset, style = MaterialTheme.typography.labelLarge) }

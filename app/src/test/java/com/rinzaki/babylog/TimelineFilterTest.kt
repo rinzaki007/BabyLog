@@ -24,4 +24,22 @@ class TimelineFilterTest {
         assertNull(timelineEventTypeForFilter("全部"))
         assertNull(timelineEventTypeForFilter("未知分类"))
     }
+
+    @Test
+    fun datePresetsProduceInclusiveLocalDateRanges() {
+        val today = java.time.LocalDate.of(2026, 11, 24)
+
+        assertEquals(today to today, timelineDateRangeForPreset("今天", today))
+        assertEquals(today.minusDays(1) to today.minusDays(1), timelineDateRangeForPreset("昨天", today))
+        assertEquals(java.time.LocalDate.of(2026, 11, 23) to today, timelineDateRangeForPreset("本周", today))
+        assertEquals(today.minusDays(6) to today, timelineDateRangeForPreset("近7天", today))
+        assertEquals(today.minusDays(29) to today, timelineDateRangeForPreset("近30天", today))
+        assertEquals(null to null, timelineDateRangeForPreset("全部日期", today))
+    }
+
+    @Test
+    fun unknownDatePresetClearsOnlyDateRange() {
+        val today = java.time.LocalDate.of(2026, 11, 24)
+        assertEquals(null to null, timelineDateRangeForPreset("未知", today))
+    }
 }
