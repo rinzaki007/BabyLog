@@ -1,5 +1,6 @@
 package com.rinzaki.babylog
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
@@ -55,7 +56,7 @@ internal fun TimelineDayHeader(date: LocalDate, count: Int) {
 }
 
 @Composable
-internal fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onEdit: () -> Unit, onDelete: () -> Unit) {
+internal fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, onClick: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     val payload = remember(event.payloadJson) { runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() } }
     val (emoji, title, detail) = when (event.eventType) {
         "FEEDING" -> Triple("🍼", "喂养", feedingDescription(event.payloadJson))
@@ -87,7 +88,7 @@ internal fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, on
     }
     val time = SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(event.occurredAt))
     Card(
-        modifier = modifier,
+        modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
