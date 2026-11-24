@@ -25,14 +25,14 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, onDismiss: () -> Unit, saving: Boolean = false, onSave: (String, JSONObject, Long, Boolean) -> Unit) {
     val context = LocalContext.current.applicationContext
-    val initialPayload = remember(existing?.id) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
+    val editorStateKey = existing?.id ?: "new"
+    val initialPayload = remember(editorStateKey) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
     val existingFeedingMethod = initialPayload.optString("method", "配方奶").ifBlank { "配方奶" }
     val enabledFeedingMethods = remember { FeedingPreferences.enabledMethods(context) }
-    val feedingOptions = remember(existing?.id, enabledFeedingMethods) {
+    val feedingOptions = remember(editorStateKey, enabledFeedingMethods) {
         (enabledFeedingMethods + if (existing != null && existingFeedingMethod in listOf("母乳", "配方奶", "混合喂养")) listOf(existingFeedingMethod) else emptyList())
             .distinct().ifEmpty { listOf("配方奶") }
     }
-    val editorStateKey = existing?.id ?: "new"
     val defaultFeedingMethod = remember(editorStateKey, feedingOptions) {
         resolveDefaultFeedingMethod(
             if (existing == null) null else existingFeedingMethod,
@@ -40,7 +40,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
             feedingOptions
         )
     }
-    val initialTime = remember(existing?.id) {
+    val initialTime = remember(editorStateKey) {
         existing?.occurredAt?.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime() } ?: LocalDateTime.now()
     }
     var date by remember(existing?.id) { mutableStateOf(initialTime.toLocalDate()) }
