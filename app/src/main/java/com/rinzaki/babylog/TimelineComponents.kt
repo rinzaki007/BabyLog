@@ -72,6 +72,12 @@ internal fun EventCard(event: BabyEventEntity, modifier: Modifier = Modifier, on
         "SUPPLEMENT" -> Triple("🧴", "补充记录", supplementDescription(event.payloadJson))
         "SOLID_FOOD" -> Triple("🥣", "辅食记录", solidFoodDescription(event.payloadJson))
         "MILESTONE" -> Triple("🌱", "成长里程碑", payload.optString("milestoneTitle").ifBlank { "成长记录" })
+        "TEMPERATURE" -> Triple(
+            "🌡️", "体温记录",
+            payload.optDouble("temperatureC").takeIf { it > 0.0 }?.let {
+                "${"%.1f".format(Locale.getDefault(), it)} ℃ · ${payload.optString("measurementMethod").ifBlank { "测量" }}"
+            } ?: "体温数据记录"
+        )
         "GROWTH" -> Triple("📏", "成长测量", listOfNotNull(
             payload.optInt("weightGrams").takeIf { it > 0 }?.let { "${"%.2f".format(Locale.getDefault(), it / 1000.0)} kg" },
             payload.optDouble("lengthCm").takeIf { it > 0 }?.let { "${"%.1f".format(Locale.getDefault(), it)} cm 身长" },

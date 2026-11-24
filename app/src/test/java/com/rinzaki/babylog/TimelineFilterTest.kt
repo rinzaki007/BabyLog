@@ -10,6 +10,7 @@ class TimelineFilterTest {
         assertEquals("FEEDING", timelineEventTypeForFilter("喂养"))
         assertEquals("DIAPER", timelineEventTypeForFilter("大小便"))
         assertEquals("SLEEP", timelineEventTypeForFilter("睡眠"))
+        assertEquals("TEMPERATURE", timelineEventTypeForFilter("体温记录"))
         assertEquals("SUPPLEMENT", timelineEventTypeForFilter("补充记录"))
         assertEquals("SOLID_FOOD", timelineEventTypeForFilter("辅食记录"))
         assertEquals("GROWTH", timelineEventTypeForFilter("成长测量"))

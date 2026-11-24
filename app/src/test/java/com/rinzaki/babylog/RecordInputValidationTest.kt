@@ -32,6 +32,21 @@ class RecordInputValidationTest {
     }
 
     @Test
+    fun temperatureAcceptsDecimalValuesAndCommaDecimalSeparator() {
+        assertEquals(36.8, parseTemperatureC("36.8"), 0.0001)
+        assertEquals(37.2, parseTemperatureC("37,2"), 0.0001)
+        assertEquals(30.0, parseTemperatureC("30"), 0.0001)
+        assertEquals(45.0, parseTemperatureC("45"), 0.0001)
+    }
+
+    @Test
+    fun temperatureRejectsBlankMalformedAndOutOfRangeValues() {
+        listOf("", " ", "abc", "29.9", "45.1", "-1", "37.2.1").forEach { raw ->
+            assertThrows(IllegalArgumentException::class.java) { parseTemperatureC(raw) }
+        }
+    }
+
+    @Test
     fun sleepDurationErrorExplainsAcceptedRange() {
         val error = assertThrows(IllegalArgumentException::class.java) {
             parseSleepDuration("0")

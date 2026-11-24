@@ -48,6 +48,14 @@ class HomeTimelinePresentationTest {
     }
 
     @Test
+    fun temperatureShowsValueAndMeasurementMethod() {
+        val result = homeTimelinePresentation(event("TEMPERATURE", """{"temperatureC":36.8,"measurementMethod":"腋温"}"""))
+        assertEquals("体温记录", result.title)
+        assertEquals("36.8 ℃ · 腋温", result.detail)
+        assertEquals("🌡️", result.emoji)
+    }
+
+    @Test
     fun diaperShowsOnlyRecordedCareTypes() {
         val result = homeTimelinePresentation(event("DIAPER", """{"urine":true,"stool":false}"""))
         assertEquals("换尿布", result.title)

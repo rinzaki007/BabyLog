@@ -25,14 +25,14 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, onDismiss: () -> Unit, saving: Boolean = false, onSave: (String, JSONObject, Long, Boolean) -> Unit) {
     val context = LocalContext.current.applicationContext
-    val initialPayload = remember(existing?.id) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
+    val editorStateKey = existing?.id ?: "new"
+    val initialPayload = remember(editorStateKey) { runCatching { JSONObject(existing?.payloadJson ?: "{}") }.getOrElse { JSONObject() } }
     val existingFeedingMethod = initialPayload.optString("method", "配方奶").ifBlank { "配方奶" }
     val enabledFeedingMethods = remember { FeedingPreferences.enabledMethods(context) }
-    val feedingOptions = remember(existing?.id, enabledFeedingMethods) {
+    val feedingOptions = remember(editorStateKey, enabledFeedingMethods) {
         (enabledFeedingMethods + if (existing != null && existingFeedingMethod in listOf("母乳", "配方奶", "混合喂养")) listOf(existingFeedingMethod) else emptyList())
             .distinct().ifEmpty { listOf("配方奶") }
     }
-    val editorStateKey = existing?.id ?: "new"
     val defaultFeedingMethod = remember(editorStateKey, feedingOptions) {
         resolveDefaultFeedingMethod(
             if (existing == null) null else existingFeedingMethod,
@@ -40,7 +40,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
             feedingOptions
         )
     }
-    val initialTime = remember(existing?.id) {
+    val initialTime = remember(editorStateKey) {
         existing?.occurredAt?.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime() } ?: LocalDateTime.now()
     }
     var date by remember(existing?.id) { mutableStateOf(initialTime.toLocalDate()) }
@@ -62,6 +62,8 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
     var weightKg by remember(existing?.id) { mutableStateOf(initialPayload.optInt("weightGrams").takeIf { it > 0 }?.div(1000.0)?.toString().orEmpty()) }
     var lengthCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("lengthCm").takeIf { it > 0 }?.toString().orEmpty()) }
     var headCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.toString().orEmpty()) }
+    var temperatureC by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("temperatureC").let { value -> if (value > 0) value.toString() else "" }) }
+    var temperatureMethod by remember(existing?.id) { mutableStateOf(initialPayload.optString("measurementMethod", "腋温").ifBlank { "腋温" }) }
     val savedSupplementName = initialPayload.optString("supplementName", if (existing == null) RecordPreferences.get(context, RecordPreferences.SUPPLEMENT_NAME, "维生素AD") else "维生素AD")
     var supplementName by remember(existing?.id) { mutableStateOf(if (savedSupplementName in supplementPresets) savedSupplementName else "其他") }
     var customSupplementName by remember(existing?.id) { mutableStateOf(savedSupplementName.takeIf { it !in supplementPresets } ?: "") }
@@ -82,7 +84,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
     val milestoneId = remember(existing?.id) { initialPayload.optString("milestoneId") }
     var error by remember { mutableStateOf<String?>(null) }
     var showEventTimePicker by remember { mutableStateOf(false) }
-    val title = when (eventType) { "FEEDING" -> "喂养记录"; "SOLID_FOOD" -> "辅食记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; "SUPPLEMENT" -> "补充记录"; "MILESTONE" -> "成长里程碑"; else -> "成长记录" }
+    val title = when (eventType) { "FEEDING" -> "喂养记录"; "SOLID_FOOD" -> "辅食记录"; "DIAPER" -> "日常护理"; "SLEEP" -> "睡眠记录"; "SUPPLEMENT" -> "补充记录"; "MILESTONE" -> "成长里程碑"; "TEMPERATURE" -> "体温记录"; else -> "成长记录" }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -279,6 +281,33 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                         )
                         Text("记录宝宝第一次做到这件事的日期，也可以补充备注。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    "TEMPERATURE" -> {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("体温", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                OutlinedTextField(
+                                    value = temperatureC,
+                                    onValueChange = { raw -> temperatureC = raw.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("体温（℃）") },
+                                    supportingText = { Text("记录实际测量值，例如 36.8 ℃") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true
+                                )
+                                Text("测量方式", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    listOf("腋温", "耳温", "额温").forEach { method ->
+                                        FilterChip(selected = temperatureMethod == method, onClick = { temperatureMethod = method }, label = { Text(method) })
+                                    }
+                                }
+                            }
+                        }
+                        Text("请按实际使用的测量方式记录；不同测量方式的数值不宜直接横向比较。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     "GROWTH" -> {
                         Text(
                             "按本次实际测量填写即可，体重、身长和头围可以单独记录，不必每次都测齐。",
@@ -410,6 +439,15 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                         if (title.isBlank()) { error = "请输入里程碑名称"; return }
                                         payload.put("milestoneTitle", title)
                                         if (milestoneId.isNotBlank()) payload.put("milestoneId", milestoneId)
+                                    }
+                                    "TEMPERATURE" -> {
+                                        val value = try {
+                                            parseTemperatureC(temperatureC)
+                                        } catch (validation: IllegalArgumentException) {
+                                            error = validation.message
+                                            return
+                                        }
+                                        payload.put("temperatureC", value).put("measurementMethod", temperatureMethod)
                                     }
                                     "GROWTH" -> {
                                         val measurements = try {
