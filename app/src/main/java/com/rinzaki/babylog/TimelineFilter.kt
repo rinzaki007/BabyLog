@@ -13,3 +13,17 @@ internal fun timelineEventTypeForFilter(filter: String): String? = when (filter)
     "其他" -> "OTHER"
     else -> null
 }
+
+
+internal fun timelineDateRangeForPreset(
+    preset: String,
+    today: java.time.LocalDate
+): Pair<java.time.LocalDate?, java.time.LocalDate?> = when (preset) {
+    "今天" -> today to today
+    "昨天" -> today.minusDays(1) to today.minusDays(1)
+    "本周" -> today.with(java.time.DayOfWeek.MONDAY) to today
+    "近7天" -> today.minusDays(6) to today
+    "近30天" -> today.minusDays(29) to today
+    "全部日期" -> null to null
+    else -> null to null
+}
