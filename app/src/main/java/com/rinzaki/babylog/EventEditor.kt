@@ -1,6 +1,7 @@
 package com.rinzaki.babylog
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -10,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.data.BabyEventEntity
 import org.json.JSONObject
@@ -102,26 +104,57 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                 }
                 when (eventType) {
                     "FEEDING" -> {
-                        Text("喂养方式", fontWeight = FontWeight.SemiBold)
-                        SelectionRow(feedingOptions, feedingMethod) { feedingMethod = it }
-                        OutlinedTextField(
-                            value = amountText,
-                            onValueChange = { raw -> amountText = raw.filter(Char::isDigit).take(4) },
+                        Card(
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text(if (feedingMethod == "母乳") "母乳量（ml，可选）" else "配方奶量（ml）") },
-                            singleLine = true
-                        )
-                        Text(if (feedingMethod == "母乳") "亲喂可只记录时长；瓶喂母乳可填写奶量。" else "单位：毫升（ml），也可以直接输入其他数值。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        SelectionRow(listOf("60", "90", "120", "150", "180", "210"), amountText) { amountText = it }
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("喂养方式", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                SelectionRow(feedingOptions, feedingMethod) { feedingMethod = it }
+                            }
+                        }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("奶量", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                OutlinedTextField(
+                                    value = amountText,
+                                    onValueChange = { raw -> amountText = raw.filter(Char::isDigit).take(4) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text(if (feedingMethod == "母乳") "母乳量（可选）" else "奶量") },
+                                    supportingText = { Text(if (feedingMethod == "母乳") "亲喂可只记录时长；瓶喂母乳可填写奶量。" else "可点选常用值，也可以直接输入 1–1000 ml。") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true
+                                )
+                                Text("常用奶量 · ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                SelectionRow(listOf("60", "90", "120", "150", "180", "210"), amountText) { amountText = it }
+                            }
+                        }
                         if (feedingMethod != "配方奶") {
-                            OutlinedTextField(
-                                value = breastMinutes,
-                                onValueChange = { breastMinutes = it.filter(Char::isDigit).take(3) },
+                            Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("亲喂时长（分钟，可选）") },
-                                singleLine = true
-                            )
-                            SelectionRow(listOf("5", "10", "15", "20", "30"), breastMinutes) { breastMinutes = it }
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("亲喂时长", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                    OutlinedTextField(
+                                        value = breastMinutes,
+                                        onValueChange = { raw -> breastMinutes = raw.filter(Char::isDigit).take(3) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = { Text("时长（分钟，可选）") },
+                                        supportingText = { Text("记录亲喂时间；也可以只填写奶量。") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true
+                                    )
+                                    Text("常用时长 · 分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    SelectionRow(listOf("5", "10", "15", "20", "30"), breastMinutes) { breastMinutes = it }
+                                }
+                            }
                         }
                     }
                     "DIAPER" -> {
