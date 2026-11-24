@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -77,7 +78,7 @@ internal fun HomeTimelinePreview(
     onViewAll: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val latestEvents = remember(events) { events.sortedBy { it.occurredAt }.takeLast(5).asReversed() }
+    val latestEvents = remember(events) { events.sortedBy { it.occurredAt }.takeLast(5) }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -145,7 +146,7 @@ internal fun HomeTimelinePreview(
                         )
                     }
                     if (index != latestEvents.lastIndex) {
-                        Spacer(Modifier.padding(start = 48.dp))
+                        Box(Modifier.padding(start = 18.dp).size(width = 2.dp, height = 8.dp).background(MaterialTheme.colorScheme.outlineVariant))
                     }
                 }
             }
