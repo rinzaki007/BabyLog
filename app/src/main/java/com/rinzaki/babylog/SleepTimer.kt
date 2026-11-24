@@ -126,7 +126,13 @@ internal fun SleepTimerCard(onComplete: (Long, Long, Int) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(
+            containerColor = if (state.isActive) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        )
     ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
@@ -138,19 +144,23 @@ internal fun SleepTimerCard(onComplete: (Long, Long, Int) -> Unit) {
                     Text(
                         when {
                             !state.isActive -> "开始记录宝宝入睡时间，结束后自动生成睡眠记录"
-                            state.isRunning -> "计时进行中 · 离开页面或关闭 App 也会继续"
-                            else -> "计时已暂停 · 可以继续或结束本次睡眠"
+                            state.isRunning -> "正在记录 · 离开页面或关闭 App 也会继续"
+                            else -> "已暂停 · 可以继续或结束本次睡眠"
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (state.isActive) {
+                            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     )
                 }
                 if (state.isActive) {
                     Text(
                         elapsedLabel,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
             }
