@@ -59,6 +59,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -228,7 +229,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
     var timelineLinkedPhotos by remember { mutableStateOf<Map<String, List<BabyPhotoEntity>>>(emptyMap()) }
     var selectedTimelinePhoto by remember { mutableStateOf<BabyPhotoEntity?>(null) }
     var timelineTotal by remember { mutableStateOf(0) }
-    var timelineLoading by remember { mutableStateOf(false) }
+    var timelineLoading by remember { mutableStateOf(true) }
     var timelineError by remember { mutableStateOf<String?>(null) }
     var timelineLoadMoreError by remember { mutableStateOf<String?>(null) }
     var timelineRetryToken by remember { mutableStateOf(0) }
@@ -695,6 +696,22 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             }
                         }
                     }
+                    if (page == 1 && timelineEvents.isEmpty() && timelineLoading && timelineError == null) item {
+                        Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(22.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(26.dp), strokeWidth = 3.dp)
+                                Spacer(Modifier.width(12.dp))
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("正在整理成长足迹", fontWeight = FontWeight.SemiBold)
+                                    Text("马上就好…", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
                     if (page == 1 && timelineError != null) item {
                         Card(shape = RoundedCornerShape(18.dp)) {
                             Column(
@@ -1040,3 +1057,4 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
     }
 }
+
