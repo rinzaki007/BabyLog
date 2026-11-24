@@ -49,9 +49,9 @@ jobs:
             echo 'org.gradle.workers.max=1'
             echo 'kotlin.compiler.execution.strategy=in-process'
           } >> gradle.properties
-          # Robolectric downloads android-all directly with HttpURLConnection rather than
-          # Gradle's dependency transport. Retry once only for that known transient Maven fetch failure.
-          for attempt in 1 2; do
+          # Robolectric downloads android-all directly with HttpURLConnection, outside Gradle's
+          # dependency transport. Use a Maven Central mirror and retry transient fetch failures.
+          for attempt in 1 2 3 4; do
             log_file="$RUNNER_TEMP/android-build-${attempt}.log"
             set +e
             gradle --no-daemon --max-workers=1 testDebugUnitTest assembleDebug 2>&1 | tee "$log_file"
@@ -62,11 +62,12 @@ jobs:
               exit 0
             fi
 
-            if [ "$attempt" -eq 1 ] &&
+            if [ "$attempt" -lt 4 ] &&
               grep -q "MavenArtifactFetcher.java" "$log_file" &&
               grep -q "HttpURLConnection.java" "$log_file"; then
-              echo "Robolectric failed to fetch its Android SDK artifact; retrying once."
-              sleep 5
+              delay=$((attempt * 15))
+              echo "Robolectric SDK download failed; retrying in ${delay}s (attempt $((attempt + 1))/4)."
+              sleep "$delay"
               continue
             fi
 
