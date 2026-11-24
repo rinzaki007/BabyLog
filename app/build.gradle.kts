@@ -5,6 +5,11 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Export Room schemas so database compatibility can be reviewed and tested across releases.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 val releaseStoreFile = System.getenv("BABYLOG_KEYSTORE_FILE")
 val releaseStorePassword = System.getenv("BABYLOG_KEYSTORE_PASSWORD")
 val releaseKeyAlias = System.getenv("BABYLOG_KEY_ALIAS")

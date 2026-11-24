@@ -23,6 +23,15 @@ BabyLog Android 客户端、NAS 同步服务和网页管理面板属于同一个
 - Activity 使用 `adjustResize`；可滚动编辑器和设置弹窗应结合 `imePadding()` 与滚动容器，避免软键盘遮住输入项。
 - UI 整理不得顺带改变 Room Entity、DAO、数据库版本 / Migration、事件 payload、照片路径、同步队列或 NAS API 契约。
 
+## BabyLog 3.0 数据与 UI 演进约定
+
+- Room Schema 由 KSP 导出到 `app/schemas`，每次 Android CI 同时上传 Schema artifact；数据库版本或 Entity 发生变化时，必须将生成的快照提交到仓库。
+- 3.0 首页、记录编辑器、时间线和统计页面共享同一套事件解释规则；展示层可以新增 UI model，但不得把展示字段写回 `BabyEventEntity.payloadJson` 作为重复数据。
+- 现有 `BabyEventEntity` 的 ID、babyId、eventType、occurredAt、payloadJson、createdBy、updatedAt、syncStatus、serverVersion、deletedAt 均视为兼容边界；未经过单独迁移设计和同步契约验证，不得重命名、删除或改变语义。
+- 时间线继续使用 `occurredAt + id` 的稳定排序与 keyset 分页；首页今日摘要只查询当前日期范围，不得为了绘制首页而加载全部历史事件。
+- 计时中的睡眠状态与已完成的睡眠事件分开处理；只有用户结束并保存后，才创建正式事件并进入同步队列。
+- 阶段性重构优先拆分 Compose 展示组件和查询/映射逻辑，不要求一次性迁移到新的架构框架，也不改变离线优先、照片本地路径、NAS API 和同步冲突处理行为。
+
 ## API 与数据兼容原则
 
 - Android 和服务端共用 `docs/FAMILY_SYNC.md` 中定义的 API 契约。
