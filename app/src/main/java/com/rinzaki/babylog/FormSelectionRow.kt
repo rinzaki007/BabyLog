@@ -29,16 +29,19 @@ internal fun SelectionRow(options: List<String>, selected: String, onSelect: (St
                     if (selected == option) {
                         FilledTonalButton(
                             onClick = { onSelect(option) },
-                            modifier = modifier,
+                            modifier = modifier.heightIn(min = 44.dp),
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text(option, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("✓", style = MaterialTheme.typography.labelMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Text(option, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                            }
                         }
                     } else {
                         OutlinedButton(
                             onClick = { onSelect(option) },
-                            modifier = modifier,
+                            modifier = modifier.heightIn(min = 44.dp),
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
