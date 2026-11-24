@@ -371,30 +371,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                 if (page == 3) item { ThemePageBanner(selectedTheme, "照片时光", "按日期或月龄，收藏成长的每个瞬间", ThemeCharacterPose.ALBUM) }
                 if (page == 4) item { ThemePageBanner(selectedTheme, "疫苗接种", "记录每一次安心守护", ThemeCharacterPose.VACCINE) }
                 if (page == 0) item {
-                    val syncConfigured = SyncPreferences.familyId(appContext).isNotBlank()
-                    val syncLabel = when {
-                        !syncConfigured -> "离线保存"
-                        syncing -> "正在同步"
-                        !syncError.isNullOrBlank() -> "同步需要检查"
-                        lastSyncAt > 0L -> "家庭同步正常"
-                        else -> "等待首次同步"
-                    }
-                    HomeSyncStatusCard(
-                        syncLabel = syncLabel,
-                        lastSyncLabel = if (lastSyncAt > 0L) SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(lastSyncAt)) else "查看详情",
-                        syncDetailLabel = if (lastSyncAt > 0L) "上次成功：" + SimpleDateFormat("yyyy年M月d日 HH时mm分", Locale.CHINA).format(Date(lastSyncAt)) else "尚无成功同步记录",
-                        syncConfigured = syncConfigured,
-                        syncing = syncing,
-                        showDetails = showSyncDetails,
-                        consistency = syncConsistency,
-                        syncError = syncError,
-                        pendingCount = pendingSyncCount,
-                        conflictCount = syncConflictCount,
-                        onToggleDetails = { showSyncDetails = !showSyncDetails },
-                        onSyncNow = { SyncScheduler.enqueue(appContext) }
-                    )
-                }
-                if (page == 0) item {
                     if (baby == null || editingProfile) {
                         BabyProfileEditor(baby) { name, birthDate, sex, avatar, weight, length, head ->
                             val now = System.currentTimeMillis()
@@ -866,6 +842,30 @@ private fun BabyLogApp(dao: BabyLogDao) {
                     }
 
                 } else if (page == 0) item { Text("创建宝宝档案后，就可以开始记录每天的生活点滴。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                if (page == 0) item {
+                    val syncConfigured = SyncPreferences.familyId(appContext).isNotBlank()
+                    val syncLabel = when {
+                        !syncConfigured -> "离线保存"
+                        syncing -> "正在同步"
+                        !syncError.isNullOrBlank() -> "同步需要检查"
+                        lastSyncAt > 0L -> "家庭同步正常"
+                        else -> "等待首次同步"
+                    }
+                    HomeSyncStatusCard(
+                        syncLabel = syncLabel,
+                        lastSyncLabel = if (lastSyncAt > 0L) SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(lastSyncAt)) else "查看详情",
+                        syncDetailLabel = if (lastSyncAt > 0L) "上次成功：" + SimpleDateFormat("yyyy年M月d日 HH时mm分", Locale.CHINA).format(Date(lastSyncAt)) else "尚无成功同步记录",
+                        syncConfigured = syncConfigured,
+                        syncing = syncing,
+                        showDetails = showSyncDetails,
+                        consistency = syncConsistency,
+                        syncError = syncError,
+                        pendingCount = pendingSyncCount,
+                        conflictCount = syncConflictCount,
+                        onToggleDetails = { showSyncDetails = !showSyncDetails },
+                        onSyncNow = { SyncScheduler.enqueue(appContext) }
+                    )
+                }
             }
             }
         }
