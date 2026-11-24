@@ -214,17 +214,25 @@ internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> U
 @Composable
 internal fun SummaryPill(emoji: String, label: String, value: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     Column(
-        modifier.fillMaxWidth().heightIn(min = 72.dp)
+        modifier.fillMaxWidth().heightIn(min = 82.dp)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
-            .padding(horizontal = 4.dp, vertical = 7.dp),
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 4.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
     ) {
-        Text(emoji, style = MaterialTheme.typography.bodyMedium)
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+            modifier = Modifier.size(30.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(emoji, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
         Text(
             value,
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             maxLines = 1
         )
