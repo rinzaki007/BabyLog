@@ -463,6 +463,12 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                     if (page == 0) item {
+                        HomeTimelinePreview(todayEvents) {
+                            selectedNav = 1
+                            selectedEventFilter = "全部"
+                        }
+                    }
+                    if (page == 0) item {
                         SleepTimerCard { startedAt, endedAt, durationMinutes ->
                             val now = System.currentTimeMillis()
                             val payload = JSONObject()
