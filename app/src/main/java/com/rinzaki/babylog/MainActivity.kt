@@ -248,7 +248,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
             try {
                 val firstPage = dao.getTimelinePage(baby.id, timelineStartAt, timelineEndAt, timelineEventType, 100, 0)
                 val total = dao.countTimelineEvents(baby.id, timelineStartAt, timelineEndAt, timelineEventType)
-                timelineEvents = firstPage                timelineTotal = total
+                timelineEvents = firstPage
+                timelineTotal = total
             } catch (error: kotlinx.coroutines.CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -497,7 +498,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                     dao.upsertEvent(event)
                                     if (SyncPreferences.familyId(appContext).isNotBlank()) {
                                         dao.enqueueOperation(
-                                            SyncOperationEntity(                                                UUID.randomUUID().toString(), "event", event.id, "upsert",
+                                            SyncOperationEntity(
+                                                UUID.randomUUID().toString(), "event", event.id, "upsert",
                                                 eventSyncPayload(event).toString(), event.serverVersion, now
                                             )
                                         )
@@ -762,7 +764,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                             if (isLastEventOfDay && dayPhotos.isNotEmpty()) {
-                                TimelinePhotoStrip(dayPhotos) { photo ->                                    selectedTimelinePhoto = photo
+                                TimelinePhotoStrip(dayPhotos) { photo ->
+                                    selectedTimelinePhoto = photo
                                     selectedNav = 3
                                 }
                             }
@@ -1011,7 +1014,8 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                 }
-            },            confirmButton = {
+            },
+            confirmButton = {
                 TextButton(onClick = { showRecordTypePicker = false }) { Text("取消") }
             }
         )
@@ -1053,3 +1057,4 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
     }
 }
+
