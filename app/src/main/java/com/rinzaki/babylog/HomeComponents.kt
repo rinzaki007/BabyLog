@@ -142,6 +142,23 @@ internal fun HomeFeedingIntervalCard(
 }
 
 @Composable
+private fun SummaryGroupLabel(emoji: String, title: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(emoji, style = MaterialTheme.typography.labelMedium)
+        Text(
+            title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
 internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> Unit = {}) {
     val todayDate = LocalDate.now()
     val start = todayDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -192,16 +209,19 @@ internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> U
                     )
                 }
             }
+            SummaryGroupLabel("🍼", "喂养与休息")
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 SummaryPill("🍼", "喂养", "${feeding.size} 次", Modifier.weight(1f)) { onSelect("喂养") }
                 SummaryPill("🥛", "记录奶量", "${milk} ml", Modifier.weight(1f)) { onSelect("喂养") }
                 SummaryPill("🌙", "睡眠", sleepLabel, Modifier.weight(1f)) { onSelect("睡眠") }
             }
+            SummaryGroupLabel("🧷", "日常护理")
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 SummaryPill("💧", "小便", "${pee} 次", Modifier.weight(1f)) { onSelect("大小便") }
                 SummaryPill("🌿", "大便", "${stool} 次", Modifier.weight(1f)) { onSelect("大小便") }
                 SummaryPill("📏", "成长测量", "${today.count { it.eventType == "GROWTH" }} 次", Modifier.weight(1f)) { onSelect("成长测量") }
             }
+            SummaryGroupLabel("🥣", "营养与成长")
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 SummaryPill("🧴", "补充记录", "${supplements.size} 次", Modifier.weight(1f)) { onSelect("补充记录") }
                 SummaryPill("🚰", "饮水", "${waterMl} ml", Modifier.weight(1f)) { onSelect("补充记录") }
