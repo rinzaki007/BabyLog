@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -125,31 +126,41 @@ internal fun HomeTimelinePreview(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(9.dp)
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Surface(
-                                modifier = Modifier.size(38.dp),
-                                shape = RoundedCornerShape(13.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(presentation.emoji, style = MaterialTheme.typography.titleMedium)
-                                }
-                            }
-                        }
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(presentation.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            Text(presentation.detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                        }
                         Text(
                             SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(event.occurredAt)),
-                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.width(42.dp),
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Surface(
+                            modifier = Modifier.size(36.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.78f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(presentation.emoji, style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(presentation.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                presentation.detail,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
                     }
                     if (index != latestEvents.lastIndex) {
-                        Box(Modifier.padding(start = 18.dp).size(width = 2.dp, height = 8.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                        Box(
+                            Modifier.padding(start = 58.dp).size(width = 2.dp, height = 9.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f))
+                        )
                     }
                 }
             }
