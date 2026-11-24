@@ -433,21 +433,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         ) { selectedNav = 1; selectedEventFilter = "喂养" }
                     }
                     if (page == 0) item {
-                        TodaySummary(todayEvents) { category ->
-                            selectedEventFilter = category
-                            selectedNav = 1
-                        }
-                    }
-                    if (page == 0) item {
-                        HomeTimelinePreview(
-                            events = todayEvents,
-                            onViewAll = {
-                                selectedNav = 1
-                                selectedEventFilter = "全部"
-                            }
-                        )
-                    }
-                    if (page == 0) item {
                         SleepTimerCard { startedAt, endedAt, durationMinutes ->
                             val now = System.currentTimeMillis()
                             val payload = JSONObject()
@@ -464,6 +449,22 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                         }
+                    }
+
+                    if (page == 0) item {
+                        TodaySummary(todayEvents) { category ->
+                            selectedEventFilter = category
+                            selectedNav = 1
+                        }
+                    }
+                    if (page == 0) item {
+                        HomeTimelinePreview(
+                            events = todayEvents,
+                            onViewAll = {
+                                selectedNav = 1
+                                selectedEventFilter = "全部"
+                            }
+                        )
                     }
 
                     if (page == 2) item {
