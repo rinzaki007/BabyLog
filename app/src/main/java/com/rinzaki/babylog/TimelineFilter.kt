@@ -27,3 +27,14 @@ internal fun timelineDateRangeForPreset(
     "全部日期" -> null to null
     else -> null to null
 }
+
+
+internal fun timelineDatePresetIsSelected(
+    preset: String,
+    today: java.time.LocalDate,
+    selectedStartDate: java.time.LocalDate?,
+    selectedEndDate: java.time.LocalDate?
+): Boolean {
+    val range = timelineDateRangeForPreset(preset, today)
+    return range.first == selectedStartDate && range.second == selectedEndDate
+}

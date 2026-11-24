@@ -42,4 +42,14 @@ class TimelineFilterTest {
         val today = java.time.LocalDate.of(2026, 11, 24)
         assertEquals(null to null, timelineDateRangeForPreset("未知", today))
     }
+
+    @Test
+    fun datePresetSelectionReflectsCurrentRange() {
+        val today = java.time.LocalDate.of(2026, 11, 24)
+
+        assertEquals(true, timelineDatePresetIsSelected("昨天", today, today.minusDays(1), today.minusDays(1)))
+        assertEquals(false, timelineDatePresetIsSelected("今天", today, today.minusDays(1), today.minusDays(1)))
+        assertEquals(true, timelineDatePresetIsSelected("全部日期", today, null, null))
+        assertEquals(false, timelineDatePresetIsSelected("全部日期", today, today, today))
+    }
 }

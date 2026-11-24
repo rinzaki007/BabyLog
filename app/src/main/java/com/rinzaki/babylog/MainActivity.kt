@@ -669,16 +669,19 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                     ) { Text("重置") }
                                 }
                             }
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 items(listOf("今天", "昨天", "本周", "近7天", "近30天", "全部日期")) { preset ->
-                                    TextButton(
+                                    FilterChip(
+                                        selected = timelineDatePresetIsSelected(
+                                            preset, LocalDate.now(), selectedStartDate, selectedEndDate
+                                        ),
                                         onClick = {
                                             val range = timelineDateRangeForPreset(preset, LocalDate.now())
                                             selectedStartDate = range.first
                                             selectedEndDate = range.second
                                         },
-                                        contentPadding = PaddingValues(horizontal = 9.dp, vertical = 5.dp)
-                                    ) { Text(preset, style = MaterialTheme.typography.labelLarge) }
+                                        label = { Text(preset) }
+                                    )
                                 }
                             }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
