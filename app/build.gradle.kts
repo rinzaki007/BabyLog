@@ -56,8 +56,11 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
-            // Use Maven Central's canonical endpoint for Robolectric's Android SDK artifacts.
-            it.systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
+            // Use Google's Maven Central mirror for Robolectric's direct HttpURLConnection downloads.
+            it.systemProperty(
+                "robolectric.dependency.repo.url",
+                "https://maven-central.storage-download.googleapis.com/maven2"
+            )
         }
     }
 }
