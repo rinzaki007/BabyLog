@@ -697,7 +697,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                                items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "成长测量", "成长里程碑", "成长足迹", "其他")) { category ->
+                                items(listOf("全部", "喂养", "辅食记录", "补充记录", "大小便", "睡眠", "体温记录", "成长测量", "成长里程碑", "成长足迹", "其他")) { category ->
                                     FilterChip(
                                         selected = selectedEventFilter == category,
                                         onClick = { selectedEventFilter = category },
@@ -972,6 +972,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
             "FEEDING" to "喂养",
             "DIAPER" to "日常护理",
             "SLEEP" to "睡眠",
+            "TEMPERATURE" to "体温记录",
             "SOLID_FOOD" to "辅食",
             "SUPPLEMENT" to "补充",
             "GROWTH" to "成长测量"
