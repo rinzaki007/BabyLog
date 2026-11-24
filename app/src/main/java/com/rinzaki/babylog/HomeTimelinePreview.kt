@@ -34,6 +34,9 @@ internal data class HomeTimelinePresentation(
     val emoji: String
 )
 
+internal fun latestHomeTimelineEvents(events: List<BabyEventEntity>, limit: Int = 5): List<BabyEventEntity> =
+    events.sortedByDescending { it.occurredAt }.take(limit.coerceAtLeast(0))
+
 internal fun homeTimelinePresentation(event: BabyEventEntity): HomeTimelinePresentation {
     val payload = runCatching { JSONObject(event.payloadJson) }.getOrElse { JSONObject() }
     return when (event.eventType) {
@@ -78,7 +81,7 @@ internal fun HomeTimelinePreview(
     onViewAll: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val latestEvents = remember(events) { events.sortedBy { it.occurredAt }.takeLast(5) }
+    val latestEvents = remember(events) { latestHomeTimelineEvents(events) }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),

@@ -5,15 +5,33 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class HomeTimelinePresentationTest {
-    private fun event(type: String, payload: String) = BabyEventEntity(
-        id = "event-1",
+    private fun event(type: String, payload: String, occurredAt: Long = 1_700_000_000_000L, id: String = "event-1") = BabyEventEntity(
+        id = id,
         babyId = "baby-1",
         eventType = type,
-        occurredAt = 1_700_000_000_000L,
+        occurredAt = occurredAt,
         payloadJson = payload,
         createdBy = null,
-        updatedAt = 1_700_000_000_000L
+        updatedAt = occurredAt
     )
+
+    @Test
+    fun latestTimelineEventsAreFirstAndLimitedToFive() {
+        val events = (1L..7L).map { index ->
+            event("FEEDING", """{"amountMl":${index * 10}}""", occurredAt = index, id = "event-${index}")
+        }
+
+        val result = latestHomeTimelineEvents(events)
+
+        assertEquals(listOf("event-7", "event-6", "event-5", "event-4", "event-3"), result.map { it.id })
+    }
+
+    @Test
+    fun latestTimelineEventsRespectZeroLimit() {
+        val events = listOf(event("FEEDING", """{"amountMl":120}"""))
+
+        assertEquals(emptyList<BabyEventEntity>(), latestHomeTimelineEvents(events, limit = 0))
+    }
 
     @Test
     fun feedingShowsRecordedMilkAmount() {
