@@ -272,33 +272,45 @@ internal fun SummaryPill(emoji: String, label: String, value: String, modifier: 
 internal fun ActionCard(emoji: String, title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 84.dp),
+        modifier = modifier.heightIn(min = 78.dp),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp)
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(13.dp),
                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
-                modifier = Modifier.size(42.dp)
+                modifier = Modifier.size(38.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(emoji, style = MaterialTheme.typography.headlineSmall)
+                    Text(emoji, style = MaterialTheme.typography.titleLarge)
                 }
             }
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Text(
+                    title,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
