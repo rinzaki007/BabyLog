@@ -62,7 +62,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
     var weightKg by remember(existing?.id) { mutableStateOf(initialPayload.optInt("weightGrams").takeIf { it > 0 }?.div(1000.0)?.toString().orEmpty()) }
     var lengthCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("lengthCm").takeIf { it > 0 }?.toString().orEmpty()) }
     var headCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.toString().orEmpty()) }
-    var temperatureC by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("temperatureC").takeIf { it > 0 }?.toString().orEmpty()) }
+    var temperatureC by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("temperatureC").let { value -> if (value > 0) value.toString() else "" }) }
     var temperatureMethod by remember(existing?.id) { mutableStateOf(initialPayload.optString("measurementMethod", "腋温").ifBlank { "腋温" }) }
     val savedSupplementName = initialPayload.optString("supplementName", if (existing == null) RecordPreferences.get(context, RecordPreferences.SUPPLEMENT_NAME, "维生素AD") else "维生素AD")
     var supplementName by remember(existing?.id) { mutableStateOf(if (savedSupplementName in supplementPresets) savedSupplementName else "其他") }
