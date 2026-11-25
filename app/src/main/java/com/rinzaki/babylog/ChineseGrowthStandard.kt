@@ -28,6 +28,39 @@ internal data class GrowthPercentiles(
             lerp(p97, other.p97)
         )
     }
+
+    internal fun isValid(): Boolean {
+        val values = listOf(p3, p10, p25, p50, p75, p90, p97)
+        return values.all { it.isFinite() && it > 0f } &&
+            values.zipWithNext().all { (lower, upper) -> lower <= upper }
+    }
+}
+
+/** The five percentile bands defined by Table 1 of WS/T 423—2022. */
+internal enum class GrowthPercentileBand {
+    BELOW_P3,
+    P3_TO_P25,
+    P25_TO_P75,
+    P75_TO_P97,
+    AT_OR_ABOVE_P97
+}
+
+/**
+ * Returns the standard's percentile band for an observed value.
+ * This is a descriptive comparison only, not a medical assessment.
+ */
+internal fun classifyGrowthPercentile(
+    value: Float,
+    reference: GrowthPercentiles
+): GrowthPercentileBand? {
+    if (!value.isFinite() || !reference.isValid()) return null
+    return when {
+        value >= reference.p97 -> GrowthPercentileBand.AT_OR_ABOVE_P97
+        value >= reference.p75 -> GrowthPercentileBand.P75_TO_P97
+        value >= reference.p25 -> GrowthPercentileBand.P25_TO_P75
+        value >= reference.p3 -> GrowthPercentileBand.P3_TO_P25
+        else -> GrowthPercentileBand.BELOW_P3
+    }
 }
 
 internal data class GrowthStandardRow(
@@ -52,6 +85,7 @@ internal fun interpolateGrowthStandard(
 ): GrowthPercentiles? {
     if (!ageMonths.isFinite() || rows.isEmpty()) return null
     val ordered = rows.sortedBy { it.ageMonths }
+    if (ordered.any { it.ageMonths < 0 || !it.percentiles.isValid() }) return null
     if (ordered.zipWithNext().any { (left, right) -> left.ageMonths >= right.ageMonths }) {
         return null
     }
