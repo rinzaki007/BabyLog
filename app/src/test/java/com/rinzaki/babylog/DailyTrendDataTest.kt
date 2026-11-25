@@ -123,6 +123,18 @@ class DailyTrendDataTest {
         assertEquals(1f, dailyTrendPoints(events, "喂养次数", 1, today, zone).single().value)
     }
 
+
+    @Test
+    fun countsTemperatureRecordsSeparatelyFromOtherEvents() {
+        val events = listOf(
+            event("t1", "TEMPERATURE", today, """{"temperatureC":36.8,"measurementMethod":"腋温"}"""),
+            event("t2", "TEMPERATURE", today, """{"temperatureC":37.1,"measurementMethod":"耳温"}"""),
+            event("f1", "FEEDING", today, """{"amountMl":120}""")
+        )
+        assertEquals(2f, dailyTrendPoints(events, "体温记录次数", 1, today, zone).single().value)
+        assertEquals(0f, dailyTrendPoints(events, "体温记录次数", 1, today.minusDays(1), zone).single().value)
+    }
+
     @Test
     fun dailyTrendMetricsFollowSelectedStatisticsCategory() {
         assertEquals(listOf("喂养奶量", "喂养次数"), trendMetricsForCategory("喂养"))
@@ -131,7 +143,8 @@ class DailyTrendDataTest {
         assertEquals(listOf("小便次数", "大便次数"), trendMetricsForCategory("护理"))
         assertEquals(listOf("睡眠小时"), trendMetricsForCategory("睡眠"))
         assertEquals(listOf("记录总数"), trendMetricsForCategory("成长"))
-        assertEquals(8, trendMetricsForCategory("全部").size)
+        assertEquals(listOf("体温记录次数"), trendMetricsForCategory("体温"))
+        assertEquals(9, trendMetricsForCategory("全部").size)
     }
 
 }
