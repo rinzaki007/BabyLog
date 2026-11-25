@@ -224,6 +224,7 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     var metric by remember { mutableStateOf("体重") }
     var range by remember { mutableStateOf("全部") }
@@ -420,9 +421,9 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     Text(points.last().first.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(dateFormat) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (referencePoints.size >= 2) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
