@@ -51,6 +51,37 @@ internal fun growthMetricPoints(
 }
 
 /**
+ * Finds the nearest plotted measurement in two dimensions. This matters when multiple
+ * observations share a timestamp: their x-coordinates overlap, but distinct values have
+ * distinct y-coordinates and should remain individually selectable.
+ */
+internal fun growthChartNearestPointIndex(
+    points: List<Pair<Long, Float>>,
+    tapX: Float,
+    tapY: Float,
+    left: Float,
+    right: Float,
+    top: Float,
+    bottom: Float,
+    minValue: Float,
+    maxValue: Float
+): Int? {
+    if (points.isEmpty() || right <= left || bottom <= top || maxValue <= minValue) return null
+    val firstTimestamp = points.first().first
+    val lastTimestamp = points.last().first
+    val valueSpan = maxValue - minValue
+    return points.indices.minByOrNull { index ->
+        val point = points[index]
+        val fraction = growthChartTimeFraction(point.first, firstTimestamp, lastTimestamp, points.size)
+        val x = left + (right - left) * fraction
+        val y = bottom - (point.second - minValue) / valueSpan * (bottom - top)
+        val dx = x - tapX
+        val dy = y - tapY
+        dx * dx + dy * dy
+    }
+}
+
+/**
  * Maps a measurement timestamp to the chart's horizontal fraction.
  * A single point (or a set of same-timestamp points) is centered instead of pinned to an edge.
  */
