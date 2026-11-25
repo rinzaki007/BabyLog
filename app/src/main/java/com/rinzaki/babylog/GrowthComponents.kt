@@ -84,8 +84,10 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             payload.optString("supplementName") == "水" && payload.optString("unit") == "ml"
         }.getOrDefault(false)
     }.sumOf { runCatching { JSONObject(it.payloadJson).optDouble("amount").toInt() }.getOrDefault(0) }
+    // The fallback start date must come from the baby's complete record history,
+    // not the currently selected category, so category averages share one denominator.
     val daysCovered = statisticsDaysCovered(
-        events = recent,
+        events = ranged,
         rangeDays = rangeDays,
         birthTimeMillis = baby?.birthTime,
         today = LocalDate.now(),
