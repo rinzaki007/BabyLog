@@ -115,8 +115,6 @@ class GrowthDataTest {
         assertEquals(50.0f, growthMetricPoints(baby(), emptyList(), "lengthCm").single().second, 0.001f)
         assertEquals(34.0f, growthMetricPoints(baby(), emptyList(), "headCircumferenceCm").single().second, 0.001f)
     }
-}
-
     @Test
     fun growthChartCentersSingleMeasurementAndSameTimestampPoints() {
         assertEquals(0.5f, growthChartTimeFraction(1_700L, 1_700L, 1_700L, 1), 0.0001f)
@@ -129,3 +127,4 @@ class GrowthDataTest {
         assertEquals(0.5f, growthChartTimeFraction(2_000L, 1_000L, 3_000L, 3), 0.0001f)
         assertEquals(1f, growthChartTimeFraction(3_000L, 1_000L, 3_000L, 3), 0.0001f)
     }
+}
