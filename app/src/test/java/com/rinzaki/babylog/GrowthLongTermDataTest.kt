@@ -26,6 +26,30 @@ class GrowthLongTermDataTest {
         assertEquals(4.5f, summaries[1].latestValue, 0.001f)
     }
 
+
+    @Test
+    fun singleMeasurementMonthComparesWithPreviousActualObservationAcrossEmptyMonths() {
+        val points = listOf(
+            at(LocalDate.of(2026, 1, 10)) to 3.2f,
+            at(LocalDate.of(2026, 4, 5)) to 4.1f
+        )
+        val summaries = growthMonthlySummaries(points, zone)
+        val april = summaries.last()
+        assertEquals(1, april.measurementCount)
+        assertEquals(3.2f, april.previousValue!!, 0.001f)
+        assertEquals(85L, april.daysSincePreviousMeasurement)
+    }
+
+    @Test
+    fun firstRecordedMonthHasNoPreviousObservationComparison() {
+        val summary = growthMonthlySummaries(
+            listOf(at(LocalDate.of(2026, 4, 5)) to 4.1f),
+            zone
+        ).single()
+        assertNull(summary.previousValue)
+        assertNull(summary.daysSincePreviousMeasurement)
+    }
+
     @Test
     fun omitsEmptyMonthsAndLimitsHistoryToMostRecentMonths() {
         val points = (1..4).map { month ->

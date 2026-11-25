@@ -622,7 +622,13 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                 Text(
                                     if (month.measurementCount > 1) {
                                         "首次 ${"%.2f".format(Locale.CHINA, month.firstValue)} → 最近 ${"%.2f".format(Locale.CHINA, month.latestValue)} $unit · 间隔 ${month.spanDays} 天 · 变化 $changeSign${"%.2f".format(Locale.CHINA, month.change)} $unit"
-                                    } else "单次记录",
+                                    } else {
+                                        month.previousValue?.let { previous ->
+                                            val previousSign = if (month.latestValue > previous) "+" else ""
+                                            val gap = month.daysSincePreviousMeasurement?.let { " · 间隔 ${it} 天" } ?: ""
+                                            "较上次记录 $previousSign${"%.2f".format(Locale.CHINA, month.latestValue - previous)} $unit$gap"
+                                        } ?: "单次记录"
+                                    },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
