@@ -109,8 +109,10 @@ internal fun growthRangeStartMillis(
 ): Long? {
     val now = Instant.ofEpochMilli(nowMillis).atZone(zone)
     val start = when (range) {
-        "近 30 天" -> now.minusDays(30)
-        "近 90 天" -> now.minusDays(90)
+        // Day-based presets include today, so a 30-day window starts 29 days ago.
+        // Use local midnight to include every measurement on the first selected day.
+        "近 30 天" -> now.toLocalDate().minusDays(29).atStartOfDay(zone)
+        "近 90 天" -> now.toLocalDate().minusDays(89).atStartOfDay(zone)
         "近半年" -> now.minusMonths(6)
         "近一年" -> now.minusYears(1)
         "全部" -> return null
