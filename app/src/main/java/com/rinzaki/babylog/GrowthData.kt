@@ -49,3 +49,20 @@ internal fun growthMetricPoints(
             }
     }.sortedBy { it.first }
 }
+
+/**
+ * Maps a measurement timestamp to the chart's horizontal fraction.
+ * A single point (or a set of same-timestamp points) is centered instead of pinned to an edge.
+ */
+internal fun growthChartTimeFraction(
+    timestamp: Long,
+    firstTimestamp: Long,
+    lastTimestamp: Long,
+    pointCount: Int
+): Float {
+    require(pointCount > 0) { "pointCount must be positive" }
+    if (pointCount == 1 || lastTimestamp <= firstTimestamp) return 0.5f
+    return ((timestamp - firstTimestamp).toDouble() / (lastTimestamp - firstTimestamp).toDouble())
+        .toFloat()
+        .coerceIn(0f, 1f)
+}
