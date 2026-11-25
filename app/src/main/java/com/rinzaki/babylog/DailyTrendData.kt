@@ -53,6 +53,22 @@ fun dailyTrendPoints(
 
 
 /**
+ * Keeps the all-time chart window anchored to the baby's complete history, even when
+ * the displayed metric is filtered to a category whose first record is more recent.
+ */
+fun dailyTrendWindowDays(
+    range: String,
+    allEvents: List<BabyEventEntity>,
+    today: LocalDate = LocalDate.now(),
+    zone: ZoneId = ZoneId.systemDefault()
+): Int = when (range) {
+    "近30天" -> 30
+    "近90天" -> 90
+    "全部" -> calendarDaysCovered(allEvents, today, zone).coerceAtMost(366)
+    else -> 7
+}
+
+/**
  * Counts calendar dates rather than elapsed 24-hour blocks. This keeps averages stable
  * across daylight-saving changes and local midnight boundaries.
  */
