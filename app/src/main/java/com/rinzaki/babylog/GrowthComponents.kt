@@ -36,10 +36,15 @@ import kotlin.math.abs
 internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     val context = LocalContext.current.applicationContext
     val visibleFeedingMethods = FeedingPreferences.enabledMethods(context)
+    val baby by produceState<BabyEntity?>(initialValue = null, babyId, dao) {
+        value = dao.getBaby(babyId)
+    }
     var range by remember { mutableStateOf("近7天") }
     var category by remember { mutableStateOf("全部") }
-    val days = when (range) { "近7天" -> 7L; "近30天" -> 30L; "近90天" -> 90L; else -> Long.MAX_VALUE }
-    val start = if (days == Long.MAX_VALUE) 0L else LocalDate.now().minusDays(days - 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val rangeDays = when (range) { "近7天" -> 7; "近30天" -> 30; "近90天" -> 90; else -> null }
+    val start = rangeDays?.let {
+        LocalDate.now().minusDays((it - 1).toLong()).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    } ?: 0L
     val eventsFlow = remember(babyId, start) { dao.observeNonVaccineEventsInRange(babyId, start, Long.MAX_VALUE) }
     val events by eventsFlow.collectAsState(initial = emptyList())
     val now = System.currentTimeMillis()
@@ -79,9 +84,13 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             payload.optString("supplementName") == "水" && payload.optString("unit") == "ml"
         }.getOrDefault(false)
     }.sumOf { runCatching { JSONObject(it.payloadJson).optDouble("amount").toInt() }.getOrDefault(0) }
-    val daysCovered = if (days == Long.MAX_VALUE) {
-        calendarDaysCovered(recent, LocalDate.now(), ZoneId.systemDefault())
-    } else days
+    val daysCovered = statisticsDaysCovered(
+        events = recent,
+        rangeDays = rangeDays,
+        birthTimeMillis = baby?.birthTime,
+        today = LocalDate.now(),
+        zone = ZoneId.systemDefault()
+    )
     val average = recent.size.toDouble() / daysCovered.toDouble()
     Card(shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
