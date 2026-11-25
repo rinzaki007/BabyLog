@@ -620,7 +620,9 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text("${"%.2f".format(Locale.CHINA, month.latestValue)} $unit", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                                 Text(
-                                    if (month.measurementCount > 1) "月内 $changeSign${"%.2f".format(Locale.CHINA, month.change)} $unit" else "单次记录",
+                                    if (month.measurementCount > 1) {
+                                        "首次 ${"%.2f".format(Locale.CHINA, month.firstValue)} → 最近 ${"%.2f".format(Locale.CHINA, month.latestValue)} $unit · 间隔 ${month.spanDays} 天 · 变化 $changeSign${"%.2f".format(Locale.CHINA, month.change)} $unit"
+                                    } else "单次记录",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
