@@ -72,6 +72,18 @@ class GrowthLongTermDataTest {
     }
 
     @Test
+    fun measurementHistoryShowsLatestFiveByDefaultAndAllWhenExpanded() {
+        val points = (1L..8L).map { it to it.toFloat() }.reversed()
+        assertEquals((4L..8L).toList(), visibleGrowthMeasurements(points, expanded = false).map { it.first })
+        assertEquals((1L..8L).toList(), visibleGrowthMeasurements(points, expanded = true).map { it.first })
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun measurementHistoryRejectsNegativeLimit() {
+        visibleGrowthMeasurements(emptyList(), expanded = false, limit = -1)
+    }
+
+    @Test
     fun growthChartHalfYearRangeUsesCalendarMonthsAtMonthEnd() {
         val now = LocalDate.of(2026, 8, 31).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
         val expected = LocalDate.of(2026, 2, 28).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
