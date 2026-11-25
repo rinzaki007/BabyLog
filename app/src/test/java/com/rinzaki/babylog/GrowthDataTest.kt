@@ -207,4 +207,41 @@ class GrowthDataTest {
         assertEquals(0.5f, growthChartTimeFraction(2_000L, 1_000L, 3_000L, 3), 0.0001f)
         assertEquals(1f, growthChartTimeFraction(3_000L, 1_000L, 3_000L, 3), 0.0001f)
     }
+    @Test
+    fun growthChartRejectsFiniteBoundsWhoseSpanOverflowsFloat() {
+        assertEquals(
+            null,
+            growthChartNearestPointIndex(
+                listOf(1_000L to 0f, 2_000L to 1f),
+                tapX = 50f,
+                tapY = 50f,
+                left = 0f,
+                right = 100f,
+                top = 0f,
+                bottom = 100f,
+                minValue = -Float.MAX_VALUE,
+                maxValue = Float.MAX_VALUE
+            )
+        )
+    }
+
+    @Test
+    fun growthChartHitDistanceDoesNotOverflowForExtremeFiniteTapCoordinates() {
+        assertEquals(
+            null,
+            growthChartNearestPointIndex(
+                listOf(1_000L to 3f, 2_000L to 5f),
+                tapX = Float.MAX_VALUE,
+                tapY = Float.MAX_VALUE,
+                left = 0f,
+                right = 100f,
+                top = 0f,
+                bottom = 100f,
+                minValue = 2f,
+                maxValue = 6f,
+                maxDistancePx = Float.MAX_VALUE
+            )
+        )
+    }
+
 }

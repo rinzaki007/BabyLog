@@ -78,27 +78,31 @@ internal fun growthChartNearestPointIndex(
         right <= left || bottom <= top || maxValue <= minValue ||
         maxDistancePx.isNaN() || maxDistancePx < 0f
     ) return null
-    val validIndices = points.indices.filter { points[it].second.isFinite() }
-    if (validIndices.isEmpty()) return null
+
+    val valueSpan = maxValue - minValue
+    // Finite endpoints can still produce an infinite span (for example, -MAX to MAX).
+    if (!valueSpan.isFinite() || valueSpan <= 0f) return null
+
     val firstTimestamp = points.first().first
     val lastTimestamp = points.last().first
-    val valueSpan = maxValue - minValue
-    val nearest = validIndices.minByOrNull { index ->
+    fun squaredDistance(index: Int): Double? {
         val point = points[index]
+        if (!point.second.isFinite()) return null
         val fraction = growthChartTimeFraction(point.first, firstTimestamp, lastTimestamp, points.size)
         val x = left + (right - left) * fraction
         val y = bottom - (point.second - minValue) / valueSpan * (bottom - top)
-        val dx = x - tapX
-        val dy = y - tapY
-        dx * dx + dy * dy
-    } ?: return null
-    val point = points[nearest]
-    val fraction = growthChartTimeFraction(point.first, firstTimestamp, lastTimestamp, points.size)
-    val x = left + (right - left) * fraction
-    val y = bottom - (point.second - minValue) / valueSpan * (bottom - top)
-    val dx = x - tapX
-    val dy = y - tapY
-    return nearest.takeIf { dx * dx + dy * dy <= maxDistancePx * maxDistancePx }
+        if (!x.isFinite() || !y.isFinite()) return null
+        val dx = (x - tapX).toDouble()
+        val dy = (y - tapY).toDouble()
+        return (dx * dx + dy * dy).takeIf { it.isFinite() }
+    }
+
+    val nearest = points.indices
+        .mapNotNull { index -> squaredDistance(index)?.let { index to it } }
+        .minByOrNull { it.second }
+        ?: return null
+    val maxDistanceSquared = maxDistancePx.toDouble() * maxDistancePx.toDouble()
+    return nearest.first.takeIf { nearest.second <= maxDistanceSquared }
 }
 
 /**
