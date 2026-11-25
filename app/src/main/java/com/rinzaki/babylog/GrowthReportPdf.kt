@@ -195,6 +195,11 @@ private class GrowthReportPdfRenderer(
         canvas = page?.canvas
         canvas?.drawColor(android.graphics.Color.WHITE)
         y = PDF_MARGIN
+        if (pageNumber > 1) {
+            canvas?.drawText("BabyLog 成长档案 · ${report.reportDate}", PDF_MARGIN, 28f, smallPaint)
+            canvas?.drawLine(PDF_MARGIN, 36f, PDF_PAGE_WIDTH - PDF_MARGIN, 36f, accentPaint)
+            y += 12f
+        }
     }
 
     private fun finishPage() {
