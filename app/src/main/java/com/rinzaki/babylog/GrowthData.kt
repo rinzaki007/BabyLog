@@ -25,9 +25,15 @@ internal fun growthMetricPoints(
         else -> baby.birthHeadCircumferenceCm
     }
 
+    val validRange = when (metricKey) {
+        "weightGrams" -> 100.0..80_000.0
+        "lengthCm" -> 20.0..120.0
+        else -> 20.0..70.0
+    }
+
     return buildList {
         if (baby.birthTime <= asOfMillis) {
-            birthValue?.takeIf { it.isFinite() && it > 0.0 }
+            birthValue?.takeIf { it.isFinite() && it in validRange }
                 ?.toFloat()
                 ?.takeIf { it.isFinite() && it > 0f }
                 ?.let { add(baby.birthTime to it) }
@@ -41,7 +47,7 @@ internal fun growthMetricPoints(
             }
             .forEach { event ->
                 val value = runCatching {
-                    JSONObject(event.payloadJson).optDouble(metricKey).takeIf { it.isFinite() && it > 0.0 }
+                    JSONObject(event.payloadJson).optDouble(metricKey).takeIf { it.isFinite() && it in validRange }
                 }.getOrNull()
                 if (value != null) {
                     val chartValue = if (metricKey == "weightGrams") value / 1000.0 else value
