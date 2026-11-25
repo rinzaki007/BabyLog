@@ -104,6 +104,35 @@ class ChineseGrowthStandardTest {
     }
 
     @Test
+    fun loadsCompleteOfficialWeightForAgeTablesForBothSexes() {
+        val boys = ChineseGrowthStandardData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY")!!
+        val girls = ChineseGrowthStandardData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, "GIRL")!!
+
+        assertEquals(44, boys.size)
+        assertEquals(44, girls.size)
+        assertEquals((0..24).toList() + (27..81 step 3).toList(), boys.map { it.ageMonths })
+        assertEquals(boys.map { it.ageMonths }, girls.map { it.ageMonths })
+        assertEquals(GrowthPercentiles(2.8f, 3.0f, 3.2f, 3.5f, 3.7f, 4.0f, 4.2f), boys.first().percentiles)
+        assertEquals(GrowthPercentiles(2.7f, 2.9f, 3.1f, 3.3f, 3.6f, 3.8f, 4.1f), girls.first().percentiles)
+        assertEquals(23.4f, boys.last().percentiles.p50)
+        assertEquals(22.4f, girls.last().percentiles.p50)
+        assertNull(ChineseGrowthStandardData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, "UNKNOWN"))
+        assertNull(ChineseGrowthStandardData.rows(ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE, "BOY"))
+    }
+
+    @Test
+    fun officialWeightRowsFeedTheSharedInterpolationEngine() {
+        val boys = ChineseGrowthStandardData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY")!!
+
+        assertEquals(
+            boys[24].percentiles.interpolate(boys[25].percentiles, 0.5f),
+            interpolateGrowthStandard(boys, 25.5)
+        )
+        assertEquals(boys.last().percentiles, interpolateGrowthStandard(boys, 81.0))
+        assertNull(interpolateGrowthStandard(boys, 81.01))
+    }
+
+    @Test
     fun enforcesMetricSpecificAgeLimitsAndRejectsDatesBeforeBirth() {
         val birthDate = LocalDate.of(2020, 1, 1)
 
