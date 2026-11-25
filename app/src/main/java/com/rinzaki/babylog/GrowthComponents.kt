@@ -178,7 +178,7 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
                     detectTapGestures { tap ->
                         dailyTrendTappedIndex(
                             tapX = tap.x,
-                            chartWidth = size.width,
+                            chartWidth = size.width.toFloat(),
                             horizontalPadding = 4.dp.toPx(),
                             pointCount = points.size
                         )?.let { selectedDayIndex = it }
