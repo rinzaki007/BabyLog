@@ -177,4 +177,42 @@ class ChineseGrowthStandardTest {
             birthDate, birthDate.plusMonths(84), ChineseGrowthMetric.WEIGHT_FOR_AGE
         ))
     }
+
+    @Test
+    fun loadsCompleteOfficialHeadCircumferenceTablesForBothSexes() {
+        val boys = ChineseGrowthHeadCircumferenceData.rows("BOY")!!
+        val girls = ChineseGrowthHeadCircumferenceData.rows("GIRL")!!
+        val expectedAges = (0..24).toList() + listOf(27, 30, 33, 36)
+
+        assertEquals(28, boys.size)
+        assertEquals(28, girls.size)
+        assertEquals(expectedAges, boys.map { it.ageMonths })
+        assertEquals(expectedAges, girls.map { it.ageMonths })
+        assertEquals(
+            GrowthPercentiles(31.9f, 32.7f, 33.4f, 34.3f, 35.2f, 36.0f, 36.8f),
+            boys.first().percentiles
+        )
+        assertEquals(
+            GrowthPercentiles(31.5f, 32.3f, 33.1f, 33.9f, 34.8f, 35.6f, 36.3f),
+            girls.first().percentiles
+        )
+        assertEquals(49.3f, boys.last().percentiles.p50)
+        assertEquals(48.5f, girls.last().percentiles.p50)
+        assertNull(ChineseGrowthHeadCircumferenceData.rows("UNKNOWN"))
+    }
+
+    @Test
+    fun officialHeadCircumferenceRowsUseSharedInterpolationWithoutExtrapolation() {
+        val boys = ChineseGrowthHeadCircumferenceData.rows("BOY")!!
+        val girls = ChineseGrowthHeadCircumferenceData.rows("GIRL")!!
+
+        assertEquals(
+            boys[24].percentiles.interpolate(boys[25].percentiles, 0.5f),
+            interpolateGrowthStandard(boys, 25.5)
+        )
+        assertEquals(boys.last().percentiles, interpolateGrowthStandard(boys, 36.0))
+        assertNull(interpolateGrowthStandard(boys, 36.01))
+        assertEquals(girls.last().percentiles, interpolateGrowthStandard(girls, 36.0))
+        assertNull(interpolateGrowthStandard(girls, 36.01))
+    }
 }
