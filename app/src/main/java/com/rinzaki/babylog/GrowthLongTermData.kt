@@ -67,6 +67,22 @@ internal fun visibleGrowthMeasurements(
     return if (expanded) ordered else ordered.takeLast(limit)
 }
 
+/**
+ * Returns source-list indices for visible history rows. Indices preserve identity when
+ * two measurements have identical timestamps and values.
+ */
+internal fun visibleGrowthMeasurementIndices(
+    points: List<Pair<Long, Float>>,
+    expanded: Boolean,
+    limit: Int = 5
+): List<Int> {
+    require(limit >= 0) { "limit must not be negative" }
+    val orderedIndices = points.indices
+        .filter { index -> points[index].second.isFinite() && points[index].second > 0f }
+        .sortedBy { index -> points[index].first }
+    return if (expanded) orderedIndices else orderedIndices.takeLast(limit)
+}
+
 internal data class GrowthMeasurementInterval(
     val previousDate: LocalDate,
     val latestDate: LocalDate,
