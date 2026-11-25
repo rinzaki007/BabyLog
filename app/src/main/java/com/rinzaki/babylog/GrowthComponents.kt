@@ -1,6 +1,7 @@
 package com.rinzaki.babylog
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
@@ -483,9 +484,14 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                 )
                 Text(if (showAllMeasurements) "全部测量" else "最近测量", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 visibleMeasurements.asReversed().forEachIndexed { index, point ->
+                    val pointIndex = points.indexOf(point)
+                    val isSelected = pointIndex == selectedPointIndex
                     Surface(
+                        modifier = Modifier.clickable {
+                            if (pointIndex >= 0) selectedPointIndex = pointIndex
+                        },
                         shape = RoundedCornerShape(12.dp),
-                        color = if (index == 0) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
                     ) {
                         Row(
@@ -496,7 +502,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                 SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(point.first)),
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 "${"%.2f".format(Locale.CHINA, point.second)} $unit",
@@ -507,6 +513,13 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                             if (index == 0) {
                                 Text(
                                     "最新",
+                                    modifier = Modifier.padding(start = 8.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else if (isSelected) {
+                                Text(
+                                    "已选中",
                                     modifier = Modifier.padding(start = 8.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary
