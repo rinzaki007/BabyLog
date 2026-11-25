@@ -60,7 +60,7 @@ class ChineseGrowthStandardTest {
     @Test
     fun rejectsInvalidPercentileRowsInsteadOfDrawingCorruptReferenceData() {
         val nonFinite = birth.copy(p50 = Float.NaN)
-        val descending = birth.copy(p25 = 3.5f)
+        val descending = birth.copy(p25 = 2.5f)
 
         assertNull(interpolateGrowthStandard(listOf(GrowthStandardRow(0, nonFinite)), 0.0))
         assertNull(interpolateGrowthStandard(listOf(GrowthStandardRow(0, descending)), 0.0))
