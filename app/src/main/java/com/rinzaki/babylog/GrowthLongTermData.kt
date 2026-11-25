@@ -12,7 +12,9 @@ internal data class GrowthMonthSummary(
     val firstValue: Float,
     val latestValue: Float,
     val change: Float,
-    val spanDays: Long
+    val spanDays: Long,
+    val previousValue: Float?,
+    val daysSincePreviousMeasurement: Long?
 )
 
 /**
@@ -25,26 +27,38 @@ internal fun growthMonthlySummaries(
     maxMonths: Int = 12
 ): List<GrowthMonthSummary> {
     require(maxMonths in 1..120) { "maxMonths must be between 1 and 120" }
-    return points.asSequence()
+    val ordered = points
         .filter { it.second.isFinite() && it.second > 0f }
         .sortedBy { it.first }
-        .groupBy { Instant.ofEpochMilli(it.first).atZone(zone).toLocalDate().let(YearMonth::from) }
+    return ordered.withIndex()
+        .groupBy { (_, point) ->
+            Instant.ofEpochMilli(point.first).atZone(zone).toLocalDate().let(YearMonth::from)
+        }
         .toSortedMap()
         .entries
         .toList()
         .takeLast(maxMonths)
-        .map { (month, measurements) ->
+        .map { (month, indexedMeasurements) ->
+            val measurements = indexedMeasurements.map { it.value }
             val first = measurements.first()
             val latest = measurements.last()
             val firstDate = Instant.ofEpochMilli(first.first).atZone(zone).toLocalDate()
             val latestDate = Instant.ofEpochMilli(latest.first).atZone(zone).toLocalDate()
+            val previous = ordered.getOrNull(indexedMeasurements.first().index - 1)
+            val previousDate = previous?.first?.let {
+                Instant.ofEpochMilli(it).atZone(zone).toLocalDate()
+            }
             GrowthMonthSummary(
                 month = month,
                 measurementCount = measurements.size,
                 firstValue = first.second,
                 latestValue = latest.second,
                 change = latest.second - first.second,
-                spanDays = ChronoUnit.DAYS.between(firstDate, latestDate)
+                spanDays = ChronoUnit.DAYS.between(firstDate, latestDate),
+                previousValue = previous?.second,
+                daysSincePreviousMeasurement = previousDate?.let {
+                    ChronoUnit.DAYS.between(it, firstDate)
+                }
             )
         }
 }
