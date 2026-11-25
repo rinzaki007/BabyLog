@@ -264,12 +264,15 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         Modifier.weight(1f).height(150.dp).pointerInput(points) {
                             detectTapGestures { tap ->
                                 if (points.isNotEmpty()) {
-                                    val start = points.first().first
-                                    val span = (points.last().first - start).coerceAtLeast(1L)
+                                    val firstTimestamp = points.first().first
+                                    val lastTimestamp = points.last().first
                                     val left = 8f
                                     val right = size.width - 8f
                                     selectedPointIndex = points.indices.minByOrNull { index ->
-                                        val x = left + (right - left) * ((points[index].first - start).toFloat() / span.toFloat())
+                                        val fraction = growthChartTimeFraction(
+                                            points[index].first, firstTimestamp, lastTimestamp, points.size
+                                        )
+                                        val x = left + (right - left) * fraction
                                         abs(x - tap.x)
                                     } ?: points.lastIndex
                                 }
@@ -282,13 +285,15 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         val bottom = size.height - 12f
                         val valueSpan = (max - min).coerceAtLeast(0.1f)
                         val timeStart = points.first().first
-                        val timeSpan = (points.last().first - timeStart).coerceAtLeast(1L)
+                        val timeEnd = points.last().first
                         repeat(4) { index ->
                             val y = top + (bottom - top) * index / 3f
                             drawLine(chartGrid, Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
                         }
                         val coords = points.map { point ->
-                            val x = left + (right - left) * ((point.first - timeStart).toFloat() / timeSpan.toFloat())
+                            val x = left + (right - left) * growthChartTimeFraction(
+                                point.first, timeStart, timeEnd, points.size
+                            )
                             val y = bottom - (point.second - min) / valueSpan * (bottom - top)
                             Offset(x, y)
                         }
