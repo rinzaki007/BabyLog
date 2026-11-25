@@ -234,11 +234,33 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val points = remember(allPoints, rangeStart) {
         if (rangeStart == null) allPoints else allPoints.filter { it.first >= rangeStart }
     }
+    val chartZone = remember { ZoneId.systemDefault() }
+    val birthDate = remember(baby.birthTime, chartZone) {
+        java.time.Instant.ofEpochMilli(baby.birthTime).atZone(chartZone).toLocalDate()
+    }
+    val referenceMetric = when (metric) {
+        "身长" -> ChineseGrowthMetric.LENGTH_HEIGHT_FOR_AGE
+        "头围" -> ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE
+        else -> ChineseGrowthMetric.WEIGHT_FOR_AGE
+    }
+    val referenceSex = chineseGrowthStandardSex(baby.sex)
+    val referencePoints = remember(birthDate, points, referenceMetric, referenceSex, chartZone) {
+        if (points.size < 2 || referenceSex == null) emptyList()
+        else {
+            val startDate = java.time.Instant.ofEpochMilli(points.first().first).atZone(chartZone).toLocalDate()
+            val endDate = java.time.Instant.ofEpochMilli(points.last().first).atZone(chartZone).toLocalDate()
+            chineseGrowthReferenceChartWindow(
+                birthDate, startDate, endDate, referenceMetric, referenceSex, chartZone
+            ).orEmpty()
+        }
+    }
     val latest = points.lastOrNull()
     val previous = points.dropLast(1).lastOrNull()
     val delta = if (latest != null && previous != null) latest.second - previous.second else null
-    val minValue = points.minOfOrNull { it.second }
-    val maxValue = points.maxOfOrNull { it.second }
+    val referenceMin = referencePoints.minOfOrNull { it.percentiles.p3 }
+    val referenceMax = referencePoints.maxOfOrNull { it.percentiles.p97 }
+    val minValue = listOfNotNull(points.minOfOrNull { it.second }, referenceMin).minOrNull()
+    val maxValue = listOfNotNull(points.maxOfOrNull { it.second }, referenceMax).maxOrNull()
     val min = ((minValue ?: 0f) - if (metric == "体重") 0.25f else 1f).coerceAtLeast(0f)
     val max = (maxValue ?: 1f) + if (metric == "体重") 0.25f else 1f
     val dateFormat = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)
@@ -307,6 +329,38 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                             val y = top + (bottom - top) * index / 3f
                             drawLine(chartGrid, Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
                         }
+                        if (referencePoints.size >= 2 && timeEnd > timeStart) {
+                            val referenceCoordinates = referencePoints.map { reference ->
+                                val x = left + (right - left) * growthChartTimeFraction(
+                                    reference.timestamp, timeStart, timeEnd, 2
+                                )
+                                fun y(value: Float) = bottom - (value - min) / valueSpan * (bottom - top)
+                                Triple(
+                                    Offset(x, y(reference.percentiles.p3)),
+                                    Offset(x, y(reference.percentiles.p50)),
+                                    Offset(x, y(reference.percentiles.p97))
+                                )
+                            }
+                            val percentileBand = Path().apply {
+                                moveTo(referenceCoordinates.first().first.x, referenceCoordinates.first().first.y)
+                                referenceCoordinates.drop(1).forEach { lineTo(it.first.x, it.first.y) }
+                                referenceCoordinates.asReversed().forEach { lineTo(it.third.x, it.third.y) }
+                                close()
+                            }
+                            drawPath(percentileBand, chartPrimary.copy(alpha = 0.09f))
+                            val medianLine = Path().apply {
+                                moveTo(referenceCoordinates.first().second.x, referenceCoordinates.first().second.y)
+                                referenceCoordinates.drop(1).forEach { lineTo(it.second.x, it.second.y) }
+                            }
+                            drawPath(
+                                medianLine,
+                                chartPrimary.copy(alpha = 0.72f),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                    width = 2.dp.toPx(),
+                                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                )
+                            )
+                        }
                         val coords = points.map { point ->
                             val x = left + (right - left) * growthChartTimeFraction(
                                 point.first, timeStart, timeEnd, points.size
@@ -346,6 +400,31 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(points.first().first.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(dateFormat) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(points.last().first.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(dateFormat) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (referencePoints.size >= 2) {
+                    Text(
+                        "中国标准 P3–P97 范围 · P50 中位线（WS/T 423—2022）",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else if (referenceSex == null) {
+                    Text(
+                        "完善宝宝性别档案后，可显示对应的中国生长标准曲线",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else if (metric == "头围") {
+                    Text(
+                        "中国头围标准仅覆盖 0–36 月龄，且需要至少两次不同日期的测量",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        "至少有两次不同日期的测量后，才会叠加中国标准曲线",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 selectedPoint?.let { point ->
                     Text(
