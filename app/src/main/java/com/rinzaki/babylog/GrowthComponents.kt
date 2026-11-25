@@ -397,13 +397,9 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                             drawPath(fillPath, chartSecondary.copy(alpha = 0.10f))
                             val linePath = Path().apply {
                                 moveTo(coords.first().x, coords.first().y)
-                                for (i in 1 until coords.size) {
-                                    val previousPoint = coords[i - 1]
-                                    val currentPoint = coords[i]
-                                    val middleX = (previousPoint.x + currentPoint.x) / 2f
-                                    quadraticTo(previousPoint.x, previousPoint.y, middleX, (previousPoint.y + currentPoint.y) / 2f)
-                                    lineTo(currentPoint.x, currentPoint.y)
-                                }
+                                // Connect actual observations directly; a smoothed curve can imply
+                                // intermediate growth values that were never measured.
+                                coords.drop(1).forEach { point -> lineTo(point.x, point.y) }
                             }
                             drawPath(linePath, chartSecondary, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
                         }
