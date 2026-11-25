@@ -58,6 +58,32 @@ class ChineseGrowthStandardTest {
     }
 
     @Test
+    fun rejectsInvalidPercentileRowsInsteadOfDrawingCorruptReferenceData() {
+        val nonFinite = birth.copy(p50 = Float.NaN)
+        val descending = birth.copy(p25 = 3.5f)
+
+        assertNull(interpolateGrowthStandard(listOf(GrowthStandardRow(0, nonFinite)), 0.0))
+        assertNull(interpolateGrowthStandard(listOf(GrowthStandardRow(0, descending)), 0.0))
+        assertNull(interpolateGrowthStandard(listOf(GrowthStandardRow(-1, birth)), 0.0))
+    }
+
+    @Test
+    fun classifiesValuesUsingTheExactOfficialPercentileBoundaries() {
+        val reference = GrowthPercentiles(3f, 4f, 5f, 6f, 7f, 8f, 9f)
+
+        assertEquals(GrowthPercentileBand.BELOW_P3, classifyGrowthPercentile(2.99f, reference))
+        assertEquals(GrowthPercentileBand.P3_TO_P25, classifyGrowthPercentile(3f, reference))
+        assertEquals(GrowthPercentileBand.P3_TO_P25, classifyGrowthPercentile(4.99f, reference))
+        assertEquals(GrowthPercentileBand.P25_TO_P75, classifyGrowthPercentile(5f, reference))
+        assertEquals(GrowthPercentileBand.P25_TO_P75, classifyGrowthPercentile(6.99f, reference))
+        assertEquals(GrowthPercentileBand.P75_TO_P97, classifyGrowthPercentile(7f, reference))
+        assertEquals(GrowthPercentileBand.P75_TO_P97, classifyGrowthPercentile(8.99f, reference))
+        assertEquals(GrowthPercentileBand.AT_OR_ABOVE_P97, classifyGrowthPercentile(9f, reference))
+        assertNull(classifyGrowthPercentile(Float.NaN, reference))
+        assertNull(classifyGrowthPercentile(5f, reference.copy(p50 = Float.POSITIVE_INFINITY)))
+    }
+
+    @Test
     fun mapsOnlyKnownProfileSexLabels() {
         assertEquals("BOY", chineseGrowthStandardSex("男宝"))
         assertEquals("GIRL", chineseGrowthStandardSex("女宝"))
