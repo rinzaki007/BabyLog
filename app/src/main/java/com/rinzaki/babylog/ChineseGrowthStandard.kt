@@ -112,7 +112,10 @@ internal fun chineseGrowthAgeMonths(
 ): Double? {
     if (measuredDate.isBefore(birthDate)) return null
     val completedMonths = growthCompletedMonths(birthDate, measuredDate)
-    if (completedMonths >= metric.maximumAgeMonths) return null
+    // The published head-circumference table includes an exact 36-month row.
+    // Allow the exact final anniversary, but never extrapolate beyond it.
+    val finalSupportedDate = birthDate.plusMonths(metric.maximumAgeMonths.toLong())
+    if (measuredDate.isAfter(finalSupportedDate)) return null
     val monthStart = birthDate.plusMonths(completedMonths)
     val nextMonth = birthDate.plusMonths(completedMonths + 1)
     val elapsedDays = ChronoUnit.DAYS.between(monthStart, measuredDate)
