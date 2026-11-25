@@ -238,4 +238,66 @@ class ChineseGrowthStandardTest {
         assertNull(ChineseGrowthReferenceData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, null))
         assertNull(ChineseGrowthReferenceData.rows(ChineseGrowthMetric.LENGTH_HEIGHT_FOR_AGE, "UNKNOWN"))
     }
+
+    @Test
+    fun mapsOfficialReferenceRowsToCalendarMonthAnniversariesOnTheMeasurementTimeline() {
+        val birthDate = LocalDate.of(2024, 1, 31)
+        val zone = java.time.ZoneId.of("Asia/Shanghai")
+        val timeline = chineseGrowthReferenceTimeline(
+            birthDate, ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY", zone
+        )!!
+
+        assertEquals(44, timeline.size)
+        assertEquals(birthDate, timeline.first().date)
+        assertEquals(LocalDate.of(2024, 2, 29), timeline[1].date)
+        assertEquals(LocalDate.of(2024, 3, 31), timeline[2].date)
+        assertEquals(birthDate.plusMonths(81), timeline.last().date)
+        assertEquals(
+            timeline[1].date.atStartOfDay(zone).toInstant().toEpochMilli(),
+            timeline[1].timestamp
+        )
+        assertEquals(
+            ChineseGrowthStandardData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY")!![1].percentiles,
+            timeline[1].percentiles
+        )
+    }
+
+    @Test
+    fun headCircumferenceTimelineStopsAtThirtySixMonthsAndUnknownSexHasNoTimeline() {
+        val birthDate = LocalDate.of(2024, 5, 10)
+        val timeline = chineseGrowthReferenceTimeline(
+            birthDate, ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE, "GIRL"
+        )!!
+
+        assertEquals(29, timeline.size)
+        assertEquals(birthDate.plusMonths(36), timeline.last().date)
+        assertNull(chineseGrowthReferenceTimeline(
+            birthDate, ChineseGrowthMetric.WEIGHT_FOR_AGE, null
+        ))
+    }
+
+    @Test
+    fun interpolatesOfficialReferenceAtMeasurementDateAndDoesNotExtrapolate() {
+        val birthDate = LocalDate.of(2024, 1, 31)
+        val rows = ChineseGrowthReferenceData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY")!!
+        val expected = rows[0].percentiles.interpolate(rows[1].percentiles, 14f / 29f)
+
+        assertEquals(
+            expected,
+            chineseGrowthReferenceAtDate(
+                birthDate, LocalDate.of(2024, 2, 14),
+                ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY"
+            )
+        )
+        assertNull(chineseGrowthReferenceAtDate(
+            birthDate, birthDate.minusDays(1), ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY"
+        ))
+        assertNull(chineseGrowthReferenceAtDate(
+            birthDate, birthDate.plusMonths(36), ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE, "GIRL"
+        ))
+        assertNull(chineseGrowthReferenceAtDate(
+            birthDate, birthDate.plusMonths(4), ChineseGrowthMetric.WEIGHT_FOR_AGE, "UNKNOWN"
+        ))
+    }
+
 }
