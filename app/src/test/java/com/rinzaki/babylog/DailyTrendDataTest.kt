@@ -108,7 +108,7 @@ class DailyTrendDataTest {
 
         assertEquals(diaperPoints.map { it.date }, feedingPoints.map { it.date })
         assertEquals(today.minusDays(10), feedingPoints.first().date)
-        assertEquals(List(8) { 0f } + listOf(0f, 0f, 1f), feedingPoints.map { it.value })
+        assertEquals(List(8) { 0f } + listOf(1f, 0f, 0f), feedingPoints.map { it.value })
         assertEquals(List(10) { 0f } + listOf(1f), diaperPoints.map { it.value })
     }
 
