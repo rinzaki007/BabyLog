@@ -280,7 +280,7 @@ class ChineseGrowthStandardTest {
     fun interpolatesOfficialReferenceAtMeasurementDateAndDoesNotExtrapolate() {
         val birthDate = LocalDate.of(2024, 1, 31)
         val rows = ChineseGrowthReferenceData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY")!!
-        val expected = rows[0].percentiles.interpolate(rows[1].percentiles, 0.5f)
+        val expected = rows[0].percentiles.interpolate(rows[1].percentiles, 14f / 29f)
 
         assertEquals(
             expected,
