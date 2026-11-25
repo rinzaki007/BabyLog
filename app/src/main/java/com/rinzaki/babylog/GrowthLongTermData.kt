@@ -95,12 +95,11 @@ internal fun growthMeasurementInterval(
     )
 }
 
-
 /**
  * Resolves chart range labels using calendar-aware boundaries.
- * Short ranges are rolling day windows; half-year and year ranges use calendar arithmetic
- * so month ends and leap years do not silently shift the requested period.
- * Returns null for the unbounded "全部" range.
+ * The 30/90-day presets include exactly that many local calendar dates, starting at local midnight.
+ * Half-year and year ranges use calendar arithmetic so month ends and leap years do not silently shift
+ * the requested period. Returns null for the unbounded "全部" range.
  */
 internal fun growthRangeStartMillis(
     range: String,
