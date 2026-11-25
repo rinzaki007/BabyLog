@@ -133,4 +133,21 @@ class GrowthReportDataTest {
         assertTrue(report.foodExploration.any { it.contains("米粉") && it.contains("首次") && it.contains("最近") && it.contains("10 个月") })
         assertEquals("10 个月", report.recentRecords.first { it.title == "成长里程碑" }.ageLabel)
     }
+    @Test
+    fun recentRecordsDescribeTemperatureValueAndMeasurementMethod() {
+        val report = buildGrowthReportData(
+            baby,
+            listOf(
+                event("temperature", "TEMPERATURE", """{"temperatureC":36.8,"measurementMethod":"腋温"}"""),
+                event("invalid-temperature", "TEMPERATURE", """{"temperatureC":-1}""", occurredAt = now - 60_000)
+            ),
+            now,
+            zone
+        )
+
+        val latest = report.recentRecords.first()
+        assertEquals("体温记录", latest.title)
+        assertEquals("36.8 ℃ · 腋温", latest.detail)
+        assertEquals("体温记录", report.recentRecords.last().detail)
+    }
 }
