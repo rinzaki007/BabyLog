@@ -27,9 +27,10 @@ internal fun growthMetricPoints(
 
     return buildList {
         if (baby.birthTime <= asOfMillis) {
-            birthValue?.takeIf { it.isFinite() && it > 0.0 }?.let {
-                add(baby.birthTime to it.toFloat())
-            }
+            birthValue?.takeIf { it.isFinite() && it > 0.0 }
+                ?.toFloat()
+                ?.takeIf { it.isFinite() && it > 0f }
+                ?.let { add(baby.birthTime to it) }
         }
         events.asSequence()
             .filter {
@@ -44,7 +45,10 @@ internal fun growthMetricPoints(
                 }.getOrNull()
                 if (value != null) {
                     val chartValue = if (metricKey == "weightGrams") value / 1000.0 else value
-                    add(event.occurredAt to chartValue.toFloat())
+                    val floatValue = chartValue.toFloat()
+                    if (floatValue.isFinite() && floatValue > 0f) {
+                        add(event.occurredAt to floatValue)
+                    }
                 }
             }
     }.sortedBy { it.first }
@@ -67,13 +71,19 @@ internal fun growthChartNearestPointIndex(
     maxValue: Float,
     maxDistancePx: Float = Float.POSITIVE_INFINITY
 ): Int? {
-    if (points.isEmpty() || right <= left || bottom <= top || maxValue <= minValue ||
+    if (points.isEmpty() ||
+        !tapX.isFinite() || !tapY.isFinite() ||
+        !left.isFinite() || !right.isFinite() || !top.isFinite() || !bottom.isFinite() ||
+        !minValue.isFinite() || !maxValue.isFinite() ||
+        right <= left || bottom <= top || maxValue <= minValue ||
         maxDistancePx.isNaN() || maxDistancePx < 0f
     ) return null
+    val validIndices = points.indices.filter { points[it].second.isFinite() }
+    if (validIndices.isEmpty()) return null
     val firstTimestamp = points.first().first
     val lastTimestamp = points.last().first
     val valueSpan = maxValue - minValue
-    val nearest = points.indices.minByOrNull { index ->
+    val nearest = validIndices.minByOrNull { index ->
         val point = points[index]
         val fraction = growthChartTimeFraction(point.first, firstTimestamp, lastTimestamp, points.size)
         val x = left + (right - left) * fraction
