@@ -14,9 +14,9 @@ internal data class PeriodTrendPoint(
 )
 
 /**
- * Aggregates an already complete daily series into calendar weeks or months.
- * Zero-value dates remain part of the period, while activeDays counts dates with
- * an observed value. Partial first/last periods are intentionally retained.
+ * Aggregates a daily series into calendar weeks or months. Missing dates between
+ * the first and last observation are treated as zero-valued calendar days; partial
+ * first/last periods are retained and no values are interpolated.
  */
 internal fun aggregateTrendPeriods(
     dailyPoints: List<DailyTrendPoint>,
@@ -25,9 +25,14 @@ internal fun aggregateTrendPeriods(
     require(period == "周" || period == "月") { "period must be 周 or 月" }
     if (dailyPoints.isEmpty()) return emptyList()
 
-    val ordered = dailyPoints.sortedBy { it.date }
-    val first = ordered.first().date
-    val last = ordered.last().date
+    val dailyTotals = dailyPoints.groupBy { it.date }
+        .mapValues { (_, values) -> values.sumOf { it.value.toDouble() }.toFloat() }
+    val first = dailyTotals.keys.minOrNull() ?: return emptyList()
+    val last = dailyTotals.keys.maxOrNull() ?: return emptyList()
+    val completeDailySeries = generateSequence(first) { date ->
+        if (date < last) date.plusDays(1) else null
+    }.map { date -> DailyTrendPoint(date, dailyTotals[date] ?: 0f) }.toList()
+
     fun bucketStart(date: LocalDate): LocalDate = when (period) {
         "周" -> date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         else -> date.withDayOfMonth(1)
@@ -41,7 +46,7 @@ internal fun aggregateTrendPeriods(
         else -> YearMonth.from(start).atEndOfMonth()
     }
 
-    val totals = ordered.groupBy { bucketStart(it.date) }
+    val totals = completeDailySeries.groupBy { bucketStart(it.date) }
     val result = mutableListOf<PeriodTrendPoint>()
     var cursor = bucketStart(first)
     val lastBucket = bucketStart(last)
