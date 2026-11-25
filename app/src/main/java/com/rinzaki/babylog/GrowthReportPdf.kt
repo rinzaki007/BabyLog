@@ -173,7 +173,7 @@ private class GrowthReportPdfRenderer(
 
         drawSection("辅食探索")
         if (report.foodExploration.isEmpty()) drawText("暂未记录辅食尝试。", smallPaint)
-        else report.foodExploration.take(30).forEach { drawText(it) }
+        else report.foodExploration.forEach { drawText(it) }
 
         drawSection("最近记录")
         if (report.recentRecords.isEmpty()) drawText("暂未添加日常记录。", smallPaint)
