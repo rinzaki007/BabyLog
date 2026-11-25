@@ -136,6 +136,18 @@ class DailyTrendDataTest {
     }
 
     @Test
+    fun countsMilestonesSeparatelyFromGrowthMeasurements() {
+        val events = listOf(
+            event("m1", "MILESTONE", today, """{"milestoneTitle":"第一次翻身"}"""),
+            event("m2", "MILESTONE", today.minusDays(1), """{"milestoneTitle":"第一次坐稳"}"""),
+            event("g1", "GROWTH", today, """{"weightGrams":6500}""")
+        )
+        assertEquals(1f, dailyTrendPoints(events, "里程碑次数", 1, today, zone).single().value)
+        assertEquals(2f, dailyTrendPoints(events, "里程碑次数", 2, today, zone).sumOf { it.value.toDouble() }.toFloat())
+        assertEquals(listOf("里程碑次数"), trendMetricsForCategory("里程碑"))
+    }
+
+    @Test
     fun dailyTrendMetricsFollowSelectedStatisticsCategory() {
         assertEquals(listOf("喂养奶量", "喂养次数"), trendMetricsForCategory("喂养"))
         assertEquals(listOf("辅食次数"), trendMetricsForCategory("辅食"))
@@ -144,7 +156,8 @@ class DailyTrendDataTest {
         assertEquals(listOf("睡眠小时"), trendMetricsForCategory("睡眠"))
         assertEquals(listOf("记录总数"), trendMetricsForCategory("成长"))
         assertEquals(listOf("体温记录次数"), trendMetricsForCategory("体温"))
-        assertEquals(9, trendMetricsForCategory("全部").size)
+        assertEquals(listOf("里程碑次数"), trendMetricsForCategory("里程碑"))
+        assertEquals(10, trendMetricsForCategory("全部").size)
     }
 
 }
