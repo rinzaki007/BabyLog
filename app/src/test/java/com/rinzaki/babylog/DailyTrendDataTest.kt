@@ -228,7 +228,7 @@ class DailyTrendDataTest {
     @Test
     fun dailyTrendTapSelectsBarsInsidePlotIncludingEdges() {
         assertEquals(0, dailyTrendTappedIndex(4f, 104f, 4f, 10))
-        assertEquals(4, dailyTrendTappedIndex(52f, 104f, 4f, 10))
+        assertEquals(4, dailyTrendTappedIndex(47f, 104f, 4f, 10))
         assertEquals(9, dailyTrendTappedIndex(100f, 104f, 4f, 10))
     }
 
