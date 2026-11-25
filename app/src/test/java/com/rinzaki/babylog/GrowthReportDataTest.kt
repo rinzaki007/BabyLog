@@ -136,6 +136,24 @@ class GrowthReportDataTest {
         assertEquals("10 个月", report.recentRecords.first { it.title == "成长里程碑" }.ageLabel)
     }
     @Test
+    fun reportKeepsAllFoodExplorationEntriesBeyondThirtyItems() {
+        val foodEvents = (1..35).map { index ->
+            event(
+                "food-$index",
+                "SOLID_FOOD",
+                """{"foodName":"食材$index","foodCategory":"蔬菜","foodStage":"首次尝试","foodReaction":"待观察"}""",
+                occurredAt = now - index * 60_000L
+            )
+        }
+
+        val report = buildGrowthReportData(baby, foodEvents, now, zone)
+
+        assertEquals(35, report.foodExploration.size)
+        assertTrue(report.foodExploration.any { it.contains("食材1 ·") })
+        assertTrue(report.foodExploration.any { it.contains("食材35 ·") })
+    }
+
+    @Test
     fun recentRecordsDescribeTemperatureValueAndMeasurementMethod() {
         val report = buildGrowthReportData(
             baby,
