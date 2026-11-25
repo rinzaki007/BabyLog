@@ -8,7 +8,7 @@ class TimelineEmptyStateTest {
     fun explainsCombinedDateAndCategoryFilters() {
         val state = timelineEmptyState(hasDateFilter = true, selectedFilter = "喂养")
 
-        assertEquals("这个日期范围内暂无喂养记录", state.title)
+        assertEquals("这个日期范围内暂无符合条件的喂养记录", state.title)
         assertEquals("可以调整日期范围、切换分类，或清除筛选查看全部记录。", state.description)
     }
 
@@ -24,8 +24,8 @@ class TimelineEmptyStateTest {
     fun explainsCategoryOnlyFilter() {
         val state = timelineEmptyState(hasDateFilter = false, selectedFilter = "睡眠")
 
-        assertEquals("还没有睡眠记录", state.title)
-        assertEquals("试试切换其他分类，查看宝宝的成长足迹。", state.description)
+        assertEquals("暂无睡眠记录", state.title)
+        assertEquals("当前分类下暂时没有记录，可以切换其他分类查看宝宝的成长足迹。", state.description)
     }
 
     @Test
