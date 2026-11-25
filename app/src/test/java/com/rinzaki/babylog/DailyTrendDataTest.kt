@@ -84,6 +84,25 @@ class DailyTrendDataTest {
         dailyTrendPoints(emptyList(), "记录总数", 0, today, zone)
     }
     @Test
+    fun allTimeTrendWindowUsesEarliestRecordAcrossCategories() {
+        val earlierDiaper = event("d1", "DIAPER", today.minusDays(10), """{"urine":true}""")
+        val laterFeeding = event("f1", "FEEDING", today.minusDays(2), """{"amountMl":100}""")
+        val selectedCategoryEvents = listOf(laterFeeding)
+        val allBabyEvents = listOf(earlierDiaper, laterFeeding)
+
+        assertEquals(11, dailyTrendWindowDays("全部", allBabyEvents, today, zone))
+        assertEquals(3, dailyTrendWindowDays("全部", selectedCategoryEvents, today, zone))
+        assertEquals(30, dailyTrendWindowDays("近30天", selectedCategoryEvents, today, zone))
+        assertEquals(90, dailyTrendWindowDays("近90天", allBabyEvents, today, zone))
+    }
+
+    @Test
+    fun allTimeTrendWindowIsLimitedTo366Days() {
+        val oldRecord = event("d1", "DIAPER", today.minusDays(500), """{"urine":true}""")
+        assertEquals(366, dailyTrendWindowDays("全部", listOf(oldRecord), today, zone))
+    }
+
+    @Test
     fun countsAllTimeAverageByLocalCalendarDays() {
         val first = event("f1", "FEEDING", today.minusDays(2), """{"amountMl":100}""", 23)
         val latest = event("f2", "FEEDING", today, """{"amountMl":120}""", 0)
