@@ -133,6 +133,34 @@ class ChineseGrowthStandardTest {
     }
 
     @Test
+    fun loadsCompleteOfficialLengthHeightTablesForBothSexes() {
+        val boys = ChineseGrowthHeightData.rows("BOY")!!
+        val girls = ChineseGrowthHeightData.rows("GIRL")!!
+        val expectedAges = (0..24).toList() + (27..81 step 3).toList()
+
+        assertEquals(44, boys.size)
+        assertEquals(44, girls.size)
+        assertEquals(expectedAges, boys.map { it.ageMonths })
+        assertEquals(expectedAges, girls.map { it.ageMonths })
+        assertEquals(GrowthPercentiles(47.6f, 48.7f, 49.9f, 51.2f, 52.5f, 53.6f, 54.8f), boys.first().percentiles)
+        assertEquals(GrowthPercentiles(46.8f, 47.9f, 49.1f, 50.3f, 51.6f, 52.7f, 53.8f), girls.first().percentiles)
+        assertEquals(123.5f, boys.last().percentiles.p50)
+        assertEquals(122.1f, girls.last().percentiles.p50)
+        assertNull(ChineseGrowthHeightData.rows("UNKNOWN"))
+    }
+
+    @Test
+    fun officialLengthHeightRowsUseTheSharedInterpolationEngineWithoutExtrapolation() {
+        val girls = ChineseGrowthHeightData.rows("GIRL")!!
+        assertEquals(
+            girls[24].percentiles.interpolate(girls[25].percentiles, 0.5f),
+            interpolateGrowthStandard(girls, 25.5)
+        )
+        assertEquals(girls.last().percentiles, interpolateGrowthStandard(girls, 81.0))
+        assertNull(interpolateGrowthStandard(girls, 81.01))
+    }
+
+    @Test
     fun enforcesMetricSpecificAgeLimitsAndRejectsDatesBeforeBirth() {
         val birthDate = LocalDate.of(2020, 1, 1)
 
