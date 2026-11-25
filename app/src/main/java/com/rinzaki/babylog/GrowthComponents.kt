@@ -321,21 +321,19 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         Text("${"%.1f".format(Locale.getDefault(), min)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Canvas(
-                        Modifier.weight(1f).height(150.dp).pointerInput(points) {
+                        Modifier.weight(1f).height(150.dp).pointerInput(points, min, max) {
                             detectTapGestures { tap ->
-                                if (points.isNotEmpty()) {
-                                    val firstTimestamp = points.first().first
-                                    val lastTimestamp = points.last().first
-                                    val left = 8f
-                                    val right = size.width - 8f
-                                    selectedPointIndex = points.indices.minByOrNull { index ->
-                                        val fraction = growthChartTimeFraction(
-                                            points[index].first, firstTimestamp, lastTimestamp, points.size
-                                        )
-                                        val x = left + (right - left) * fraction
-                                        abs(x - tap.x)
-                                    } ?: points.lastIndex
-                                }
+                                selectedPointIndex = growthChartNearestPointIndex(
+                                    points = points,
+                                    tapX = tap.x,
+                                    tapY = tap.y,
+                                    left = 8f,
+                                    right = size.width - 8f,
+                                    top = 10f,
+                                    bottom = size.height - 12f,
+                                    minValue = min,
+                                    maxValue = max
+                                ) ?: points.lastIndex
                             }
                         }
                     ) {
