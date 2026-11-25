@@ -347,4 +347,20 @@ class ChineseGrowthStandardTest {
         )!!.isEmpty())
     }
 
+
+    @Test
+    fun assessmentDescribesPercentileBandAndMedianWithoutClinicalInterpretation() {
+        val reference = GrowthPercentiles(3f, 4f, 5f, 6f, 7f, 8f, 9f)
+
+        assertEquals("低于 P3", assessChineseGrowthPercentile(2.9f, reference)!!.bandLabel)
+        assertEquals("P3–P25", assessChineseGrowthPercentile(4f, reference)!!.bandLabel)
+        assertEquals("P25–P75", assessChineseGrowthPercentile(6f, reference)!!.bandLabel)
+        assertEquals("P75–P97", assessChineseGrowthPercentile(8f, reference)!!.bandLabel)
+        val upper = assessChineseGrowthPercentile(9f, reference)!!
+        assertEquals("达到或高于 P97", upper.bandLabel)
+        assertEquals(6f, upper.medianValue)
+        assertNull(assessChineseGrowthPercentile(Float.NaN, reference))
+        assertNull(assessChineseGrowthPercentile(5f, GrowthPercentiles(3f, 4f, 6f, 5f, 7f, 8f, 9f)))
+    }
+
 }
