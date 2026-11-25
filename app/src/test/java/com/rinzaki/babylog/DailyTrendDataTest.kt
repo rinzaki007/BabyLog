@@ -184,11 +184,10 @@ class DailyTrendDataTest {
         val earlierDiaper = event("d1", "DIAPER", today.minusDays(10), """{"urine":true}""")
         val laterFeeding = event("f1", "FEEDING", today.minusDays(2), """{"amountMl":100}""")
         val allBabyEvents = listOf(earlierDiaper, laterFeeding)
-        val selectedFeedingEvents = allBabyEvents.filter { it.eventType == "FEEDING" }
 
+        // Even when the selected category has no record until later, the denominator
+        // remains based on the baby's earliest valid record across all categories.
         assertEquals(11, statisticsDaysCovered(allBabyEvents, null, null, today, zone))
-        assertEquals(11, statisticsDaysCovered(allBabyEvents, null, null, today, zone))
-        assertEquals(1, selectedFeedingEvents.size)
     }
 
 }
