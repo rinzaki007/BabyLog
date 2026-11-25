@@ -184,8 +184,8 @@ class ChineseGrowthStandardTest {
         val girls = ChineseGrowthHeadCircumferenceData.rows("GIRL")!!
         val expectedAges = (0..24).toList() + listOf(27, 30, 33, 36)
 
-        assertEquals(28, boys.size)
-        assertEquals(28, girls.size)
+        assertEquals(29, boys.size)
+        assertEquals(29, girls.size)
         assertEquals(expectedAges, boys.map { it.ageMonths })
         assertEquals(expectedAges, girls.map { it.ageMonths })
         assertEquals(
