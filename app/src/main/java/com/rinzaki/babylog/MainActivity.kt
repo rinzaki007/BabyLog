@@ -1051,3 +1051,31 @@ private fun BabyLogApp(dao: BabyLogDao) {
             scope.launch {
                 try {
                     val event = currentEvent?.copy(
+                        eventType = type, occurredAt = occurredAt, payloadJson = payload.toString(),
+                        updatedAt = now, syncStatus = "PENDING", deletedAt = null
+                    ) ?: BabyEventEntity(UUID.randomUUID().toString(), baby.id, type, occurredAt, payload.toString(), null, now)
+                    dao.upsertEvent(event)
+                    if (SyncPreferences.familyId(appContext).isNotBlank()) {
+                        try {
+                            dao.clearPendingOperations("event", event.id)
+                            dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", event.id, "upsert", eventSyncPayload(event).toString(), event.serverVersion, now))
+                            SyncScheduler.enqueue(appContext)
+                        } catch (syncError: Exception) {
+                            Toast.makeText(appContext, "记录已保存到本机，但同步任务创建失败，请稍后重试", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    if (!keepOpen) {
+                        addingEvent = null
+                        editingEvent = null
+                    }
+                } catch (error: Exception) {
+                    Toast.makeText(appContext, "保存记录失败，请检查后重试", Toast.LENGTH_LONG).show()
+                } finally {
+                    savingEvent = false
+                }
+            }
+        }
+    }
+    }
+}
+
