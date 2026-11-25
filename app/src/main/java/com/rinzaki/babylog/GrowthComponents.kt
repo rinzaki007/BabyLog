@@ -176,9 +176,12 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
             Canvas(
                 Modifier.fillMaxWidth().height(150.dp).pointerInput(points) {
                     detectTapGestures { tap ->
-                        val horizontalPadding = 4.dp.toPx()
-                        val slotWidth = (size.width - horizontalPadding * 2) / points.size.coerceAtLeast(1)
-                        selectedDayIndex = ((tap.x - horizontalPadding) / slotWidth).toInt().coerceIn(points.indices)
+                        dailyTrendTappedIndex(
+                            tapX = tap.x,
+                            chartWidth = size.width,
+                            horizontalPadding = 4.dp.toPx(),
+                            pointCount = points.size
+                        )?.let { selectedDayIndex = it }
                     }
                 }
             ) {
