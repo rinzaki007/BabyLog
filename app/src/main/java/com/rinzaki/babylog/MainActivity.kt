@@ -237,6 +237,9 @@ private fun BabyLogApp(dao: BabyLogDao) {
     val timelineEventType = timelineEventTypeForFilter(selectedEventFilter)
     val timelineStartAt = selectedStartDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
     val timelineEndAt = selectedEndDate?.plusDays(1)?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+    LaunchedEffect(selectedEventFilter, selectedStartDate, selectedEndDate) {
+        pageListStates[1].scrollToItem(0)
+    }
     LaunchedEffect(baby?.id, selectedEventFilter, selectedStartDate, selectedEndDate, eventRevision, timelineRetryToken) {
         timelineError = null
         timelineLoadMoreError = null
@@ -1075,5 +1078,4 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
     }
 }
-
 
