@@ -160,4 +160,23 @@ class DailyTrendDataTest {
         assertEquals(10, trendMetricsForCategory("全部").size)
     }
 
+    @Test
+    fun recentAverageWindowStartsAtBirthWhenBabyIsYoungerThanSelectedRange() {
+        val birth = today.minusDays(3).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertEquals(4, statisticsDaysCovered(emptyList(), 7, birth, today, zone))
+    }
+
+    @Test
+    fun recentAverageWindowUsesFullRangeWhenBabyWasBornEarlier() {
+        val birth = today.minusDays(30).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertEquals(7, statisticsDaysCovered(emptyList(), 7, birth, today, zone))
+    }
+
+    @Test
+    fun allTimeAverageWindowStartsAtBirthAndFallsBackToFirstRecord() {
+        val birth = today.minusDays(10).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertEquals(11, statisticsDaysCovered(emptyList(), null, birth, today, zone))
+        val first = event("f1", "FEEDING", today.minusDays(2), """{"amountMl":100}""")
+        assertEquals(3, statisticsDaysCovered(listOf(first), null, null, today, zone))
+    }
 }
