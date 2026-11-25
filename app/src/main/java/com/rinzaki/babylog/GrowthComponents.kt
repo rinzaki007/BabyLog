@@ -138,16 +138,14 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
-    DailyTrendChart(recent, range, category)
+    DailyTrendChart(recent, range, category, ranged)
 }
 
 @Composable
-private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, category: String) {
+private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, category: String, allTimeEvents: List<BabyEventEntity>) {
     val availableMetrics = remember(category) { trendMetricsForCategory(category) }
     var metric by remember(category) { mutableStateOf(availableMetrics.first()) }
-    val days = if (range == "全部") {
-        calendarDaysCovered(events, LocalDate.now(), ZoneId.systemDefault()).coerceAtMost(366)
-    } else when (range) { "近30天" -> 30; "近90天" -> 90; else -> 7 }
+    val days = dailyTrendWindowDays(range, allTimeEvents)
     val unit = when (metric) {
         "喂养奶量" -> "ml"
         "睡眠小时" -> "小时"
