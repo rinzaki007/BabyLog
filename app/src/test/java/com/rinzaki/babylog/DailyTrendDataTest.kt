@@ -97,6 +97,22 @@ class DailyTrendDataTest {
     }
 
     @Test
+    fun categorySeriesKeepTheSameAllTimeDateAxis() {
+        val earlierDiaper = event("d1", "DIAPER", today.minusDays(10), """{"urine":true}""")
+        val laterFeeding = event("f1", "FEEDING", today.minusDays(2), """{"amountMl":100}""")
+        val allBabyEvents = listOf(earlierDiaper, laterFeeding)
+        val days = dailyTrendWindowDays("全部", allBabyEvents, today, zone)
+
+        val feedingPoints = dailyTrendPoints(listOf(laterFeeding), "喂养次数", days, today, zone)
+        val diaperPoints = dailyTrendPoints(listOf(earlierDiaper), "小便次数", days, today, zone)
+
+        assertEquals(diaperPoints.map { it.date }, feedingPoints.map { it.date })
+        assertEquals(today.minusDays(10), feedingPoints.first().date)
+        assertEquals(List(8) { 0f } + listOf(0f, 0f, 1f), feedingPoints.map { it.value })
+        assertEquals(List(10) { 0f } + listOf(1f), diaperPoints.map { it.value })
+    }
+
+    @Test
     fun allTimeTrendWindowIsLimitedTo366Days() {
         val oldRecord = event("d1", "DIAPER", today.minusDays(500), """{"urine":true}""")
         assertEquals(366, dailyTrendWindowDays("全部", listOf(oldRecord), today, zone))
