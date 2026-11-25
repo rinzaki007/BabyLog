@@ -363,4 +363,35 @@ class ChineseGrowthStandardTest {
         assertNull(assessChineseGrowthPercentile(5f, GrowthPercentiles(3f, 4f, 6f, 5f, 7f, 8f, 9f)))
     }
 
+
+    @Test
+    fun everyOfficialReferenceTableHasValidOrderedPercentilesAndMonotonicAgeRows() {
+        val weightAndHeightAges = (0..24).toList() + (27..81 step 3).toList()
+        val headCircumferenceAges = (0..24).toList() + listOf(27, 30, 33, 36)
+        val tables = listOf(
+            ChineseGrowthReferenceData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY")!!,
+            ChineseGrowthReferenceData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, "GIRL")!!,
+            ChineseGrowthReferenceData.rows(ChineseGrowthMetric.LENGTH_HEIGHT_FOR_AGE, "BOY")!!,
+            ChineseGrowthReferenceData.rows(ChineseGrowthMetric.LENGTH_HEIGHT_FOR_AGE, "GIRL")!!,
+            ChineseGrowthReferenceData.rows(ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE, "BOY")!!,
+            ChineseGrowthReferenceData.rows(ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE, "GIRL")!!
+        )
+
+        tables.forEachIndexed { index, rows ->
+            val expectedAges = if (index >= 4) headCircumferenceAges else weightAndHeightAges
+            assertEquals(expectedAges, rows.map { it.ageMonths })
+            assertTrue(rows.all { it.percentiles.isValid() })
+            assertTrue(rows.zipWithNext().all { (left, right) ->
+                left.ageMonths < right.ageMonths &&
+                    left.percentiles.p3 <= right.percentiles.p3 &&
+                    left.percentiles.p10 <= right.percentiles.p10 &&
+                    left.percentiles.p25 <= right.percentiles.p25 &&
+                    left.percentiles.p50 <= right.percentiles.p50 &&
+                    left.percentiles.p75 <= right.percentiles.p75 &&
+                    left.percentiles.p90 <= right.percentiles.p90 &&
+                    left.percentiles.p97 <= right.percentiles.p97
+            })
+        }
+    }
+
 }
