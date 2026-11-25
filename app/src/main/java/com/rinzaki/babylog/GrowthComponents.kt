@@ -266,6 +266,15 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val dateFormat = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)
     var selectedPointIndex by remember(points) { mutableStateOf(points.lastIndex) }
     val selectedPoint = points.getOrNull(selectedPointIndex)
+    val selectedAssessment = remember(selectedPoint, birthDate, referenceMetric, referenceSex) {
+        selectedPoint?.let { point ->
+            val measuredDate = java.time.Instant.ofEpochMilli(point.first).atZone(chartZone).toLocalDate()
+            val reference = chineseGrowthReferenceAtDate(
+                birthDate, measuredDate, referenceMetric, referenceSex
+            )
+            reference?.let { assessChineseGrowthPercentile(point.second, it) }
+        }
+    }
     var showAllMeasurements by remember(points) { mutableStateOf(false) }
     val visibleMeasurements = visibleGrowthMeasurements(points, showAllMeasurements)
     val chartPrimary = MaterialTheme.colorScheme.primary
@@ -439,6 +448,32 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
+                    )
+                }
+                selectedAssessment?.let { assessment ->
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("中国标准百分位区间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(assessment.bandLabel, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                            }
+                            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("P50 参考值", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(String.format(Locale.CHINA, "%.2f %s", assessment.medianValue, unit), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                    Text(
+                        "这是与同月龄同性别参考分布的对照，不代表健康诊断。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Text(
