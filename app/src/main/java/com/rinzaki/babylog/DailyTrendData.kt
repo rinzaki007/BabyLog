@@ -53,6 +53,31 @@ fun dailyTrendPoints(
 
 
 /**
+ * Resolves a tap to a daily bar only when it lands inside the chart's horizontal plot area.
+ * Returning null for touches in the outer padding avoids accidentally selecting the first
+ * or last day when a user taps beside the plotted bars.
+ */
+internal fun dailyTrendTappedIndex(
+    tapX: Float,
+    chartWidth: Float,
+    horizontalPadding: Float,
+    pointCount: Int
+): Int? {
+    if (!tapX.isFinite() || !chartWidth.isFinite() || !horizontalPadding.isFinite() ||
+        chartWidth <= 0f || horizontalPadding < 0f ||
+        chartWidth <= horizontalPadding * 2f || pointCount <= 0 ||
+        tapX < horizontalPadding || tapX > chartWidth - horizontalPadding
+    ) return null
+
+    val plotWidth = chartWidth - horizontalPadding * 2f
+    val slotWidth = plotWidth / pointCount
+    if (!slotWidth.isFinite() || slotWidth <= 0f) return null
+    return (((tapX - horizontalPadding) / slotWidth).toInt())
+        .coerceIn(0, pointCount - 1)
+}
+
+
+/**
  * Keeps the all-time chart window anchored to the baby's complete history, even when
  * the displayed metric is filtered to a category whose first record is more recent.
  */

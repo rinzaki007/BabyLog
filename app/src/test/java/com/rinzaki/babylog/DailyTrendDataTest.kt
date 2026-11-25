@@ -225,4 +225,26 @@ class DailyTrendDataTest {
         assertEquals(11, statisticsDaysCovered(allBabyEvents, null, null, today, zone))
     }
 
+    @Test
+    fun dailyTrendTapSelectsBarsInsidePlotIncludingEdges() {
+        assertEquals(0, dailyTrendTappedIndex(4f, 104f, 4f, 10))
+        assertEquals(4, dailyTrendTappedIndex(47f, 104f, 4f, 10))
+        assertEquals(9, dailyTrendTappedIndex(100f, 104f, 4f, 10))
+    }
+
+    @Test
+    fun dailyTrendTapDoesNotClampTouchesOutsidePlotToEdgeBars() {
+        assertEquals(null, dailyTrendTappedIndex(3.9f, 104f, 4f, 10))
+        assertEquals(null, dailyTrendTappedIndex(100.1f, 104f, 4f, 10))
+        assertEquals(null, dailyTrendTappedIndex(Float.NaN, 104f, 4f, 10))
+    }
+
+    @Test
+    fun dailyTrendTapRejectsInvalidChartGeometryAndEmptySeries() {
+        assertEquals(null, dailyTrendTappedIndex(10f, Float.POSITIVE_INFINITY, 4f, 10))
+        assertEquals(null, dailyTrendTappedIndex(10f, 104f, -1f, 10))
+        assertEquals(null, dailyTrendTappedIndex(10f, 8f, 4f, 10))
+        assertEquals(null, dailyTrendTappedIndex(10f, 104f, 4f, 0))
+    }
+
 }
