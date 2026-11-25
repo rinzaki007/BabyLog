@@ -179,4 +179,16 @@ class DailyTrendDataTest {
         val first = event("f1", "FEEDING", today.minusDays(2), """{"amountMl":100}""")
         assertEquals(3, statisticsDaysCovered(listOf(first), null, null, today, zone))
     }
+    @Test
+    fun allTimeAverageFallbackUsesEarliestRecordAcrossCategories() {
+        val earlierDiaper = event("d1", "DIAPER", today.minusDays(10), """{"urine":true}""")
+        val laterFeeding = event("f1", "FEEDING", today.minusDays(2), """{"amountMl":100}""")
+        val allBabyEvents = listOf(earlierDiaper, laterFeeding)
+        val selectedFeedingEvents = allBabyEvents.filter { it.eventType == "FEEDING" }
+
+        assertEquals(11, statisticsDaysCovered(allBabyEvents, null, null, today, zone))
+        assertEquals(11, statisticsDaysCovered(allBabyEvents, null, null, today, zone))
+        assertEquals(1, selectedFeedingEvents.size)
+    }
+
 }
