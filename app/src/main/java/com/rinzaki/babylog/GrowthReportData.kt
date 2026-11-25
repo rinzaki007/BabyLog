@@ -171,6 +171,18 @@ internal fun buildGrowthReportData(
                     title = "成长里程碑"
                     detail = payload.optString("milestoneTitle").ifBlank { "成长记录" }
                 }
+                "TEMPERATURE" -> {
+                    title = "体温记录"
+                    val temperature = payload.optDouble("temperatureC", Double.NaN)
+                    detail = buildList {
+                        if (temperature.isFinite() && temperature > 0.0) {
+                            add("${"%.1f".format(Locale.CHINA, temperature)} ℃")
+                        }
+                        payload.optString("measurementMethod")
+                            .takeIf { it.isNotBlank() }
+                            ?.let(::add)
+                    }.joinToString(" · ").ifBlank { "体温记录" }
+                }
                 "VACCINE" -> {
                     title = "疫苗接种"
                     detail = listOfNotNull(
