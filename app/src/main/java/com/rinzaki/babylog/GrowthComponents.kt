@@ -224,6 +224,7 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     var metric by remember { mutableStateOf("体重") }
     var range by remember { mutableStateOf("全部") }
