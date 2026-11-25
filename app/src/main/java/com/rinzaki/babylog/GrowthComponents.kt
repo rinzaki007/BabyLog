@@ -253,7 +253,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                 }
             }
             SelectionRow(listOf("体重", "身长", "头围"), metric) { metric = it }
-            SelectionRow(listOf("近30天", "近90天", "近半年", "近一年", "全部"), range.replace("近30天","近 30 天").replace("近90天","近 90 天").replace("近半年","近半年").replace("近一年","近一年")) { range = it.replace("近30天","近 30 天").replace("近90天","近 90 天") }
+            SelectionRow(listOf("近 30 天", "近 90 天", "近半年", "近一年", "全部"), range) { range = it }
             if (points.isEmpty()) {
                 Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
                     Text("还没有${metric}数据，记录几次后就能看到变化", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
