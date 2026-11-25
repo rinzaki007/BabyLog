@@ -122,6 +122,29 @@ class GrowthDataTest {
     }
 
     @Test
+    fun growthChartTapUsesVerticalDistanceWhenMeasurementsShareTimestamp() {
+        val points = listOf(1_000L to 3f, 1_000L to 5f, 2_000L to 4f)
+        assertEquals(
+            1,
+            growthChartNearestPointIndex(
+                points, tapX = 10f, tapY = 25f,
+                left = 0f, right = 100f, top = 0f, bottom = 100f,
+                minValue = 2f, maxValue = 6f
+            )
+        )
+    }
+
+    @Test
+    fun growthChartTapReturnsNullForEmptyOrInvalidPlotBounds() {
+        assertEquals(null, growthChartNearestPointIndex(
+            emptyList(), 0f, 0f, 0f, 100f, 0f, 100f, 0f, 10f
+        ))
+        assertEquals(null, growthChartNearestPointIndex(
+            listOf(1L to 3f), 0f, 0f, 10f, 10f, 0f, 100f, 0f, 10f
+        ))
+    }
+
+    @Test
     fun growthChartMapsChronologicalMeasurementsAcrossFullWidth() {
         assertEquals(0f, growthChartTimeFraction(1_000L, 1_000L, 3_000L, 3), 0.0001f)
         assertEquals(0.5f, growthChartTimeFraction(2_000L, 1_000L, 3_000L, 3), 0.0001f)
