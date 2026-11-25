@@ -331,8 +331,9 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                     top = 10f,
                                     bottom = size.height - 12f,
                                     minValue = min,
-                                    maxValue = max
-                                ) ?: points.lastIndex
+                                    maxValue = max,
+                                    maxDistancePx = 24.dp.toPx()
+                                )?.let { selectedPointIndex = it }
                             }
                         }
                     ) {
