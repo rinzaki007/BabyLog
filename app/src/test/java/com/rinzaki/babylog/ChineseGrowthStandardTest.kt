@@ -215,4 +215,27 @@ class ChineseGrowthStandardTest {
         assertEquals(girls.last().percentiles, interpolateGrowthStandard(girls, 36.0))
         assertNull(interpolateGrowthStandard(girls, 36.01))
     }
-}
+
+    @Test
+    fun unifiedReferenceAccessorDispatchesAllOfficialMetricsForBothSexes() {
+        val metrics = listOf(
+            ChineseGrowthMetric.WEIGHT_FOR_AGE,
+            ChineseGrowthMetric.LENGTH_HEIGHT_FOR_AGE,
+            ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE
+        )
+
+        metrics.forEach { metric ->
+            val boys = ChineseGrowthReferenceData.rows(metric, "BOY")!!
+            val girls = ChineseGrowthReferenceData.rows(metric, "GIRL")!!
+            assertEquals(metric.maximumAgeMonths, boys.last().ageMonths)
+            assertEquals(metric.maximumAgeMonths, girls.last().ageMonths)
+            assertEquals(boys.map { it.ageMonths }, girls.map { it.ageMonths })
+            assertEquals(7, boys.first().percentiles.let {
+                listOf(it.p3, it.p10, it.p25, it.p50, it.p75, it.p90, it.p97).size
+            })
+        }
+
+        assertNull(ChineseGrowthReferenceData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, null))
+        assertNull(ChineseGrowthReferenceData.rows(ChineseGrowthMetric.LENGTH_HEIGHT_FOR_AGE, "UNKNOWN"))
+    }
+}\n
