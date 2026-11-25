@@ -675,7 +675,7 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                 }
                             }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                items(listOf("今天", "昨天", "本周", "近7天", "近30天", "全部日期")) { preset ->
+                                items(listOf("今天", "昨天", "本周", "近7天", "近30天", "近90天", "全部日期")) { preset ->
                                     FilterChip(
                                         selected = timelineDatePresetIsSelected(
                                             preset, LocalDate.now(), selectedStartDate, selectedEndDate

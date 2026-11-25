@@ -34,6 +34,7 @@ class TimelineFilterTest {
         assertEquals(java.time.LocalDate.of(2026, 11, 23) to today, timelineDateRangeForPreset("本周", today))
         assertEquals(today.minusDays(6) to today, timelineDateRangeForPreset("近7天", today))
         assertEquals(today.minusDays(29) to today, timelineDateRangeForPreset("近30天", today))
+        assertEquals(today.minusDays(89) to today, timelineDateRangeForPreset("近90天", today))
         assertEquals(null to null, timelineDateRangeForPreset("全部日期", today))
     }
 
@@ -49,6 +50,7 @@ class TimelineFilterTest {
 
         assertEquals(true, timelineDatePresetIsSelected("昨天", today, today.minusDays(1), today.minusDays(1)))
         assertEquals(false, timelineDatePresetIsSelected("今天", today, today.minusDays(1), today.minusDays(1)))
+        assertEquals(true, timelineDatePresetIsSelected("近90天", today, today.minusDays(89), today))
         assertEquals(true, timelineDatePresetIsSelected("全部日期", today, null, null))
         assertEquals(false, timelineDatePresetIsSelected("全部日期", today, today, today))
     }
