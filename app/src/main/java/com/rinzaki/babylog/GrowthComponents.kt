@@ -276,6 +276,14 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
             reference?.let { assessChineseGrowthPercentile(point.second, it) }
         }
     }
+    val measurementAssessments = remember(points, birthDate, referenceMetric, referenceSex, chartZone) {
+        points.map { point ->
+            val measuredDate = java.time.Instant.ofEpochMilli(point.first).atZone(chartZone).toLocalDate()
+            chineseGrowthReferenceAtDate(
+                birthDate, measuredDate, referenceMetric, referenceSex
+            )?.let { reference -> assessChineseGrowthPercentile(point.second, reference) }
+        }
+    }
     var showAllMeasurements by remember(points) { mutableStateOf(false) }
     val visibleMeasurements = visibleGrowthMeasurements(points, showAllMeasurements)
     val chartPrimary = MaterialTheme.colorScheme.primary
@@ -498,12 +506,20 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(point.first)),
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(point.first)),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                measurementAssessments.getOrNull(pointIndex)?.let { assessment ->
+                                    Text(
+                                        "中国标准 · ${assessment.bandLabel}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                             Text(
                                 "${"%.2f".format(Locale.CHINA, point.second)} $unit",
                                 style = MaterialTheme.typography.bodyMedium,
