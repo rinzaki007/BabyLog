@@ -78,6 +78,24 @@ class GrowthLongTermDataTest {
         assertEquals((1L..8L).toList(), visibleGrowthMeasurements(points, expanded = true).map { it.first })
     }
 
+    @Test
+    fun measurementHistoryIndicesKeepIdenticalMeasurementsDistinct() {
+        val duplicate = 1_000L to 3.5f
+        val points = listOf(
+            500L to 3.0f,
+            duplicate,
+            duplicate,
+            1_500L to 4.0f
+        )
+        assertEquals(listOf(0, 1, 2, 3), visibleGrowthMeasurementIndices(points, expanded = true))
+        assertEquals(listOf(1, 2, 3), visibleGrowthMeasurementIndices(points, expanded = false, limit = 3))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun measurementHistoryIndicesRejectNegativeLimit() {
+        visibleGrowthMeasurementIndices(emptyList(), expanded = false, limit = -1)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun measurementHistoryRejectsNegativeLimit() {
         visibleGrowthMeasurements(emptyList(), expanded = false, limit = -1)
