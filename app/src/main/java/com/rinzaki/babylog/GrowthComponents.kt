@@ -322,7 +322,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     Canvas(
                         Modifier.weight(1f).height(150.dp).pointerInput(points, min, max) {
                             detectTapGestures { tap ->
-                                selectedPointIndex = growthChartNearestPointIndex(
+                                growthChartNearestPointIndex(
                                     points = points,
                                     tapX = tap.x,
                                     tapY = tap.y,
@@ -331,8 +331,9 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                     top = 10f,
                                     bottom = size.height - 12f,
                                     minValue = min,
-                                    maxValue = max
-                                ) ?: points.lastIndex
+                                    maxValue = max,
+                                    maxDistancePx = 24.dp.toPx()
+                                )?.let { selectedPointIndex = it }
                             }
                         }
                     ) {

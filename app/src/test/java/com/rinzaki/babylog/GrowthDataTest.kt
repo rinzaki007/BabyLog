@@ -135,6 +135,27 @@ class GrowthDataTest {
     }
 
     @Test
+    fun growthChartTapIgnoresTouchesOutsideMeasurementHitTarget() {
+        val points = listOf(1_000L to 3f, 2_000L to 5f)
+        assertEquals(
+            1,
+            growthChartNearestPointIndex(
+                points, tapX = 100f, tapY = 25f,
+                left = 0f, right = 100f, top = 0f, bottom = 100f,
+                minValue = 2f, maxValue = 6f, maxDistancePx = 12f
+            )
+        )
+        assertEquals(
+            null,
+            growthChartNearestPointIndex(
+                points, tapX = 10f, tapY = 10f,
+                left = 0f, right = 100f, top = 0f, bottom = 100f,
+                minValue = 2f, maxValue = 6f, maxDistancePx = 12f
+            )
+        )
+    }
+
+    @Test
     fun growthChartTapReturnsNullForEmptyOrInvalidPlotBounds() {
         assertEquals(null, growthChartNearestPointIndex(
             emptyList(), 0f, 0f, 0f, 100f, 0f, 100f, 0f, 10f

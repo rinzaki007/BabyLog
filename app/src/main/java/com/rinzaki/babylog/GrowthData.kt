@@ -64,13 +64,16 @@ internal fun growthChartNearestPointIndex(
     top: Float,
     bottom: Float,
     minValue: Float,
-    maxValue: Float
+    maxValue: Float,
+    maxDistancePx: Float = Float.POSITIVE_INFINITY
 ): Int? {
-    if (points.isEmpty() || right <= left || bottom <= top || maxValue <= minValue) return null
+    if (points.isEmpty() || right <= left || bottom <= top || maxValue <= minValue ||
+        maxDistancePx.isNaN() || maxDistancePx < 0f
+    ) return null
     val firstTimestamp = points.first().first
     val lastTimestamp = points.last().first
     val valueSpan = maxValue - minValue
-    return points.indices.minByOrNull { index ->
+    val nearest = points.indices.minByOrNull { index ->
         val point = points[index]
         val fraction = growthChartTimeFraction(point.first, firstTimestamp, lastTimestamp, points.size)
         val x = left + (right - left) * fraction
@@ -78,7 +81,14 @@ internal fun growthChartNearestPointIndex(
         val dx = x - tapX
         val dy = y - tapY
         dx * dx + dy * dy
-    }
+    } ?: return null
+    val point = points[nearest]
+    val fraction = growthChartTimeFraction(point.first, firstTimestamp, lastTimestamp, points.size)
+    val x = left + (right - left) * fraction
+    val y = bottom - (point.second - minValue) / valueSpan * (bottom - top)
+    val dx = x - tapX
+    val dy = y - tapY
+    return nearest.takeIf { dx * dx + dy * dy <= maxDistancePx * maxDistancePx }
 }
 
 /**
