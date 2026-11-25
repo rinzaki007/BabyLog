@@ -452,13 +452,21 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     )
                 } else if (metric == "头围") {
                     Text(
-                        "中国头围标准仅覆盖 0–36 月龄，且需要至少两次不同日期的测量",
+                        if (points.size == 1) {
+                            "已有一次头围测量，可查看下方同月龄百分位参考；增加不同日期的测量后即可叠加标准曲线。中国头围标准覆盖 0–36 月龄。"
+                        } else {
+                            "中国头围标准覆盖 0–36 月龄，且需要至少两次不同日期的测量才能叠加曲线。"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Text(
-                        "至少有两次不同日期的测量后，才会叠加中国标准曲线",
+                        if (points.size == 1) {
+                            "已有一次测量，可查看下方同月龄百分位参考；增加不同日期的测量后即可叠加中国标准曲线。"
+                        } else {
+                            "至少有两次不同日期的测量后，才会叠加中国标准曲线。"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
