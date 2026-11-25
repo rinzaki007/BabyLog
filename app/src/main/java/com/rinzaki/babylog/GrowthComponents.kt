@@ -286,7 +286,9 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
         }
     }
     var showAllMeasurements by remember(points) { mutableStateOf(false) }
-    val visibleMeasurements = visibleGrowthMeasurements(points, showAllMeasurements)
+    val visibleMeasurementIndices = remember(points, showAllMeasurements) {
+        visibleGrowthMeasurementIndices(points, showAllMeasurements)
+    }
     val chartPrimary = MaterialTheme.colorScheme.primary
     val chartSecondary = MaterialTheme.colorScheme.secondary
     val chartGrid = MaterialTheme.colorScheme.outlineVariant
@@ -513,8 +515,8 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(if (showAllMeasurements) "全部测量" else "最近测量", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                visibleMeasurements.asReversed().forEachIndexed { index, point ->
-                    val pointIndex = points.indexOf(point)
+                visibleMeasurementIndices.asReversed().forEachIndexed { index, pointIndex ->
+                    val point = points[pointIndex]
                     val isSelected = pointIndex == selectedPointIndex
                     Surface(
                         modifier = Modifier.clickable {
