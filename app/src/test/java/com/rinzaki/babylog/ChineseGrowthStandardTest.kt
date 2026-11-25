@@ -238,4 +238,4 @@ class ChineseGrowthStandardTest {
         assertNull(ChineseGrowthReferenceData.rows(ChineseGrowthMetric.WEIGHT_FOR_AGE, null))
         assertNull(ChineseGrowthReferenceData.rows(ChineseGrowthMetric.LENGTH_HEIGHT_FOR_AGE, "UNKNOWN"))
     }
-}\n
+}
