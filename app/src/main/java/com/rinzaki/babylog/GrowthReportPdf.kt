@@ -149,6 +149,7 @@ private class GrowthReportPdfRenderer(
         drawText("性别：${report.sex}    报告生成：${report.reportDate}", bodyPaint)
         drawSection("成长记录概览")
         drawText("记录总数：${report.eventCount} 条")
+        drawText("成长测量：${report.growthMeasurements.size} 条（含出生测量） · 成长里程碑：${report.milestones.size} 个")
         drawText("喂养：${report.feedingCount} 次 · 已记录奶量：${report.recordedMilkMl} ml · 亲喂：${report.breastfeedingMinutes} 分钟")
         drawText("睡眠：${formatDuration(report.sleepMinutes)} · 日常护理：${report.diaperCount} 次")
         drawText("辅食：${report.solidFoodCount} 次 · 营养补充：${report.supplementCount} 次 · 疫苗：${report.vaccineCount} 次 · 体温：${report.temperatureCount} 次")
