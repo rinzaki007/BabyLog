@@ -50,6 +50,23 @@ internal fun growthMonthlySummaries(
 }
 
 /** Describes the interval and observed change between two actual measurements. */
+
+/**
+ * Keeps the measurement history compact by default while allowing older observations
+ * to remain accessible. Returned points stay chronological for predictable rendering.
+ */
+internal fun visibleGrowthMeasurements(
+    points: List<Pair<Long, Float>>,
+    expanded: Boolean,
+    limit: Int = 5
+): List<Pair<Long, Float>> {
+    require(limit >= 0) { "limit must not be negative" }
+    val ordered = points
+        .filter { it.second.isFinite() && it.second > 0f }
+        .sortedBy { it.first }
+    return if (expanded) ordered else ordered.takeLast(limit)
+}
+
 internal data class GrowthMeasurementInterval(
     val previousDate: LocalDate,
     val latestDate: LocalDate,
