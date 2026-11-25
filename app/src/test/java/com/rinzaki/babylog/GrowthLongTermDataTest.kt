@@ -91,10 +91,17 @@ class GrowthLongTermDataTest {
     }
 
     @Test
-    fun growthChartNinetyDayRangeUsesCalendarDayWindow() {
+    fun growthChartNinetyDayRangeIncludesNinetyLocalCalendarDates() {
         val now = LocalDate.of(2026, 8, 31).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
-        val expected = LocalDate.of(2026, 6, 2).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        val expected = LocalDate.of(2026, 6, 3).atStartOfDay(zone).toInstant().toEpochMilli()
         assertEquals(expected, growthRangeStartMillis("近 90 天", now, zone))
+    }
+
+    @Test
+    fun growthChartThirtyDayRangeIncludesWholeFirstAndCurrentDays() {
+        val now = LocalDate.of(2026, 8, 31).atTime(18, 45).atZone(zone).toInstant().toEpochMilli()
+        val expected = LocalDate.of(2026, 8, 2).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertEquals(expected, growthRangeStartMillis("近 30 天", now, zone))
     }
 
     @Test
