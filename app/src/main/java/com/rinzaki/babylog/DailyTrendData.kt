@@ -71,6 +71,38 @@ fun calendarDaysCovered(
         .coerceAtLeast(1)
 }
 
+/**
+ * Uses only days in which the baby could have generated records. For a finite range,
+ * the window starts at the later of the range boundary and the birth date. When the
+ * birth date is unavailable, the selected range (or first recorded day) remains the fallback.
+ */
+internal fun statisticsDaysCovered(
+    events: List<BabyEventEntity>,
+    rangeDays: Int?,
+    birthTimeMillis: Long?,
+    today: LocalDate = LocalDate.now(),
+    zone: ZoneId = ZoneId.systemDefault()
+): Int {
+    require(rangeDays == null || rangeDays in 1..3660) { "rangeDays must be between 1 and 3660" }
+    val rangeStart = rangeDays?.let { today.minusDays((it - 1).toLong()) }
+    val birthDate = birthTimeMillis
+        ?.takeIf { it > 0L }
+        ?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
+    val firstDate = when {
+        birthDate != null && rangeStart != null -> maxOf(birthDate, rangeStart)
+        birthDate != null -> birthDate
+        rangeStart != null -> rangeStart
+        else -> events.asSequence()
+            .filter { it.deletedAt == null }
+            .map { java.time.Instant.ofEpochMilli(it.occurredAt).atZone(zone).toLocalDate() }
+            .filter { !it.isAfter(today) }
+            .minOrNull() ?: today
+    }.coerceAtMost(today)
+    return (java.time.temporal.ChronoUnit.DAYS.between(firstDate, today) + 1)
+        .toInt()
+        .coerceAtLeast(1)
+}
+
 /** Metrics shown by the daily chart follow the currently selected statistics category. */
 fun trendMetricsForCategory(category: String): List<String> = when (category) {
     "喂养" -> listOf("喂养奶量", "喂养次数")
