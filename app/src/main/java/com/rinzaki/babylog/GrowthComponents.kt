@@ -232,6 +232,8 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val dateFormat = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)
     var selectedPointIndex by remember(points) { mutableStateOf(points.lastIndex) }
     val selectedPoint = points.getOrNull(selectedPointIndex)
+    var showAllMeasurements by remember(points) { mutableStateOf(false) }
+    val visibleMeasurements = visibleGrowthMeasurements(points, showAllMeasurements)
     val chartPrimary = MaterialTheme.colorScheme.primary
     val chartSecondary = MaterialTheme.colorScheme.secondary
     val chartGrid = MaterialTheme.colorScheme.outlineVariant
@@ -348,8 +350,8 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text("最近测量", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                points.takeLast(5).asReversed().forEachIndexed { index, point ->
+                Text(if (showAllMeasurements) "全部测量" else "最近测量", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                visibleMeasurements.asReversed().forEachIndexed { index, point ->
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = if (index == 0) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
@@ -380,6 +382,14 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                 )
                             }
                         }
+                    }
+                }
+                if (points.size > 5) {
+                    TextButton(
+                        onClick = { showAllMeasurements = !showAllMeasurements },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text(if (showAllMeasurements) "收起测量记录" else "查看全部 · ${points.size} 次")
                     }
                 }
             }
