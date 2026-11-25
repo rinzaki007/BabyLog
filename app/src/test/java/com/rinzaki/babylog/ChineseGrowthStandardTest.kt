@@ -300,4 +300,50 @@ class ChineseGrowthStandardTest {
         ))
     }
 
+
+    @Test
+    fun clipsOfficialReferenceToMeasurementWindowAndInterpolatesWindowEndpoints() {
+        val birthDate = LocalDate.of(2024, 1, 31)
+        val startDate = LocalDate.of(2024, 2, 10)
+        val endDate = LocalDate.of(2024, 3, 10)
+        val window = chineseGrowthReferenceChartWindow(
+            birthDate, startDate, endDate,
+            ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY",
+            java.time.ZoneId.of("Asia/Shanghai")
+        )!!
+
+        assertEquals(startDate, window.first().date)
+        assertEquals(endDate, window.last().date)
+        assertEquals(startDate.atStartOfDay(java.time.ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli(), window.first().timestamp)
+        assertEquals(endDate.atStartOfDay(java.time.ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli(), window.last().timestamp)
+        assertEquals(
+            chineseGrowthReferenceAtDate(birthDate, startDate, ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY"),
+            window.first().percentiles
+        )
+        assertEquals(
+            chineseGrowthReferenceAtDate(birthDate, endDate, ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY"),
+            window.last().percentiles
+        )
+        assertTrue(window.zipWithNext().all { (left, right) -> left.date.isBefore(right.date) })
+    }
+
+    @Test
+    fun chartWindowRespectsMetricAgeLimitAndUnknownSex() {
+        val birthDate = LocalDate.of(2024, 1, 1)
+        val headWindow = chineseGrowthReferenceChartWindow(
+            birthDate, birthDate.plusMonths(35), birthDate.plusMonths(40),
+            ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE, "GIRL"
+        )!!
+
+        assertEquals(listOf(birthDate.plusMonths(35), birthDate.plusMonths(36)), headWindow.map { it.date })
+        assertNull(chineseGrowthReferenceChartWindow(
+            birthDate, birthDate, birthDate.plusMonths(2),
+            ChineseGrowthMetric.WEIGHT_FOR_AGE, null
+        ))
+        assertTrue(chineseGrowthReferenceChartWindow(
+            birthDate, birthDate.plusMonths(85), birthDate.plusMonths(86),
+            ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY"
+        )!!.isEmpty())
+    }
+
 }
