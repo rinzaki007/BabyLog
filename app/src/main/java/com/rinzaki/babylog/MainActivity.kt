@@ -93,6 +93,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.room.Room
 import com.rinzaki.babylog.data.BabyEntity
@@ -792,7 +793,24 @@ private fun BabyLogApp(dao: BabyLogDao) {
                             enabled = !timelineLoading,
                             onClick = { scope.launch { loadMoreTimelinePage() } },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (timelineLoading) "正在加载…" else "加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）") }
+                        ) {
+                            if (timelineLoading) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("正在加载…")
+                            } else {
+                                Text("加载更多记录（已显示 ${timelineEvents.size} / ${timelineTotal}）")
+                            }
+                        }
+                    }
+                    if (page == 1 && timelineEvents.isNotEmpty() && timelineEvents.size >= timelineTotal && timelineLoadMoreError == null) item {
+                        Text(
+                            "已经到底啦 · 共 ${timelineEvents.size} 条记录",
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     if (page == 4) item {
                         CollapsibleSection(
@@ -1057,4 +1075,5 @@ private fun BabyLogApp(dao: BabyLogDao) {
     }
     }
 }
+
 
