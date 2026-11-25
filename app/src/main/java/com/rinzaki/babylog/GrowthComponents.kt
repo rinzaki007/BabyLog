@@ -407,6 +407,11 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
+                    Text(
+                        "按出生日期计算月龄；早产儿矫正月龄暂未纳入。身长/身高按官方年龄段口径。仅供趋势参考，不作诊断。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 } else if (referenceSex == null) {
                     Text(
                         "完善宝宝性别档案后，可显示对应的中国生长标准曲线",
