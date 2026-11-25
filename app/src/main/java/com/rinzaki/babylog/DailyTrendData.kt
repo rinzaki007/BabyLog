@@ -37,6 +37,7 @@ fun dailyTrendPoints(
                 "小便次数" -> if (event.eventType == "DIAPER" && payload.optBoolean("urine")) 1f else 0f
                 "大便次数" -> if (event.eventType == "DIAPER" && payload.optBoolean("stool")) 1f else 0f
                 "睡眠小时" -> if (event.eventType == "SLEEP") payload.optInt("durationMinutes").coerceAtLeast(0) / 60f else 0f
+                "体温记录次数" -> if (event.eventType == "TEMPERATURE") 1f else 0f
                 "记录总数" -> 1f
                 else -> 0f
             }
@@ -77,5 +78,6 @@ fun trendMetricsForCategory(category: String): List<String> = when (category) {
     "护理" -> listOf("小便次数", "大便次数")
     "睡眠" -> listOf("睡眠小时")
     "成长" -> listOf("记录总数")
-    else -> listOf("喂养奶量", "喂养次数", "辅食次数", "补充次数", "小便次数", "大便次数", "睡眠小时", "记录总数")
+    "体温" -> listOf("体温记录次数")
+    else -> listOf("喂养奶量", "喂养次数", "辅食次数", "补充次数", "小便次数", "大便次数", "睡眠小时", "体温记录次数", "记录总数")
 }

@@ -52,6 +52,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             "补充" -> event.eventType == "SUPPLEMENT"
             "辅食" -> event.eventType == "SOLID_FOOD"
             "成长" -> event.eventType == "GROWTH"
+            "体温" -> event.eventType == "TEMPERATURE"
             else -> true
         }
     }
@@ -69,6 +70,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     val sleepMinutes = recent.filter { it.eventType == "SLEEP" }.sumOf { runCatching { JSONObject(it.payloadJson).optInt("durationMinutes") }.getOrDefault(0) }
     val supplementEvents = recent.filter { it.eventType == "SUPPLEMENT" }
     val solidFoodEvents = recent.filter { it.eventType == "SOLID_FOOD" }
+    val temperatureEvents = recent.filter { it.eventType == "TEMPERATURE" }
     val waterMl = supplementEvents.filter {
         runCatching {
             val payload = JSONObject(it.payloadJson)
@@ -88,7 +90,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             Text("统计周期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("近7天", "近30天", "近90天", "全部"), range) { range = it }
             Text("记录类型", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-            SelectionRow(listOf("全部", "喂养", "辅食", "补充", "护理", "睡眠", "成长"), category) { category = it }
+            SelectionRow(listOf("全部", "喂养", "辅食", "补充", "护理", "睡眠", "体温", "成长"), category) { category = it }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
@@ -118,6 +120,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
                 SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
             }
             if (category == "全部" || category == "睡眠") SummaryPill("🌙", "睡眠时长", if (sleepMinutes >= 60) "${sleepMinutes / 60}小时${sleepMinutes % 60}分" else "${sleepMinutes}分钟", Modifier.fillMaxWidth())
+            if (category == "全部" || category == "体温") SummaryPill("🌡️", "体温记录", "${temperatureEvents.size} 次", Modifier.fillMaxWidth())
             if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
