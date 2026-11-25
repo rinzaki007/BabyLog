@@ -420,13 +420,26 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     Text(points.last().first.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(dateFormat) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (referencePoints.size >= 2) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("━", color = chartSecondary, style = MaterialTheme.typography.titleSmall)
+                            Text("宝宝测量", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("━", color = chartPrimary, style = MaterialTheme.typography.titleSmall)
+                            Text("标准 P50", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("▰", color = chartPrimary.copy(alpha = 0.38f), style = MaterialTheme.typography.titleSmall)
+                            Text("P3–P97", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                     Text(
-                        "中国标准 P3–P97 范围 · P50 中位线（WS/T 423—2022）",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        "按出生日期计算月龄；早产儿矫正月龄暂未纳入。身长/身高按官方年龄段口径。仅供趋势参考，不作诊断。",
+                        "中国标准 WS/T 423—2022。按出生日期计算月龄；早产儿矫正月龄暂未纳入。身长/身高按官方年龄段口径。仅供趋势参考，不作诊断。",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
