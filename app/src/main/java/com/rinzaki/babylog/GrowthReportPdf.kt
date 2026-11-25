@@ -204,7 +204,7 @@ private class GrowthReportPdfRenderer(
 
     private fun finishPage() {
         canvas?.drawText("BabyLog · 家庭成长档案", PDF_MARGIN, PDF_PAGE_HEIGHT - 22f, smallPaint)
-        canvas?.drawText(pageNumber.toString(), PDF_PAGE_WIDTH - PDF_MARGIN, PDF_PAGE_HEIGHT - 22f, smallPaint)
+        canvas?.drawText("第 ${pageNumber} 页", PDF_PAGE_WIDTH - PDF_MARGIN, PDF_PAGE_HEIGHT - 22f, smallPaint)
         page?.let(document::finishPage)
         page = null
         canvas = null
@@ -218,7 +218,8 @@ private class GrowthReportPdfRenderer(
     }
 
     private fun drawSection(title: String) {
-        ensureSpace(34f)
+        // Keep the section title and divider with at least the first body line.
+        ensureSpace(52f)
         y += 12f
         canvas?.drawText(title, PDF_MARGIN, y, headingPaint)
         y += 8f
