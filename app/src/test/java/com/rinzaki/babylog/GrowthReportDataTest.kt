@@ -117,7 +117,8 @@ class GrowthReportDataTest {
                 event("sleep", "SLEEP", """{"durationMinutes":90}"""),
                 event("food", "SOLID_FOOD", """{"foodName":"米粉","foodStage":"首次尝试","foodReaction":"未见明显异常"}"""),
                 event("mile", "MILESTONE", """{"milestoneTitle":"第一次翻身","category":"大运动"}"""),
-                event("vaccine", "VACCINE", """{"vaccineName":"疫苗A"}""")
+                event("vaccine", "VACCINE", """{"vaccineName":"疫苗A"}"""),
+                event("temperature", "TEMPERATURE", """{"temperatureC":36.8,"measurementMethod":"腋温"}""")
             ),
             now,
             zone
@@ -128,6 +129,7 @@ class GrowthReportDataTest {
         assertEquals(90, report.sleepMinutes)
         assertEquals(1, report.solidFoodCount)
         assertEquals(1, report.vaccineCount)
+        assertEquals(1, report.temperatureCount)
         assertEquals("第一次翻身", report.milestones.first().title)
         assertEquals("10 个月", report.milestones.first().ageLabel)
         assertTrue(report.foodExploration.any { it.contains("米粉") && it.contains("首次") && it.contains("最近") && it.contains("10 个月") })
