@@ -26,7 +26,7 @@ internal fun growthMetricPoints(
     }
 
     val validRange = when (metricKey) {
-        "weightGrams" -> 100.0..80_000.0
+        "weightGrams" -> 0.1..80.0
         "lengthCm" -> 20.0..120.0
         else -> 20.0..70.0
     }
@@ -47,12 +47,12 @@ internal fun growthMetricPoints(
             }
             .forEach { event ->
                 val value = runCatching {
-                    JSONObject(event.payloadJson).optDouble(metricKey).takeIf { it.isFinite() && it in validRange }
+                    JSONObject(event.payloadJson).optDouble(metricKey).takeIf { it.isFinite() && it > 0.0 }
                 }.getOrNull()
                 if (value != null) {
                     val chartValue = if (metricKey == "weightGrams") value / 1000.0 else value
                     val floatValue = chartValue.toFloat()
-                    if (floatValue.isFinite() && floatValue > 0f) {
+                    if (floatValue.isFinite() && floatValue.toDouble() in validRange) {
                         add(event.occurredAt to floatValue)
                     }
                 }
