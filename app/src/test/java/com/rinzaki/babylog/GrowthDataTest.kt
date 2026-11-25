@@ -116,6 +116,42 @@ class GrowthDataTest {
         assertEquals(34.0f, growthMetricPoints(baby(), emptyList(), "headCircumferenceCm").single().second, 0.001f)
     }
     @Test
+    fun growthMetricPointsDropsValuesThatOverflowFloatRepresentation() {
+        val points = growthMetricPoints(
+            baby(weight = null, length = 1.0e100, head = null),
+            listOf(
+                event("GROWTH", 1_710_000_000_000L, """{"lengthCm":1.0e100}"""),
+                event("GROWTH", 1_720_000_000_000L, """{"lengthCm":62.5}""")
+            ),
+            "lengthCm"
+        )
+
+        assertEquals(1, points.size)
+        assertEquals(62.5f, points.single().second, 0.001f)
+    }
+
+    @Test
+    fun growthChartTapSkipsNonFinitePointsAndRejectsNonFiniteCoordinates() {
+        val points = listOf(1_000L to Float.NaN, 2_000L to 5f)
+        assertEquals(
+            1,
+            growthChartNearestPointIndex(
+                points, tapX = 100f, tapY = 25f,
+                left = 0f, right = 100f, top = 0f, bottom = 100f,
+                minValue = 2f, maxValue = 6f
+            )
+        )
+        assertEquals(
+            null,
+            growthChartNearestPointIndex(
+                points, tapX = Float.NaN, tapY = 25f,
+                left = 0f, right = 100f, top = 0f, bottom = 100f,
+                minValue = 2f, maxValue = 6f
+            )
+        )
+    }
+
+    @Test
     fun growthChartCentersSingleMeasurementAndSameTimestampPoints() {
         assertEquals(0.5f, growthChartTimeFraction(1_700L, 1_700L, 1_700L, 1), 0.0001f)
         assertEquals(0.5f, growthChartTimeFraction(1_700L, 1_700L, 1_700L, 2), 0.0001f)
