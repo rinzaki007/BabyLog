@@ -105,14 +105,14 @@ class GrowthLongTermDataTest {
     }
 
     @Test
-    fun growthChartYearRangeHandlesLeapDayAndShortRangesRemainRollingDays() {
+    fun growthChartYearRangeHandlesLeapDayAndShortRangesUseCalendarDates() {
         val leapDay = LocalDate.of(2024, 2, 29).atTime(9, 30).atZone(zone).toInstant().toEpochMilli()
         val yearExpected = LocalDate.of(2023, 2, 28).atTime(9, 30).atZone(zone).toInstant().toEpochMilli()
         assertEquals(yearExpected, growthRangeStartMillis("近一年", leapDay, zone))
 
-        val thirtyDayExpected = LocalDate.of(2024, 1, 30).atTime(9, 30).atZone(zone).toInstant().toEpochMilli()
+        // The 30-day preset includes 30 local calendar dates, including leap day.
+        val thirtyDayExpected = LocalDate.of(2024, 1, 31).atStartOfDay(zone).toInstant().toEpochMilli()
         assertEquals(thirtyDayExpected, growthRangeStartMillis("近 30 天", leapDay, zone))
         assertNull(growthRangeStartMillis("全部", leapDay, zone))
     }
-
 }
