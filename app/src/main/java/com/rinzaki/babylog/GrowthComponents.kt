@@ -139,6 +139,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
         }
     }
     DailyTrendChart(recent, range, category, ranged)
+    PeriodTrendSummary(recent, range, category, ranged)
 }
 
 @Composable
@@ -221,6 +222,91 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
                 )
             }
             Text("每日无记录时按 0 统计；睡眠按记录的时长合计。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+
+@Composable
+private fun PeriodTrendSummary(
+    events: List<BabyEventEntity>,
+    range: String,
+    category: String,
+    allTimeEvents: List<BabyEventEntity>
+) {
+    val metrics = remember(category) { trendMetricsForCategory(category) }
+    var metric by remember(category) { mutableStateOf(metrics.first()) }
+    var period by remember { mutableStateOf("周") }
+    val today = LocalDate.now()
+    val zone = remember { ZoneId.systemDefault() }
+    val days = dailyTrendWindowDays(range, allTimeEvents, today, zone)
+    val daily = remember(events, metric, days, today, zone) {
+        dailyTrendPoints(events, metric, days, today, zone)
+    }
+    val periods = remember(daily, period) { aggregateTrendPeriods(daily, period).takeLast(8) }
+    val maximum = periods.maxOfOrNull { it.value }?.coerceAtLeast(1f) ?: 1f
+    val unit = when (metric) {
+        "喂养奶量" -> "ml"
+        "睡眠小时" -> "小时"
+        else -> "次"
+    }
+    Card(shape = RoundedCornerShape(22.dp)) {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("周 / 月周期趋势", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "按自然周或自然月汇总，与上方每日趋势使用相同数据范围",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            SelectionRow(listOf("周", "月"), period) { period = it }
+            SelectionRow(metrics, metric) { metric = it }
+            if (periods.isEmpty()) {
+                Text("当前范围暂无可汇总的数据。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                periods.forEach { point ->
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val label = if (period == "周") {
+                                "${point.startDate.format(DateTimeFormatter.ofPattern("M/d", Locale.CHINA))} – ${point.endDate.format(DateTimeFormatter.ofPattern("M/d", Locale.CHINA))}"
+                            } else {
+                                point.startDate.format(DateTimeFormatter.ofPattern("yyyy年M月", Locale.CHINA))
+                            }
+                            Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "${"%.1f".format(Locale.CHINA, point.value)} $unit",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Box(
+                            Modifier.fillMaxWidth().height(8.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(99.dp))
+                        ) {
+                            Box(
+                                Modifier.fillMaxWidth((point.value / maximum).coerceIn(0f, 1f))
+                                    .fillMaxHeight()
+                                    .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(99.dp))
+                            )
+                        }
+                        Text(
+                            "${point.activeDays} 个有记录日 · 覆盖 ${point.coveredDays} 天",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Text(
+                    "首尾周期可能不完整；无记录日期保留为 0，不代表漏记或实际活动为零。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
