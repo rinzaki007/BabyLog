@@ -155,3 +155,13 @@ internal fun growthMeasurementComparison(
     val change = current.second - previous.second
     return GrowthMeasurementComparison(elapsedDays, change).takeIf { change.isFinite() }
 }
+
+/** Counts distinct local calendar dates represented by actual growth observations. */
+internal fun growthMeasurementDateCount(
+    points: List<Pair<Long, Float>>,
+    zone: java.time.ZoneId = java.time.ZoneId.systemDefault()
+): Int = points.asSequence()
+    .filter { it.second.isFinite() && it.second > 0f }
+    .map { java.time.Instant.ofEpochMilli(it.first).atZone(zone).toLocalDate() }
+    .distinct()
+    .count()
