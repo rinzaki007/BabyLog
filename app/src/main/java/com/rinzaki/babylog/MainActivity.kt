@@ -475,11 +475,18 @@ private fun BabyLogApp(dao: BabyLogDao) {
 
                     if (page == 2) item {
                         CollapsibleSection(
-                            title = "成长数据与趋势",
-                            description = "身高、体重、头围及日常照护统计",
+                            title = "成长测量与生长曲线",
+                            description = "体重、身长 / 身高、头围及中国同月龄参考",
                             expandedInitially = true
                         ) {
                             GrowthSection(baby, growthEvents)
+                        }
+                    }
+                    if (page == 2) item {
+                        CollapsibleSection(
+                            title = "日常照护统计",
+                            description = "喂养、睡眠、护理、营养与成长记录趋势"
+                        ) {
                             TrendsSummary(baby.id, dao)
                         }
                     }
