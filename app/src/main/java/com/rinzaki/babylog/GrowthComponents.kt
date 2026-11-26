@@ -309,7 +309,7 @@ private fun PeriodTrendSummary(
                             )
                         }
                         Text(
-                            "${point.activeDays} 个有记录日 · 覆盖 ${point.coveredDays} 天" + if (isSelected) " · 已选中" else "",
+                            "${point.activeDays} 个非零日 · 覆盖 ${point.coveredDays} 天" + if (isSelected) " · 已选中" else "",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -331,14 +331,14 @@ private fun PeriodTrendSummary(
                         val sign = if (comparison.change > 0f) "+" else ""
                         val activeSign = if (comparison.activeDaysChange > 0) "+" else ""
                         Text(
-                            "较上一${if (period == "周") "周" else "月"} · 变化 $sign${"%.1f".format(Locale.CHINA, comparison.change)} $unit · 有记录日 $activeSign${comparison.activeDaysChange} 天",
+                            "较上一${if (period == "周") "周" else "月"} · 变化 $sign${"%.1f".format(Locale.CHINA, comparison.change)} $unit · 非零日 $activeSign${comparison.activeDaysChange} 天",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 Text(
-                    "首尾周期可能不完整；无记录日期保留为 0，不代表漏记或实际活动为零。点击周期可查看与上一周期的变化。",
+                    "首尾周期可能不完整；无记录日期保留为 0，不代表漏记。非零日按所选指标累计值大于 0 的日期统计。点击周期可查看与上一周期的变化。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
