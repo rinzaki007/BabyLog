@@ -378,7 +378,6 @@ class GrowthDataTest {
         )
     }
 
-}
     @Test
     fun growthReferenceOverlayRequiresTwoDistinctLocalMeasurementDates() {
         val zone = ZoneId.of("Asia/Shanghai")
@@ -400,5 +399,4 @@ class GrowthDataTest {
             growthMeasurementDateCount(listOf(morning to 6.0f, evening to Float.NaN), zone)
         )
     }
-
-
+}
