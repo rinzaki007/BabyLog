@@ -213,6 +213,35 @@ class GrowthDataTest {
     }
 
     @Test
+    fun selectedRangeRetainsSourceIndicesForPreviousObservationOutsideWindow() {
+        val zone = ZoneId.of("Asia/Shanghai")
+        val points = listOf(
+            LocalDate.of(2026, 1, 1).atStartOfDay(zone).toInstant().toEpochMilli() to 3.2f,
+            LocalDate.of(2026, 1, 11).atStartOfDay(zone).toInstant().toEpochMilli() to 3.6f,
+            LocalDate.of(2026, 2, 1).atStartOfDay(zone).toInstant().toEpochMilli() to 4.1f
+        )
+        val februaryStart = LocalDate.of(2026, 2, 1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val visibleIndices = growthPointIndicesInRange(points, februaryStart)
+
+        assertEquals(listOf(2), visibleIndices)
+        val comparison = growthMeasurementComparison(points, visibleIndices.single(), zone)
+        assertEquals(21L, comparison?.elapsedDays)
+        assertEquals(0.5f, comparison?.change ?: Float.NaN, 0.001f)
+    }
+
+    @Test
+    fun selectedRangeKeepsDuplicateTimestampObservationsStableBySourceIndex() {
+        val timestamp = LocalDate.of(2026, 2, 1).atStartOfDay(ZoneId.of("Asia/Shanghai"))
+            .toInstant().toEpochMilli()
+        val points = listOf(timestamp - 86_400_000L to 3.2f, timestamp to 3.6f, timestamp to 3.8f)
+
+        assertEquals(listOf(1, 2), growthPointIndicesInRange(points, timestamp))
+        val comparison = growthMeasurementComparison(points, 2, ZoneId.of("Asia/Shanghai"))
+        assertEquals(0L, comparison?.elapsedDays)
+        assertEquals(0.2f, comparison?.change ?: Float.NaN, 0.001f)
+    }
+
+    @Test
     fun selectedGrowthMeasurementComparesWithPreviousActualObservation() {
         val zone = java.time.ZoneId.of("Asia/Shanghai")
         val points = listOf(
