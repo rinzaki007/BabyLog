@@ -371,6 +371,102 @@ private fun PeriodTrendSummary(
 }
 
 @Composable
+private fun GrowthOverviewCard(baby: BabyEntity, events: List<BabyEventEntity>) {
+    val zone = remember { ZoneId.systemDefault() }
+    val asOf = remember { System.currentTimeMillis() }
+    val metrics = remember(baby, events, zone, asOf) {
+        listOf(
+            Triple("体重", "kg", growthMetricOverview(baby, events, "weightGrams", asOf, zone)),
+            Triple("身长 / 身高", "cm", growthMetricOverview(baby, events, "lengthCm", asOf, zone)),
+            Triple("头围", "cm", growthMetricOverview(baby, events, "headCircumferenceCm", asOf, zone))
+        )
+    }
+    val referenceHints = metrics.mapNotNull { it.third.referenceHint }.distinct()
+
+    Card(shape = RoundedCornerShape(22.dp)) {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("成长总览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "汇总三项指标最近一次实际测量及变化",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            metrics.forEachIndexed { index, (label, unit, overview) ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        overview.measuredAt?.let { measuredAt ->
+                            Text(
+                                SimpleDateFormat("M月d日", Locale.CHINA).format(Date(measuredAt)) +
+                                    " · " + growthMeasurementAgeLabel(baby.birthTime, measuredAt, zone),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } ?: Text(
+                            "尚无测量记录",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            overview.value?.let { value ->
+                                String.format(Locale.CHINA, if (unit == "kg") "%.2f %s" else "%.1f %s", value, unit)
+                            } ?: "—",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        overview.comparison?.let { comparison ->
+                            val sign = if (comparison.change > 0f) "+" else ""
+                            Text(
+                                "较上次 $sign\${String.format(Locale.CHINA, "%.2f", comparison.change)} $unit · \${comparison.elapsedDays} 天",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        overview.percentileBand?.let { band ->
+                            Text(
+                                "中国标准 $band",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+                if (index != metrics.lastIndex) {
+                    Spacer(
+                        Modifier.fillMaxWidth().height(1.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                    )
+                }
+            }
+            referenceHints.forEach { hint ->
+                Text(
+                    hint,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                "百分位仅用于同月龄同性别参考对照，不代表健康诊断。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 @OptIn(ExperimentalLayoutApi::class)
 internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     var metric by remember { mutableStateOf("体重") }
@@ -440,6 +536,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val chartPrimary = MaterialTheme.colorScheme.primary
     val chartSecondary = MaterialTheme.colorScheme.secondary
     val chartGrid = MaterialTheme.colorScheme.outlineVariant
+    GrowthOverviewCard(baby, events)
     Card(shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
