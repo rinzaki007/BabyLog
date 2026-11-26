@@ -417,7 +417,7 @@ private fun GrowthOverviewCard(baby: BabyEntity, events: List<BabyEventEntity>) 
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(
                             overview.value?.let { value ->
                                 String.format(Locale.CHINA, if (unit == "kg") "%.2f %s" else "%.1f %s", value, unit)
