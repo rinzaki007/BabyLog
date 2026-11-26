@@ -118,6 +118,42 @@ class PeriodTrendDataTest {
     }
 
     @Test
+    fun comparesCompleteMonthsEvenWhenCalendarMonthLengthsDiffer() {
+        val firstDay = LocalDate.of(2026, 1, 1)
+        val lastDay = LocalDate.of(2026, 3, 31)
+        val daily = generateSequence(firstDay) { date ->
+            if (date < lastDay) date.plusDays(1) else null
+        }.map { date ->
+            DailyTrendPoint(date, if (date.monthValue == 2) 2f else 1f)
+        }.toList()
+
+        val monthly = aggregateTrendPeriods(daily, "月")
+
+        assertTrue(monthly.all { it.isComplete })
+        assertEquals(31, monthly[0].coveredDays)
+        assertEquals(28, monthly[1].coveredDays)
+        assertEquals(31, monthly[2].coveredDays)
+        assertEquals(28f, periodTrendComparison(monthly, 1)?.change ?: Float.NaN, 0.001f)
+        assertEquals(-28f, periodTrendComparison(monthly, 2)?.change ?: Float.NaN, 0.001f)
+    }
+
+    @Test
+    fun doesNotComparePartialMonthsEvenWhenTheirCoveredDayCountsMatch() {
+        val daily = listOf(
+            DailyTrendPoint(LocalDate.of(2026, 1, 10), 1f),
+            DailyTrendPoint(LocalDate.of(2026, 1, 11), 1f),
+            DailyTrendPoint(LocalDate.of(2026, 2, 10), 1f),
+            DailyTrendPoint(LocalDate.of(2026, 2, 11), 1f)
+        )
+
+        val monthly = aggregateTrendPeriods(daily, "月")
+
+        assertEquals(monthly[0].coveredDays, monthly[1].coveredDays)
+        assertTrue(monthly.none { it.isComplete })
+        assertEquals(null, periodTrendComparison(monthly, 1))
+    }
+
+    @Test
     fun selectedPeriodRejectsNonFiniteComparisonResult() {
         val periods = listOf(
             PeriodTrendPoint(start, start.plusDays(6), Float.MAX_VALUE, 1, 7),
