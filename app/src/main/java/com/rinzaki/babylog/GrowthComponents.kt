@@ -328,6 +328,11 @@ private fun PeriodTrendSummary(
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
                     )
+                    Text(
+                        if (point.observationCount > 0) "相关记录 ${point.observationCount} 条" else "暂无相关记录",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     if (selectedPeriodIndex > 0 && selectedComparison == null &&
                         !allPeriods[selectedPeriodIndex - 1].isComplete || !point.isComplete
                     ) {
@@ -348,7 +353,7 @@ private fun PeriodTrendSummary(
                     }
                 }
                 Text(
-                    "首尾周期可能不完整；无记录日期保留为 0，不代表漏记。非零日按所选指标累计值大于 0 的日期统计。点击周期可查看与上一周期的变化。",
+                    "首尾周期可能不完整；无相关记录的日期按 0 统计，有记录但指标值为 0 会保留记录条数。非零日按所选指标累计值大于 0 的日期统计。点击周期可查看与上一周期的变化。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

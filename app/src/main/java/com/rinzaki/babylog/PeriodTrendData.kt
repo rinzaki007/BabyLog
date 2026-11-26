@@ -11,7 +11,8 @@ internal data class PeriodTrendPoint(
     val value: Float,
     val nonZeroDays: Int,
     val coveredDays: Int,
-    val isComplete: Boolean = true
+    val isComplete: Boolean = true,
+    val observationCount: Int = 0
 )
 
 /**
@@ -35,11 +36,13 @@ internal fun aggregateTrendPeriods(
                 point.value.takeIf { it.isFinite() && it >= 0f }?.toDouble() ?: 0.0
             }.toFloat()
         }
+    val dailyObservations = dailyPoints.groupBy { it.date }
+        .mapValues { (_, values) -> values.sumOf { it.observationCount.coerceAtLeast(0) } }
     val first = dailyTotals.keys.minOrNull() ?: return emptyList()
     val last = dailyTotals.keys.maxOrNull() ?: return emptyList()
     val completeDailySeries = generateSequence(first) { date ->
         if (date < last) date.plusDays(1) else null
-    }.map { date -> DailyTrendPoint(date, dailyTotals[date] ?: 0f) }.toList()
+    }.map { date -> DailyTrendPoint(date, dailyTotals[date] ?: 0f, dailyObservations[date] ?: 0) }.toList()
 
     fun bucketStart(date: LocalDate): LocalDate = when (period) {
         "周" -> date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
@@ -66,6 +69,7 @@ internal fun aggregateTrendPeriods(
             value = values.sumOf { it.value.toDouble() }.toFloat(),
             nonZeroDays = values.count { it.value > 0f },
             coveredDays = values.size,
+            observationCount = values.sumOf { it.observationCount.coerceAtLeast(0) },
             // Completeness is based on the calendar bucket boundaries, not its length:
             // a full 30-day month and a full 31-day month are both complete.
             isComplete = first <= cursor && last >= bucketEnd(cursor)
