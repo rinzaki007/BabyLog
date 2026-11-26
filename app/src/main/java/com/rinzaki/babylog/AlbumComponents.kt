@@ -844,7 +844,7 @@ internal fun TimelinePhotoStrip(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             photos.take(6).forEach { photo ->
                 AlbumPhotoCard(
                     photo = photo,
