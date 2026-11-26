@@ -66,6 +66,18 @@ internal fun growthMetricPoints(
 }
 
 /**
+ * Preserves source indices when a chart range filters the visible measurements.
+ * Keeping these indices lets the first visible point compare with the immediately
+ * preceding real observation outside the selected date window.
+ */
+internal fun growthPointIndicesInRange(
+    points: List<Pair<Long, Float>>,
+    startInclusiveMillis: Long?
+): List<Int> = points.indices.filter { index ->
+    startInclusiveMillis == null || points[index].first >= startInclusiveMillis
+}
+
+/**
  * Finds the nearest plotted measurement in two dimensions. This matters when multiple
  * observations share a timestamp: their x-coordinates overlap, but distinct values have
  * distinct y-coordinates and should remain individually selectable.
