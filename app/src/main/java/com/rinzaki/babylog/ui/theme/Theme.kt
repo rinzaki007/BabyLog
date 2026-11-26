@@ -47,7 +47,7 @@ object BabyLogThemePreferences {
  */
 internal fun babyLogColorScheme(style: BabyLogThemeStyle): ColorScheme = when (style) {
     BabyLogThemeStyle.DEFAULT -> lightColorScheme(
-        primary = Color(0xFF955D50), onPrimary = Color.White,
+        primary = Color(0xFF945C4F), onPrimary = Color.White,
         primaryContainer = Color(0xFFF1DDD6), onPrimaryContainer = Color(0xFF4A2820),
         secondary = Color(0xFF58715D), onSecondary = Color.White,
         secondaryContainer = Color(0xFFE1E9DF), onSecondaryContainer = Color(0xFF293E2D),
@@ -64,7 +64,7 @@ internal fun babyLogColorScheme(style: BabyLogThemeStyle): ColorScheme = when (s
         primaryContainer = Color(0xFFF2E2D0), onPrimaryContainer = Color(0xFF4B2D18),
         secondary = Color(0xFF5A6A43), onSecondary = Color.White,
         secondaryContainer = Color(0xFFE5EBD8), onSecondaryContainer = Color(0xFF334126),
-        tertiary = Color(0xFF8A6034), onTertiary = Color.White,
+        tertiary = Color(0xFF885E33), onTertiary = Color.White,
         tertiaryContainer = Color(0xFFF5E4CC), onTertiaryContainer = Color(0xFF50351B),
         background = Color(0xFFFFF7E9), onBackground = Color(0xFF493729),
         surface = Color(0xFFFFFCF4), onSurface = Color(0xFF493729),
