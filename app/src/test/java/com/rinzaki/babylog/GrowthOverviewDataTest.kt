@@ -5,7 +5,6 @@ import com.rinzaki.babylog.data.BabyEventEntity
 import java.time.LocalDate
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -56,7 +55,7 @@ class GrowthOverviewDataTest {
         assertEquals(5.1f, weight.value!!, 0.001f)
         assertEquals(57.0f, length.value!!, 0.001f)
         assertEquals(38.0f, head.value!!, 0.001f)
-        assertEquals(1, listOf(weight, length, head).count { it.percentileBand != null })
+        assertTrue(listOf(weight, length, head).all { it.percentileBand != null })
         assertEquals(30L, weight.comparison?.elapsedDays)
         assertEquals(0.9f, weight.comparison?.change ?: Float.NaN, 0.001f)
         assertEquals(null, weight.referenceHint)
