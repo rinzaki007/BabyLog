@@ -79,4 +79,13 @@ class AlbumGroupingTest {
         assertEquals(1, groups.sumOf { it.photos.size })
         assertEquals("active", groups.single().photos.single().id)
     }
+
+    @Test
+    fun usesFewerAlbumColumnsOnCompactScreens() {
+        assertEquals(2, albumGridColumnCount(320f))
+        assertEquals(2, albumGridColumnCount(359.9f))
+        assertEquals(3, albumGridColumnCount(360f))
+        assertEquals(3, albumGridColumnCount(420f))
+    }
+
 }

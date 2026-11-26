@@ -70,3 +70,8 @@ internal fun groupAlbumPhotos(
         AlbumPhotoGroup(key, title, subtitle, groupedPhotos)
     }
 }
+
+
+/** Use two album columns on compact content widths to keep thumbnails comfortably tappable. */
+internal fun albumGridColumnCount(availableWidthDp: Float): Int =
+    if (availableWidthDp < 360f) 2 else 3
