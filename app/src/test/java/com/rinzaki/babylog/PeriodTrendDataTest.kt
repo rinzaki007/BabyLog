@@ -55,6 +55,24 @@ class PeriodTrendDataTest {
         assertEquals(0f, periods.last().value)
     }
 
+    @Test
+    fun invalidDailyValuesDoNotPoisonPeriodTotalsOrActiveDayCounts() {
+        val daily = listOf(
+            DailyTrendPoint(start, 2f),
+            DailyTrendPoint(start, Float.NaN),
+            DailyTrendPoint(start, Float.POSITIVE_INFINITY),
+            DailyTrendPoint(start, -5f),
+            DailyTrendPoint(start.plusDays(1), 3f)
+        )
+
+        val periods = aggregateTrendPeriods(daily, "周")
+
+        assertEquals(5f, periods.single().value)
+        assertEquals(2, periods.single().activeDays)
+        assertEquals(2, periods.single().coveredDays)
+        assertTrue(periods.single().value.isFinite())
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsUnknownPeriod() {
         aggregateTrendPeriods(emptyList(), "日")

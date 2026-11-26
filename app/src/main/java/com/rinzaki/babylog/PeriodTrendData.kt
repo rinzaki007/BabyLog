@@ -17,6 +17,9 @@ internal data class PeriodTrendPoint(
  * Aggregates a daily series into calendar weeks or months. Missing dates between
  * the first and last observation are treated as zero-valued calendar days; partial
  * first/last periods are retained and no values are interpolated.
+ *
+ * Invalid negative or non-finite values are treated as zero so one malformed input
+ * cannot poison an entire period total or its chart scale.
  */
 internal fun aggregateTrendPeriods(
     dailyPoints: List<DailyTrendPoint>,
@@ -26,7 +29,11 @@ internal fun aggregateTrendPeriods(
     if (dailyPoints.isEmpty()) return emptyList()
 
     val dailyTotals = dailyPoints.groupBy { it.date }
-        .mapValues { (_, values) -> values.sumOf { it.value.toDouble() }.toFloat() }
+        .mapValues { (_, values) ->
+            values.sumOf { point ->
+                point.value.takeIf { it.isFinite() && it >= 0f }?.toDouble() ?: 0.0
+            }.toFloat()
+        }
     val first = dailyTotals.keys.minOrNull() ?: return emptyList()
     val last = dailyTotals.keys.maxOrNull() ?: return emptyList()
     val completeDailySeries = generateSequence(first) { date ->
