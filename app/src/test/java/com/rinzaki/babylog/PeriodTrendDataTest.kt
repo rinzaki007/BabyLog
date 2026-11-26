@@ -9,6 +9,35 @@ class PeriodTrendDataTest {
     private val start = LocalDate.of(2026, 11, 2) // Monday
 
     @Test
+    fun aggregatesSourceObservationCountsIncludingZeroValueRecords() {
+        val daily = listOf(
+            DailyTrendPoint(start, 0f, observationCount = 2),
+            DailyTrendPoint(start.plusDays(1), 3f, observationCount = 1),
+            DailyTrendPoint(start.plusDays(2), 0f, observationCount = 0)
+        )
+
+        val weekly = aggregateTrendPeriods(daily, "周").single()
+
+        assertEquals(3, weekly.observationCount)
+        assertEquals(1, weekly.nonZeroDays)
+        assertEquals(7, weekly.coveredDays)
+    }
+
+    @Test
+    fun duplicateDailyPointsPreserveAllSourceObservationCounts() {
+        val daily = listOf(
+            DailyTrendPoint(start, 0f, observationCount = 1),
+            DailyTrendPoint(start, 0f, observationCount = 2),
+            DailyTrendPoint(start.plusDays(1), 1f, observationCount = 1)
+        )
+
+        val weekly = aggregateTrendPeriods(daily, "周").single()
+
+        assertEquals(4, weekly.observationCount)
+        assertEquals(1f, weekly.value)
+    }
+
+    @Test
     fun aggregatesWeeklyValuesAndPreservesZeroDays() {
         val daily = (0..9).map { offset ->
             DailyTrendPoint(start.plusDays(offset.toLong()), if (offset == 1 || offset == 8) 2f else 0f)
