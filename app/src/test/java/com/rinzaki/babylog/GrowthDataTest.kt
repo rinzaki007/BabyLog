@@ -5,6 +5,8 @@ import com.rinzaki.babylog.data.BabyEventEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
 
 class GrowthDataTest {
     private fun baby(
@@ -377,3 +379,26 @@ class GrowthDataTest {
     }
 
 }
+    @Test
+    fun growthReferenceOverlayRequiresTwoDistinctLocalMeasurementDates() {
+        val zone = ZoneId.of("Asia/Shanghai")
+        val date = LocalDate.of(2026, 11, 26)
+        val morning = date.atTime(8, 0).atZone(zone).toInstant().toEpochMilli()
+        val evening = date.atTime(20, 0).atZone(zone).toInstant().toEpochMilli()
+        val nextDay = date.plusDays(1).atTime(0, 5).atZone(zone).toInstant().toEpochMilli()
+
+        assertEquals(
+            1,
+            growthMeasurementDateCount(listOf(morning to 6.0f, evening to 6.1f), zone)
+        )
+        assertEquals(
+            2,
+            growthMeasurementDateCount(listOf(morning to 6.0f, evening to 6.1f, nextDay to 6.2f), zone)
+        )
+        assertEquals(
+            1,
+            growthMeasurementDateCount(listOf(morning to 6.0f, evening to Float.NaN), zone)
+        )
+    }
+
+
