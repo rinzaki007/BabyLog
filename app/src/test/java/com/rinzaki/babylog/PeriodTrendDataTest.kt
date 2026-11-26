@@ -182,6 +182,15 @@ class PeriodTrendDataTest {
     }
 
     @Test
+    fun periodDailyAverageUsesCoveredCalendarDaysAndRejectsInvalidPeriods() {
+        assertEquals(2f, periodTrendDailyAverage(PeriodTrendPoint(start, start.plusDays(6), 14f, 3, 7)) ?: Float.NaN, 0.001f)
+        assertEquals(null, periodTrendDailyAverage(PeriodTrendPoint(start, start, 10f, 1, 0)))
+        assertEquals(null, periodTrendDailyAverage(PeriodTrendPoint(start, start, Float.NaN, 1, 1)))
+        assertEquals(null, periodTrendDailyAverage(PeriodTrendPoint(start, start, -1f, 1, 1)))
+        assertEquals(null, periodTrendDailyAverage(PeriodTrendPoint(start, start, Float.MAX_VALUE, 1, 1).copy(coveredDays = -1)))
+    }
+
+    @Test
     fun selectedPeriodRejectsNonFiniteComparisonResult() {
         val periods = listOf(
             PeriodTrendPoint(start, start.plusDays(6), Float.MAX_VALUE, 1, 7),
