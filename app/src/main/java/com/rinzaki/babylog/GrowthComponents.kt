@@ -33,6 +33,117 @@ import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 
+
+@Composable
+private fun GrowthPercentileBandTrendCard(
+    points: List<GrowthPercentileTrendPoint>,
+    selectedVisibleIndex: Int
+) {
+    val labels = listOf("≥ P97", "P75–P97", "P25–P75", "P3–P25", "< P3")
+    val chartColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val textColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val firstTimestamp = points.minOf { it.timestamp }
+    val lastTimestamp = points.maxOf { it.timestamp }
+    val dateFormat = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("百分位区间变化", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "按实际测量日期展示与同性别、同月龄中国标准的区间对照",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Column(
+                    Modifier.width(54.dp).height(140.dp),
+                    verticalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    labels.forEach { label ->
+                        Text(label, style = MaterialTheme.typography.labelSmall, color = textColor, maxLines = 1)
+                    }
+                }
+                Canvas(Modifier.weight(1f).height(140.dp)) {
+                    val rowHeight = size.height / 5f
+                    labels.forEachIndexed { index, _ ->
+                        val y = (index + 0.5f) * rowHeight
+                        drawLine(
+                            color = gridColor.copy(alpha = 0.65f),
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+                    points.forEach { point ->
+                        val x = if (lastTimestamp == firstTimestamp) {
+                            size.width / 2f
+                        } else {
+                            ((point.timestamp - firstTimestamp).toFloat() /
+                                (lastTimestamp - firstTimestamp).toFloat()).coerceIn(0f, 1f) * size.width
+                        }
+                        val row = 4 - point.band.ordinal
+                        val center = Offset(x, (row + 0.5f) * rowHeight)
+                        val selected = point.visibleIndex == selectedVisibleIndex
+                        if (selected) {
+                            drawCircle(
+                                color = chartColor.copy(alpha = 0.18f),
+                                radius = 10.dp.toPx(),
+                                center = center
+                            )
+                        }
+                        drawCircle(
+                            color = chartColor,
+                            radius = if (selected) 5.5.dp.toPx() else 4.dp.toPx(),
+                            center = center
+                        )
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    java.time.Instant.ofEpochMilli(firstTimestamp).atZone(ZoneId.systemDefault())
+                        .toLocalDate().format(dateFormat),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor
+                )
+                Text(
+                    java.time.Instant.ofEpochMilli(lastTimestamp).atZone(ZoneId.systemDefault())
+                        .toLocalDate().format(dateFormat),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor
+                )
+            }
+            val selected = points.firstOrNull { it.visibleIndex == selectedVisibleIndex }
+            Text(
+                selected?.let { "当前选中：${it.bandLabel}" }
+                    ?: "共 ${points.size} 次测量有可用的百分位区间参考",
+                style = MaterialTheme.typography.labelSmall,
+                color = chartColor,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "每个点代表一次真实测量；不连接测量点、不补齐缺失月份。区间变化仅作记录对照，不代表健康诊断。",
+                style = MaterialTheme.typography.labelSmall,
+                color = textColor
+            )
+        }
+    }
+}
+
 @Composable
 internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     val context = LocalContext.current.applicationContext
@@ -591,6 +702,15 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val chartSecondary = MaterialTheme.colorScheme.secondary
     val chartGrid = MaterialTheme.colorScheme.outlineVariant
     GrowthOverviewCard(baby, events)
+    val percentileTrendPoints = remember(points, pointSourceIndices, measurementAssessments) {
+        growthPercentileTrendPoints(points, pointSourceIndices, measurementAssessments)
+    }
+    if (percentileTrendPoints.isNotEmpty()) {
+        GrowthPercentileBandTrendCard(
+            points = percentileTrendPoints,
+            selectedVisibleIndex = selectedPointIndex
+        )
+    }
     Card(shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
