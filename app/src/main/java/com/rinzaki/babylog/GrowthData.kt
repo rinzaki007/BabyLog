@@ -43,6 +43,8 @@ internal fun growthMetricPoints(
                 it.babyId == baby.id &&
                     it.deletedAt == null &&
                     it.eventType == "GROWTH" &&
+                    // Growth observations cannot precede the baby's recorded birth date.
+                    it.occurredAt >= baby.birthTime &&
                     it.occurredAt <= asOfMillis
             }
             .forEach { event ->
