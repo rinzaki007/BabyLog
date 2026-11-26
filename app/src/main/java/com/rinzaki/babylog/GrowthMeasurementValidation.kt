@@ -1,5 +1,7 @@
 package com.rinzaki.babylog
 
+internal const val MAX_LENGTH_HEIGHT_CM = 150.0
+
 /**
  * Parses an optional numeric measurement and rejects malformed or out-of-range input.
  * A blank field is intentionally omitted from the saved measurement.
