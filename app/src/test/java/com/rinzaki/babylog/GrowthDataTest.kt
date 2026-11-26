@@ -159,8 +159,12 @@ class GrowthDataTest {
             java.time.LocalDate.of(2026, 2, 1).atStartOfDay(zone).toInstant().toEpochMilli() to 4.1f
         )
         assertEquals(null, growthMeasurementComparison(points, 0, zone))
-        assertEquals(GrowthMeasurementComparison(10, 0.4f), growthMeasurementComparison(points, 1, zone))
-        assertEquals(GrowthMeasurementComparison(21, 0.5f), growthMeasurementComparison(points, 2, zone))
+        val firstComparison = growthMeasurementComparison(points, 1, zone)
+        assertEquals(10L, firstComparison?.elapsedDays)
+        assertEquals(0.4f, firstComparison?.change ?: Float.NaN, 0.001f)
+        val secondComparison = growthMeasurementComparison(points, 2, zone)
+        assertEquals(21L, secondComparison?.elapsedDays)
+        assertEquals(0.5f, secondComparison?.change ?: Float.NaN, 0.001f)
         assertEquals(null, growthMeasurementComparison(points, 3, zone))
     }
 
