@@ -193,18 +193,18 @@ fun SyncSettingsDialog(dao: BabyLogDao, onDismiss: () -> Unit) {
                 val familyId = linkedFamilies.getJSONObject(0).getString("id")
                 val username = profile.optString("username", accountIdentifier.trim())
 
-                // Always inspect unassigned profiles. This also resumes a first-link
-                // operation interrupted after the family session was last saved.
+                // Commit the validated session before changing local ownership. If
+                // the process stops during first-link queue preparation, the worker
+                // can resume it under this same family session on its next run.
+                SyncPreferences.saveAuthenticatedSession(context, base, accessToken, username, familyId)
+                SyncScheduler.schedule(context)
+
                 val unassignedBabies = dao.getUnassignedBabies(UNASSIGNED_FAMILY_ID)
                 val claimedLocalBabies = enqueueUnassignedFamilyData(dao, unassignedBabies, familyId)
                 val restoredConflicts = dao.restoreFamilyOwnershipConflicts(
                     familyId,
                     FAMILY_OWNERSHIP_CONFLICT_REASON
                 )
-
-                // Commit server, encrypted token, account, family and cursor together.
-                SyncPreferences.saveAuthenticatedSession(context, base, accessToken, username, familyId)
-                SyncScheduler.schedule(context)
                 val recoveryNotes = buildList {
                     if (claimedLocalBabies > 0) add("已将 $claimedLocalBabies 份此前离线创建的档案关联到当前家庭")
                     if (restoredConflicts > 0) add("已恢复 $restoredConflicts 条属于当前家庭的冲突记录")
