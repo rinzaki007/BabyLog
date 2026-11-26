@@ -371,6 +371,56 @@ private fun PeriodTrendSummary(
 }
 
 @Composable
+private fun GrowthOverviewSparkline(values: List<Float>) {
+    val lineColor = MaterialTheme.colorScheme.primary
+    val pointColor = MaterialTheme.colorScheme.secondary
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Canvas(Modifier.width(56.dp).height(30.dp)) {
+            if (values.isNotEmpty()) {
+                val left = 3.dp.toPx()
+                val right = size.width - left
+                val top = 4.dp.toPx()
+                val bottom = size.height - top
+                val minimum = values.minOrNull() ?: 0f
+                val maximum = values.maxOrNull() ?: minimum
+                val span = (maximum - minimum).takeIf { it.isFinite() && it > 0f } ?: 1f
+                val coordinates = values.mapIndexed { index, value ->
+                    val x = if (values.size == 1) size.width / 2f
+                    else left + (right - left) * index / (values.size - 1).toFloat()
+                    val y = if (maximum == minimum) size.height / 2f
+                    else bottom - ((value - minimum) / span) * (bottom - top)
+                    Offset(x, y)
+                }
+                coordinates.zipWithNext().forEach { (start, end) ->
+                    drawLine(
+                        color = lineColor,
+                        start = start,
+                        end = end,
+                        strokeWidth = 2.dp.toPx(),
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                }
+                coordinates.forEach { point ->
+                    drawCircle(
+                        color = pointColor,
+                        radius = 2.5.dp.toPx(),
+                        center = point
+                    )
+                }
+            }
+        }
+        Text(
+            if (values.isEmpty()) "暂无走势" else "最近走势",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
 private fun GrowthOverviewCard(baby: BabyEntity, events: List<BabyEventEntity>) {
     val zone = remember { ZoneId.systemDefault() }
     val asOf = remember { System.currentTimeMillis() }
@@ -417,6 +467,7 @@ private fun GrowthOverviewCard(baby: BabyEntity, events: List<BabyEventEntity>) 
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    GrowthOverviewSparkline(overview.recentValues)
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(
                             overview.value?.let { value ->
