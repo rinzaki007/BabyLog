@@ -27,7 +27,7 @@ internal fun growthMetricPoints(
 
     val validRange = when (metricKey) {
         "weightGrams" -> 0.1..80.0
-        "lengthCm" -> 20.0..120.0
+        "lengthCm" -> 20.0..MAX_LENGTH_HEIGHT_CM
         else -> 20.0..70.0
     }
 
