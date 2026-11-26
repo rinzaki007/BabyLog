@@ -453,7 +453,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                         val measurements = try {
                                             Triple(
                                                 parseOptionalMeasurement(weightKg, "体重", 0.1, 80.0),
-                                                parseOptionalMeasurement(lengthCm, "身长", 20.0, 120.0),
+                                                parseOptionalMeasurement(lengthCm, "身长", 20.0, MAX_LENGTH_HEIGHT_CM),
                                                 parseOptionalMeasurement(headCm, "头围", 20.0, 70.0)
                                             )
                                         } catch (validation: IllegalArgumentException) {
