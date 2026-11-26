@@ -95,6 +95,29 @@ class PeriodTrendDataTest {
     }
 
     @Test
+    fun selectedPeriodDoesNotComparePartialAndCompleteBuckets() {
+        val daily = (0..9).map { offset ->
+            DailyTrendPoint(start.plusDays(offset.toLong()), 1f)
+        }
+        val weekly = aggregateTrendPeriods(daily, "周")
+        assertEquals(7, weekly[0].coveredDays)
+        assertEquals(3, weekly[1].coveredDays)
+        assertEquals(null, periodTrendComparison(weekly, 1))
+
+        val monthly = aggregateTrendPeriods(
+            listOf(
+                DailyTrendPoint(LocalDate.of(2026, 11, 30), 1f),
+                DailyTrendPoint(LocalDate.of(2026, 12, 1), 1f),
+                DailyTrendPoint(LocalDate.of(2026, 12, 2), 1f)
+            ),
+            "月"
+        )
+        assertEquals(1, monthly[0].coveredDays)
+        assertEquals(2, monthly[1].coveredDays)
+        assertEquals(null, periodTrendComparison(monthly, 1))
+    }
+
+    @Test
     fun selectedPeriodRejectsNonFiniteComparisonResult() {
         val periods = listOf(
             PeriodTrendPoint(start, start.plusDays(6), Float.MAX_VALUE, 1, 7),
