@@ -1259,30 +1259,35 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
                     ) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text("${month.month.year}年${month.month.monthValue}月", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                Text("${month.measurementCount} 次测量", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("${month.month.year}年${month.month.monthValue}月", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    Text("本月记录 ${month.measurementCount} 次", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text("${"%.2f".format(Locale.CHINA, month.latestValue)} $unit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                             }
-                            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text("${"%.2f".format(Locale.CHINA, month.latestValue)} $unit", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    if (month.measurementCount > 1) {
-                                        "首次 ${"%.2f".format(Locale.CHINA, month.firstValue)} → 最近 ${"%.2f".format(Locale.CHINA, month.latestValue)} $unit · 间隔 ${month.spanDays} 天 · 变化 $changeSign${"%.2f".format(Locale.CHINA, month.change)} $unit"
-                                    } else {
-                                        month.previousValue?.let { previous ->
-                                            val previousSign = if (month.latestValue > previous) "+" else ""
-                                            val gap = month.daysSincePreviousMeasurement?.let { " · 间隔 ${it} 天" } ?: ""
-                                            "较上次记录 $previousSign${"%.2f".format(Locale.CHINA, month.latestValue - previous)} $unit$gap"
-                                        } ?: "单次记录"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Text(
+                                if (month.measurementCount > 1) {
+                                    "本月从 ${"%.2f".format(Locale.CHINA, month.firstValue)} 到 ${"%.2f".format(Locale.CHINA, month.latestValue)} $unit，变化 $changeSign${"%.2f".format(Locale.CHINA, month.change)} $unit（相隔 ${month.spanDays} 天）"
+                                } else {
+                                    month.previousValue?.let { previous ->
+                                        val previousSign = if (month.latestValue > previous) "+" else ""
+                                        val gap = month.daysSincePreviousMeasurement?.let { "，相隔 ${it} 天" } ?: ""
+                                        "较上一次测量 $previousSign${"%.2f".format(Locale.CHINA, month.latestValue - previous)} $unit$gap"
+                                    } ?: "这个月只有一次记录，暂时无法计算变化"
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
