@@ -16,6 +16,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rinzaki.babylog.ui.theme.BabyLogThemeStyle
@@ -42,7 +43,8 @@ fun BabyLogNavigationBar(selectedIndex: Int, themeStyle: BabyLogThemeStyle = Bab
                                 BabyLogDestination.ALBUM -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌳" else "📷"
                                 BabyLogDestination.VACCINE -> if (themeStyle == BabyLogThemeStyle.KOALA) "🌼" else "💉"
                             },
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.clearAndSetSemantics {}
                         )
                     } else {
                         Icon(
@@ -53,7 +55,7 @@ fun BabyLogNavigationBar(selectedIndex: Int, themeStyle: BabyLogThemeStyle = Bab
                                 BabyLogDestination.ALBUM -> Icons.Filled.Photo
                                 BabyLogDestination.VACCINE -> Icons.Filled.Favorite
                             },
-                            contentDescription = destination.label
+                            contentDescription = null
                         )
                     }
                 },
