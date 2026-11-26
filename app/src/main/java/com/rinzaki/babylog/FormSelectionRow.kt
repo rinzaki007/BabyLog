@@ -30,24 +30,48 @@ internal fun SelectionRow(options: List<String>, selected: String, onSelect: (St
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             rows.forEach { group ->
-            val missing = columns - group.size
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (missing > 0) Spacer(Modifier.weight(missing / 2f))
-                group.forEach { option ->
-                    val modifier = Modifier.weight(1f)
-                    if (selected == option) {
-                        FilledTonalButton(
-                            onClick = { onSelect(option) },
-                            modifier = modifier.heightIn(min = 44.dp),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("✓", style = MaterialTheme.typography.labelMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                val missing = columns - group.size
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (missing > 0) Spacer(Modifier.weight(missing / 2f))
+                    group.forEach { option ->
+                        val itemModifier = Modifier.weight(1f)
+                        if (selected == option) {
+                            FilledTonalButton(
+                                onClick = { onSelect(option) },
+                                modifier = itemModifier.heightIn(min = 44.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        "✓",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                    )
+                                    Text(
+                                        option,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.Center,
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                }
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { onSelect(option) },
+                                modifier = itemModifier.heightIn(min = 44.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
                                 Text(
                                     option,
                                     maxLines = 2,
@@ -57,27 +81,10 @@ internal fun SelectionRow(options: List<String>, selected: String, onSelect: (St
                                 )
                             }
                         }
-                    } else {
-                        OutlinedButton(
-                            onClick = { onSelect(option) },
-                            modifier = modifier.heightIn(min = 44.dp),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                option,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                        }
                     }
+                    if (missing > 0) Spacer(Modifier.weight(missing / 2f))
                 }
-                if (missing > 0) Spacer(Modifier.weight(missing / 2f))
             }
-            }
+        }
     }
 }
-
-
