@@ -49,6 +49,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -962,8 +964,18 @@ private fun AlbumPhotoCard(
             AlbumPhotoThumbnailCache.load(photo.localPath, 360, 360)
         }.getOrNull()
     }
+    val takenAtLabel = SimpleDateFormat("yyyy年M月d日 HH:mm", Locale.CHINA).format(Date(photo.takenAt))
+    val storageLabel = when {
+        photo.originalOnDevice -> "本地原图"
+        hasCachedOriginal -> "已缓存原图"
+        else -> "云端原图"
+    }
     Card(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier
+            .semantics(mergeDescendants = true) {
+                contentDescription = albumPhotoAccessibilityLabel(takenAtLabel, storageLabel)
+            }
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
@@ -971,7 +983,7 @@ private fun AlbumPhotoCard(
             if (bitmap != null) {
                 Image(
                     bitmap!!.asImageBitmap(),
-                    contentDescription = "宝宝照片缩略图",
+                    contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
@@ -996,11 +1008,7 @@ private fun AlbumPhotoCard(
             ) {
                 Icon(
                     imageVector = storageIcon,
-                    contentDescription = when {
-                        photo.originalOnDevice -> "本地原图"
-                        hasCachedOriginal -> "已缓存原图"
-                        else -> "云端原图"
-                    },
+                    contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(11.dp)
                 )

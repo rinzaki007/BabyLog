@@ -75,3 +75,8 @@ internal fun groupAlbumPhotos(
 /** Use two album columns on compact content widths to keep thumbnails comfortably tappable. */
 internal fun albumGridColumnCount(availableWidthDp: Float): Int =
     if (availableWidthDp < 360f) 2 else 3
+
+
+/** A single concise screen-reader label for each actionable photo thumbnail. */
+internal fun albumPhotoAccessibilityLabel(dateLabel: String, storageLabel: String): String =
+    "宝宝照片，拍摄于$dateLabel，$storageLabel"
