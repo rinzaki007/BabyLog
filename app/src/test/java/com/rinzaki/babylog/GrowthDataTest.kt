@@ -170,6 +170,30 @@ class GrowthDataTest {
         assertEquals(asOf, points.last().first)
     }
 
+
+    @Test
+    fun sameTimestampGrowthMeasurementsUseStableEventIdOrdering() {
+        val timestamp = 1_710_000_000_000L
+        val events = listOf(
+            event("GROWTH", timestamp, """{"weightGrams":5200}""").copy(id = "event-b"),
+            event("GROWTH", timestamp, """{"weightGrams":5100}""").copy(id = "event-a")
+        )
+
+        val first = growthMetricPoints(
+            baby(weight = null, length = null, head = null),
+            events,
+            "weightGrams"
+        )
+        val reversed = growthMetricPoints(
+            baby(weight = null, length = null, head = null),
+            events.reversed(),
+            "weightGrams"
+        )
+
+        assertEquals(listOf(5.1f, 5.2f), first.map { it.second })
+        assertEquals(first, reversed)
+    }
+
     @Test
     fun selectedGrowthMeasurementComparesWithPreviousActualObservation() {
         val zone = java.time.ZoneId.of("Asia/Shanghai")
