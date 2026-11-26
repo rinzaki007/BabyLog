@@ -9,7 +9,7 @@ internal data class PeriodTrendPoint(
     val startDate: LocalDate,
     val endDate: LocalDate,
     val value: Float,
-    val activeDays: Int,
+    val nonZeroDays: Int,
     val coveredDays: Int
 )
 
@@ -63,10 +63,28 @@ internal fun aggregateTrendPeriods(
             startDate = maxOf(cursor, first),
             endDate = minOf(bucketEnd(cursor), last),
             value = values.sumOf { it.value.toDouble() }.toFloat(),
-            activeDays = values.count { it.value > 0f },
+            nonZeroDays = values.count { it.value > 0f },
             coveredDays = values.size
         )
         cursor = nextBucket(cursor)
     }
     return result
+}
+
+internal data class PeriodTrendComparison(
+    val change: Float,
+    val nonZeroDaysChange: Int
+)
+
+/** Compares a selected calendar bucket with the immediately preceding bucket. */
+internal fun periodTrendComparison(
+    periods: List<PeriodTrendPoint>,
+    selectedIndex: Int
+): PeriodTrendComparison? {
+    if (selectedIndex !in periods.indices || selectedIndex == 0) return null
+    val previous = periods[selectedIndex - 1]
+    val current = periods[selectedIndex]
+    val change = current.value - previous.value
+    if (!change.isFinite()) return null
+    return PeriodTrendComparison(change, current.nonZeroDays - previous.nonZeroDays)
 }

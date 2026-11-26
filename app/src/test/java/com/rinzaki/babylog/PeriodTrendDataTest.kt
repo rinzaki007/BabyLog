@@ -16,11 +16,11 @@ class PeriodTrendDataTest {
         val periods = aggregateTrendPeriods(daily, "周")
         assertEquals(2, periods.size)
         assertEquals(2f, periods[0].value)
-        assertEquals(1, periods[0].activeDays)
+        assertEquals(1, periods[0].nonZeroDays)
         assertEquals(7, periods[0].coveredDays)
         assertEquals(start.plusDays(7), periods[1].startDate)
         assertEquals(2f, periods[1].value)
-        assertEquals(1, periods[1].activeDays)
+        assertEquals(1, periods[1].nonZeroDays)
         assertEquals(3, periods[1].coveredDays)
     }
 
@@ -38,7 +38,7 @@ class PeriodTrendDataTest {
         assertEquals(3f, periods[0].value)
         assertEquals(LocalDate.of(2027, 1, 1), periods[1].startDate)
         assertEquals(4f, periods[1].value)
-        assertEquals(1, periods[1].activeDays)
+        assertEquals(1, periods[1].nonZeroDays)
     }
 
     @Test
@@ -68,7 +68,7 @@ class PeriodTrendDataTest {
         val periods = aggregateTrendPeriods(daily, "周")
 
         assertEquals(5f, periods.single().value)
-        assertEquals(2, periods.single().activeDays)
+        assertEquals(2, periods.single().nonZeroDays)
         assertEquals(2, periods.single().coveredDays)
         assertTrue(periods.single().value.isFinite())
     }
@@ -77,4 +77,30 @@ class PeriodTrendDataTest {
     fun rejectsUnknownPeriod() {
         aggregateTrendPeriods(emptyList(), "日")
     }
+
+    @Test
+    fun selectedPeriodComparesWithImmediatelyPreviousCalendarBucket() {
+        val periods = aggregateTrendPeriods(
+            (0..13).map { offset ->
+                DailyTrendPoint(start.plusDays(offset.toLong()), if (offset < 7) 2f else 3f)
+            },
+            "周"
+        )
+
+        assertEquals(null, periodTrendComparison(periods, 0))
+        val comparison = periodTrendComparison(periods, 1)
+        assertEquals(7f, comparison?.change ?: Float.NaN, 0.001f)
+        assertEquals(0, comparison?.nonZeroDaysChange)
+        assertEquals(null, periodTrendComparison(periods, 2))
+    }
+
+    @Test
+    fun selectedPeriodRejectsNonFiniteComparisonResult() {
+        val periods = listOf(
+            PeriodTrendPoint(start, start.plusDays(6), Float.MAX_VALUE, 1, 7),
+            PeriodTrendPoint(start.plusDays(7), start.plusDays(13), -Float.MAX_VALUE, 1, 7)
+        )
+        assertEquals(null, periodTrendComparison(periods, 1))
+    }
+
 }
