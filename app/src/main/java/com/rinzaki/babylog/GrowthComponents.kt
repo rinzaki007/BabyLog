@@ -327,6 +327,15 @@ private fun PeriodTrendSummary(
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
                     )
+                    if (selectedPeriodIndex > 0 && selectedComparison == null &&
+                        allPeriods[selectedPeriodIndex - 1].coveredDays != point.coveredDays
+                    ) {
+                        Text(
+                            "与上一周期覆盖天数不同，暂不直接比较总量",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     selectedComparison?.let { comparison ->
                         val sign = if (comparison.change > 0f) "+" else ""
                         val activeSign = if (comparison.nonZeroDaysChange > 0) "+" else ""
