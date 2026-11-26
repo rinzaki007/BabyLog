@@ -131,6 +131,24 @@ class GrowthDataTest {
     }
 
     @Test
+    fun excludesGrowthMeasurementsDatedBeforeBirth() {
+        val birthTime = 1_700_000_000_000L
+        val points = growthMetricPoints(
+            baby(weight = null, length = null, head = null, birthTime = birthTime),
+            listOf(
+                event("GROWTH", birthTime - 1L, """{"weightGrams":2900}"""),
+                event("GROWTH", birthTime, """{"weightGrams":3200}"""),
+                event("GROWTH", birthTime + 86_400_000L, """{"weightGrams":3400}""")
+            ),
+            "weightGrams"
+        )
+
+        assertEquals(2, points.size)
+        assertEquals(listOf(3.2f, 3.4f), points.map { it.second })
+        assertTrue(points.all { it.first >= birthTime })
+    }
+
+    @Test
     fun excludesFutureBirthAndGrowthMeasurementsButKeepsMeasurementAtAsOfTime() {
         val asOf = 1_750_000_000_000L
         val points = growthMetricPoints(
