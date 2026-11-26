@@ -5,7 +5,12 @@ import org.json.JSONObject
 import java.time.LocalDate
 import java.time.ZoneId
 
-data class DailyTrendPoint(val date: LocalDate, val value: Float)
+data class DailyTrendPoint(
+    val date: LocalDate,
+    val value: Float,
+    /** Number of matching source records, even when their payload contributes a zero value. */
+    val observationCount: Int = 0
+)
 
 /**
  * Builds a complete daily series for the selected metric. Missing dates are kept as zero
@@ -23,12 +28,25 @@ fun dailyTrendPoints(
     val startMillis = firstDay.atStartOfDay(zone).toInstant().toEpochMilli()
     val endMillis = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
     val totals = mutableMapOf<LocalDate, Float>()
+    val observations = mutableMapOf<LocalDate, Int>()
 
     events.asSequence()
         .filter { it.deletedAt == null && it.occurredAt >= startMillis && it.occurredAt < endMillis }
         .forEach { event ->
             val date = java.time.Instant.ofEpochMilli(event.occurredAt).atZone(zone).toLocalDate()
             val payload = runCatching { JSONObject(event.payloadJson) }.getOrNull() ?: JSONObject()
+            val matchesMetric = when (metric) {
+                "喂养奶量", "喂养次数" -> event.eventType == "FEEDING"
+                "补充次数" -> event.eventType == "SUPPLEMENT"
+                "辅食次数" -> event.eventType == "SOLID_FOOD"
+                "小便次数", "大便次数" -> event.eventType == "DIAPER"
+                "睡眠小时" -> event.eventType == "SLEEP"
+                "体温记录次数" -> event.eventType == "TEMPERATURE"
+                "里程碑次数" -> event.eventType == "MILESTONE"
+                "记录总数" -> true
+                else -> false
+            }
+            if (matchesMetric) observations[date] = (observations[date] ?: 0) + 1
             val value = when (metric) {
                 "喂养奶量" -> if (event.eventType == "FEEDING") payload.optInt("amountMl").coerceAtLeast(0).toFloat() else 0f
                 "喂养次数" -> if (event.eventType == "FEEDING") 1f else 0f
@@ -47,7 +65,7 @@ fun dailyTrendPoints(
 
     return (0 until days).map { offset ->
         val date = firstDay.plusDays(offset.toLong())
-        DailyTrendPoint(date, totals[date] ?: 0f)
+        DailyTrendPoint(date, totals[date] ?: 0f, observations[date] ?: 0)
     }
 }
 

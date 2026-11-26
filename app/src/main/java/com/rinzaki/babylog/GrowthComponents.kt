@@ -216,13 +216,14 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
             selectedDay?.let { point ->
                 Text(
                     point.date.format(DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA)) + " · " +
-                        String.format(Locale.CHINA, "%.1f", point.value) + " " + unit,
+                        String.format(Locale.CHINA, "%.1f", point.value) + " " + unit + " · " +
+                        if (point.observationCount == 0) "无相关记录" else "相关记录 ${point.observationCount} 条",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            Text("每日无记录时按 0 统计；睡眠按记录的时长合计。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("无相关记录的日期按 0 统计；有记录但指标值为 0 会单独标明记录条数。睡眠按记录的时长合计。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
