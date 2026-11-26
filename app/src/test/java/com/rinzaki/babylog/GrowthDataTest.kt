@@ -94,7 +94,7 @@ class GrowthDataTest {
             baby(weight = null, length = null, head = null),
             listOf(
                 event("GROWTH", 1_710_000_000_000L, """{"lengthCm":19.9}"""),
-                event("GROWTH", 1_720_000_000_000L, """{"lengthCm":120.1}"""),
+                event("GROWTH", 1_720_000_000_000L, """{"lengthCm":150.1}"""),
                 event("GROWTH", 1_730_000_000_000L, """{"lengthCm":62.5}""")
             ),
             "lengthCm"
@@ -111,6 +111,22 @@ class GrowthDataTest {
 
         assertEquals(listOf(62.5f), lengthPoints.map { it.second })
         assertEquals(listOf(34.5f), headPoints.map { it.second })
+    }
+
+
+    @Test
+    fun keepsHeightMeasurementsAboveOneHundredTwentyCentimeters() {
+        val points = growthMetricPoints(
+            baby(weight = null, length = null, head = null),
+            listOf(
+                event("GROWTH", 1_710_000_000_000L, """{"lengthCm":120.1}"""),
+                event("GROWTH", 1_720_000_000_000L, """{"lengthCm":131.0}"""),
+                event("GROWTH", 1_730_000_000_000L, """{"lengthCm":150.1}""")
+            ),
+            "lengthCm"
+        )
+
+        assertEquals(listOf(120.1f, 131.0f), points.map { it.second })
     }
 
     @Test
