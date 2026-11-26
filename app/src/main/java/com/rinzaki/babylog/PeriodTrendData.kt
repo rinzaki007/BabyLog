@@ -84,6 +84,8 @@ internal fun periodTrendComparison(
     if (selectedIndex !in periods.indices || selectedIndex == 0) return null
     val previous = periods[selectedIndex - 1]
     val current = periods[selectedIndex]
+    // Totals from partial and complete calendar buckets are not directly comparable.
+    if (current.coveredDays != previous.coveredDays) return null
     val change = current.value - previous.value
     if (!change.isFinite()) return null
     return PeriodTrendComparison(change, current.nonZeroDays - previous.nonZeroDays)
