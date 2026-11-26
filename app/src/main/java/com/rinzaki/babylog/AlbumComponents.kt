@@ -251,61 +251,66 @@ internal fun BabyAlbumSection(
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            grouped.forEach { group ->
-                val dayPhotos = group.photos
-                val photoRows = dayPhotos.chunked(3)
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Box(
-                        Modifier.width(18.dp).height((photoRows.size * 124 + 36).dp)
-                            .background(Color.Transparent)
-                    ) {
-                        Box(
-                            Modifier.align(Alignment.TopCenter).padding(top = 5.dp)
-                                .width(2.dp).fillMaxSize()
-                                .background(MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(2.dp))
-                        )
-                        Surface(
-                            modifier = Modifier.align(Alignment.TopCenter).padding(top = 3.dp).size(11.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary
-                        ) {}
-                    }
-                    Column(
-                        Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(group.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text(group.subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Text(
-                                "${dayPhotos.size} 张",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        photoRows.forEach { rowPhotos ->
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val columns = albumGridColumnCount(maxWidth.value)
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    grouped.forEach { group ->
+                        val dayPhotos = group.photos
+                        val photoRows = dayPhotos.chunked(columns)
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Box(
+                                Modifier.width(18.dp).height((photoRows.size * 124 + 36).dp)
+                                    .background(Color.Transparent)
                             ) {
-                                rowPhotos.forEach { photo ->
-                                    AlbumPhotoCard(
-                                        photo = photo,
-                                        cacheRefreshKey = photoCacheRefreshKey,
-                                        onClick = {
-                                            viewingPhoto = photo
-                                            galleryMessage = null
-                                        },
-                                        modifier = Modifier.weight(1f)
+                                Box(
+                                    Modifier.align(Alignment.TopCenter).padding(top = 5.dp)
+                                        .width(2.dp).fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(2.dp))
+                                )
+                                Surface(
+                                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 3.dp).size(11.dp),
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {}
+                            }
+                            Column(
+                                Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(group.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        Text(group.subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Text(
+                                        "${dayPhotos.size} 张",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                repeat(3 - rowPhotos.size) { Spacer(Modifier.weight(1f)) }
+                                photoRows.forEach { rowPhotos ->
+                                    Row(
+                                        Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                                    ) {
+                                        rowPhotos.forEach { photo ->
+                                            AlbumPhotoCard(
+                                                photo = photo,
+                                                cacheRefreshKey = photoCacheRefreshKey,
+                                                onClick = {
+                                                    viewingPhoto = photo
+                                                    galleryMessage = null
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                        repeat(columns - rowPhotos.size) { Spacer(Modifier.weight(1f)) }
+                                    }
+                                }
                             }
                         }
                     }
