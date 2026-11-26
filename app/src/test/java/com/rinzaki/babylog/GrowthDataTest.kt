@@ -152,7 +152,9 @@ class GrowthDataTest {
     fun excludesFutureBirthAndGrowthMeasurementsButKeepsMeasurementAtAsOfTime() {
         val asOf = 1_750_000_000_000L
         val points = growthMetricPoints(
-            baby(birthTime = 1_800_000_000_000L),
+            // Both retained observations must occur after birth; only the final
+            // observation is excluded because it is later than the as-of timestamp.
+            baby(birthTime = 1_730_000_000_000L),
             listOf(
                 event("GROWTH", 1_740_000_000_000L, """{"weightGrams":5100}"""),
                 event("GROWTH", asOf, """{"weightGrams":5200}"""),
