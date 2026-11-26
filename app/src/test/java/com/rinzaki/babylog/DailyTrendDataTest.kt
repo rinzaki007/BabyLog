@@ -206,7 +206,7 @@ class DailyTrendDataTest {
         assertEquals(listOf("补充次数"), trendMetricsForCategory("补充"))
         assertEquals(listOf("小便次数", "大便次数"), trendMetricsForCategory("护理"))
         assertEquals(listOf("睡眠小时"), trendMetricsForCategory("睡眠"))
-        assertEquals(listOf("记录总数"), trendMetricsForCategory("成长"))
+        assertEquals(listOf("成长测量次数"), trendMetricsForCategory("成长"))
         assertEquals(listOf("体温记录次数"), trendMetricsForCategory("体温"))
         assertEquals(listOf("里程碑次数"), trendMetricsForCategory("里程碑"))
         assertEquals(10, trendMetricsForCategory("全部").size)
