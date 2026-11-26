@@ -70,8 +70,8 @@ internal data class GrowthStandardRow(
 )
 
 internal enum class ChineseGrowthMetric(val maximumAgeMonths: Int) {
-    WEIGHT_FOR_AGE(84),
-    LENGTH_HEIGHT_FOR_AGE(84),
+    WEIGHT_FOR_AGE(81),
+    LENGTH_HEIGHT_FOR_AGE(81),
     HEAD_CIRCUMFERENCE_FOR_AGE(36)
 }
 
