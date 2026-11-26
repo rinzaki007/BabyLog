@@ -592,6 +592,17 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    val previousAssessment = measurementAssessments.getOrNull(selectedPointIndex - 1)
+                    growthPercentileTransitionLabel(
+                        previousAssessment?.bandLabel,
+                        assessment.bandLabel
+                    )?.let { transition ->
+                        Text(
+                            "与前一次实际测量对照：$transition。仅描述记录区间变化，不代表健康结论。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 Text(
                     "${points.size} 次测量 · 最新记录 ${SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(Date(latest!!.first))}",
