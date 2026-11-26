@@ -665,6 +665,21 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         }
                     }
                 }
+                if (selectedAssessment == null) {
+                    selectedPoint?.let { point ->
+                        val measuredDate = java.time.Instant.ofEpochMilli(point.first)
+                            .atZone(chartZone).toLocalDate()
+                        growthReferenceUnavailableHint(
+                            birthDate, measuredDate, referenceMetric, referenceSex
+                        )?.let { hint ->
+                            Text(
+                                hint,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
                 selectedAssessment?.let { assessment ->
                     Surface(
                         shape = RoundedCornerShape(12.dp),

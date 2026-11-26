@@ -432,4 +432,36 @@ class ChineseGrowthStandardTest {
         }
     }
 
+
+    @Test
+    fun explainsWhenChineseGrowthReferenceIsUnavailable() {
+        val birthDate = LocalDate.of(2024, 1, 1)
+
+        assertEquals(
+            "设置宝宝性别后可对照同性别的中国生长标准；当前仅展示实际测量。",
+            growthReferenceUnavailableHint(
+                birthDate, birthDate.plusMonths(6),
+                ChineseGrowthMetric.WEIGHT_FOR_AGE, null
+            )
+        )
+        assertEquals(
+            "当前月龄超出官方参考范围（头围标准覆盖至36月龄），此处仅展示实际测量。",
+            growthReferenceUnavailableHint(
+                birthDate, birthDate.plusMonths(36).plusDays(1),
+                ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE, "BOY"
+            )
+        )
+        assertEquals(
+            "当前月龄超出官方参考范围（体重及身长/身高标准覆盖至81月龄），此处仅展示实际测量。",
+            growthReferenceUnavailableHint(
+                birthDate, birthDate.plusMonths(81).plusDays(1),
+                ChineseGrowthMetric.WEIGHT_FOR_AGE, "GIRL"
+            )
+        )
+        assertNull(growthReferenceUnavailableHint(
+            birthDate, birthDate.minusDays(1),
+            ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY"
+        ))
+    }
+
 }

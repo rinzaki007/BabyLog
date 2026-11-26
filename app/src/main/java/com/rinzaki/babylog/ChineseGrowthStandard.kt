@@ -147,6 +147,32 @@ internal fun growthPercentileTransitionLabel(
 }
 
 
+
+/**
+ * Explains why a selected measurement cannot be compared with the official reference.
+ * This keeps missing reference data visible instead of silently hiding the comparison.
+ */
+internal fun growthReferenceUnavailableHint(
+    birthDate: LocalDate,
+    measuredDate: LocalDate,
+    metric: ChineseGrowthMetric,
+    sex: String?
+): String? {
+    if (measuredDate.isBefore(birthDate)) return null
+    if (sex == null) {
+        return "设置宝宝性别后可对照同性别的中国生长标准；当前仅展示实际测量。"
+    }
+    if (chineseGrowthAgeMonths(birthDate, measuredDate, metric) == null) {
+        val range = when (metric) {
+            ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE -> "头围标准覆盖至36月龄"
+            ChineseGrowthMetric.WEIGHT_FOR_AGE,
+            ChineseGrowthMetric.LENGTH_HEIGHT_FOR_AGE -> "体重及身长/身高标准覆盖至81月龄"
+        }
+        return "当前月龄超出官方参考范围（$range），此处仅展示实际测量。"
+    }
+    return "当前测量日期暂无可用的中国标准参考值；此处仅展示实际测量。"
+}
+
 /**
  * Returns the measurement method used by WS/T 423—2022 for the selected age.
  * The reference switches from recumbent length to standing height at 24 months.
