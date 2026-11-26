@@ -244,7 +244,13 @@ private fun PeriodTrendSummary(
     val daily = remember(events, metric, days, today, zone) {
         dailyTrendPoints(events, metric, days, today, zone)
     }
-    val periods = remember(daily, period) { aggregateTrendPeriods(daily, period).takeLast(8) }
+    val allPeriods = remember(daily, period) { aggregateTrendPeriods(daily, period) }
+    val periods = remember(allPeriods) { allPeriods.takeLast(8) }
+    var selectedPeriodStart by remember(range, category, metric, period) { mutableStateOf<LocalDate?>(null) }
+    val selectedPeriodIndex = allPeriods.indexOfFirst { it.startDate == selectedPeriodStart }
+        .takeIf { it >= 0 } ?: allPeriods.lastIndex
+    val selectedPeriod = allPeriods.getOrNull(selectedPeriodIndex)
+    val selectedComparison = periodTrendComparison(allPeriods, selectedPeriodIndex)
     val maximum = periods.maxOfOrNull { it.value }?.coerceAtLeast(1f) ?: 1f
     val unit = when (metric) {
         "喂养奶量" -> "ml"
@@ -270,7 +276,11 @@ private fun PeriodTrendSummary(
                 Text("当前范围暂无可汇总的数据。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 periods.forEach { point ->
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    val isSelected = point.startDate == selectedPeriod?.startDate
+                    Column(
+                        modifier = Modifier.fillMaxWidth().clickable { selectedPeriodStart = point.startDate },
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val label = if (period == "周") {
                                 "${point.startDate.format(DateTimeFormatter.ofPattern("M/d", Locale.CHINA))} – ${point.endDate.format(DateTimeFormatter.ofPattern("M/d", Locale.CHINA))}"
@@ -282,7 +292,7 @@ private fun PeriodTrendSummary(
                                 "${"%.1f".format(Locale.CHINA, point.value)} $unit",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Box(
@@ -292,18 +302,43 @@ private fun PeriodTrendSummary(
                             Box(
                                 Modifier.fillMaxWidth((point.value / maximum).coerceIn(0f, 1f))
                                     .fillMaxHeight()
-                                    .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(99.dp))
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                                        RoundedCornerShape(99.dp)
+                                    )
                             )
                         }
                         Text(
-                            "${point.activeDays} 个有记录日 · 覆盖 ${point.coveredDays} 天",
+                            "${point.activeDays} 个有记录日 · 覆盖 ${point.coveredDays} 天" + if (isSelected) " · 已选中" else "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                selectedPeriod?.let { point ->
+                    val label = if (period == "周") {
+                        "${point.startDate.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))} – ${point.endDate.format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))}"
+                    } else {
+                        point.startDate.format(DateTimeFormatter.ofPattern("yyyy年M月", Locale.CHINA))
+                    }
+                    Text(
+                        "$label · ${"%.1f".format(Locale.CHINA, point.value)} $unit",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    selectedComparison?.let { comparison ->
+                        val sign = if (comparison.change > 0f) "+" else ""
+                        val activeSign = if (comparison.activeDaysChange > 0) "+" else ""
+                        Text(
+                            "较上一${if (period == "周") "周" else "月"} · 变化 $sign${"%.1f".format(Locale.CHINA, comparison.change)} $unit · 有记录日 $activeSign${comparison.activeDaysChange} 天",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 Text(
-                    "首尾周期可能不完整；无记录日期保留为 0，不代表漏记或实际活动为零。",
+                    "首尾周期可能不完整；无记录日期保留为 0，不代表漏记或实际活动为零。点击周期可查看与上一周期的变化。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
