@@ -7,6 +7,20 @@ import org.junit.Test
 import java.time.LocalDate
 
 class ChineseGrowthStandardTest {
+    @Test
+    fun percentileTransitionDescribesSameAndChangedBandsWithoutDiagnosing() {
+        assertEquals(
+            "与上次测量处于相同的百分位区间（中）",
+            growthPercentileTransitionLabel("中", "中")
+        )
+        assertEquals(
+            "百分位区间由中变化为中上",
+            growthPercentileTransitionLabel("中", "中上")
+        )
+        assertNull(growthPercentileTransitionLabel(null, "中"))
+        assertNull(growthPercentileTransitionLabel("中", null))
+    }
+
     private val birth = GrowthPercentiles(2f, 3f, 4f, 5f, 6f, 7f, 8f)
     private val oneMonth = GrowthPercentiles(4f, 5f, 6f, 7f, 8f, 9f, 10f)
     private val fourMonths = GrowthPercentiles(7f, 8f, 9f, 10f, 11f, 12f, 13f)
