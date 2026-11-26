@@ -171,8 +171,11 @@ class ChineseGrowthStandardTest {
         assertEquals(35.0, chineseGrowthAgeMonths(
             birthDate, birthDate.plusMonths(35), ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE
         )!!, 0.0001)
-        assertNull(chineseGrowthAgeMonths(
+        assertEquals(36.0, chineseGrowthAgeMonths(
             birthDate, birthDate.plusMonths(36), ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE
+        )!!, 0.0001)
+        assertNull(chineseGrowthAgeMonths(
+            birthDate, birthDate.plusMonths(36).plusDays(1), ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE
         ))
         assertNull(chineseGrowthAgeMonths(
             birthDate, birthDate.plusMonths(84), ChineseGrowthMetric.WEIGHT_FOR_AGE
@@ -293,8 +296,14 @@ class ChineseGrowthStandardTest {
         assertNull(chineseGrowthReferenceAtDate(
             birthDate, birthDate.minusDays(1), ChineseGrowthMetric.WEIGHT_FOR_AGE, "BOY"
         ))
+        assertEquals(
+            ChineseGrowthHeadCircumferenceData.rows("GIRL")!!.last().percentiles,
+            chineseGrowthReferenceAtDate(
+                birthDate, birthDate.plusMonths(36), ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE, "GIRL"
+            )
+        )
         assertNull(chineseGrowthReferenceAtDate(
-            birthDate, birthDate.plusMonths(36), ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE, "GIRL"
+            birthDate, birthDate.plusMonths(36).plusDays(1), ChineseGrowthMetric.HEAD_CIRCUMFERENCE_FOR_AGE, "GIRL"
         ))
         assertNull(chineseGrowthReferenceAtDate(
             birthDate, birthDate.plusMonths(4), ChineseGrowthMetric.WEIGHT_FOR_AGE, "UNKNOWN"

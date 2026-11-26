@@ -70,8 +70,8 @@ internal data class GrowthStandardRow(
 )
 
 internal enum class ChineseGrowthMetric(val maximumAgeMonths: Int) {
-    WEIGHT_FOR_AGE(84),
-    LENGTH_HEIGHT_FOR_AGE(84),
+    WEIGHT_FOR_AGE(81),
+    LENGTH_HEIGHT_FOR_AGE(81),
     HEAD_CIRCUMFERENCE_FOR_AGE(36)
 }
 
@@ -112,7 +112,10 @@ internal fun chineseGrowthAgeMonths(
 ): Double? {
     if (measuredDate.isBefore(birthDate)) return null
     val completedMonths = growthCompletedMonths(birthDate, measuredDate)
-    if (completedMonths >= metric.maximumAgeMonths) return null
+    // The published head-circumference table includes an exact 36-month row.
+    // Allow the exact final anniversary, but never extrapolate beyond it.
+    val finalSupportedDate = birthDate.plusMonths(metric.maximumAgeMonths.toLong())
+    if (measuredDate.isAfter(finalSupportedDate)) return null
     val monthStart = birthDate.plusMonths(completedMonths)
     val nextMonth = birthDate.plusMonths(completedMonths + 1)
     val elapsedDays = ChronoUnit.DAYS.between(monthStart, measuredDate)
