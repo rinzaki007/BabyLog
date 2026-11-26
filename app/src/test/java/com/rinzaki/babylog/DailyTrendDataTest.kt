@@ -38,6 +38,23 @@ class DailyTrendDataTest {
         assertEquals(listOf(today.minusDays(2), today.minusDays(1), today), points.map { it.date })
     }
 
+
+    @Test
+    fun distinguishesNoMatchingRecordFromMatchingRecordWithZeroValue() {
+        val noUrine = event("d1", "DIAPER", today, """{"urine":false,"stool":true}""")
+        val malformedFeeding = event("f1", "FEEDING", today, "not-json")
+        val emptyDay = dailyTrendPoints(emptyList(), "小便次数", 1, today, zone).single()
+        val zeroWithRecord = dailyTrendPoints(listOf(noUrine), "小便次数", 1, today, zone).single()
+        val invalidPayloadWithRecord = dailyTrendPoints(listOf(malformedFeeding), "喂养奶量", 1, today, zone).single()
+
+        assertEquals(0f, emptyDay.value)
+        assertEquals(0, emptyDay.observationCount)
+        assertEquals(0f, zeroWithRecord.value)
+        assertEquals(1, zeroWithRecord.observationCount)
+        assertEquals(0f, invalidPayloadWithRecord.value)
+        assertEquals(1, invalidPayloadWithRecord.observationCount)
+    }
+
     @Test
     fun aggregatesFeedingVolumeAndCountSeparately() {
         val events = listOf(
