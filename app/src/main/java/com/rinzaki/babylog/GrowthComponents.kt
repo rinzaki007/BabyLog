@@ -309,7 +309,7 @@ private fun PeriodTrendSummary(
                             )
                         }
                         Text(
-                            "${point.activeDays} 个非零日 · 覆盖 ${point.coveredDays} 天" + if (isSelected) " · 已选中" else "",
+                            "${point.nonZeroDays} 个非零日 · 覆盖 ${point.coveredDays} 天" + if (isSelected) " · 已选中" else "",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -329,9 +329,9 @@ private fun PeriodTrendSummary(
                     )
                     selectedComparison?.let { comparison ->
                         val sign = if (comparison.change > 0f) "+" else ""
-                        val activeSign = if (comparison.activeDaysChange > 0) "+" else ""
+                        val activeSign = if (comparison.nonZeroDaysChange > 0) "+" else ""
                         Text(
-                            "较上一${if (period == "周") "周" else "月"} · 变化 $sign${"%.1f".format(Locale.CHINA, comparison.change)} $unit · 非零日 $activeSign${comparison.activeDaysChange} 天",
+                            "较上一${if (period == "周") "周" else "月"} · 变化 $sign${"%.1f".format(Locale.CHINA, comparison.change)} $unit · 非零日 $activeSign${comparison.nonZeroDaysChange} 天",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
