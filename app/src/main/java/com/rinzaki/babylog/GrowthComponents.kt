@@ -583,6 +583,17 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+                selectedPoint?.let {
+                    growthMeasurementComparison(points, selectedPointIndex, chartZone)?.let { comparison ->
+                        val sign = if (comparison.change > 0f) "+" else ""
+                        val changeText = String.format(Locale.CHINA, "%.2f", comparison.change)
+                        Text(
+                            "较前一次测量 · 间隔 ${comparison.elapsedDays} 天 · 变化 " + sign + changeText + " " + unit,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 if (metric == "身长") {
                     selectedPoint?.let { point ->
                         val measuredDate = java.time.Instant.ofEpochMilli(point.first)
