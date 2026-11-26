@@ -444,26 +444,38 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                     reference.timestamp, timeStart, timeEnd, 2
                                 )
                                 fun y(value: Float) = bottom - (value - min) / valueSpan * (bottom - top)
-                                Triple(
+                                listOf(
                                     Offset(x, y(reference.percentiles.p3)),
+                                    Offset(x, y(reference.percentiles.p25)),
                                     Offset(x, y(reference.percentiles.p50)),
+                                    Offset(x, y(reference.percentiles.p75)),
                                     Offset(x, y(reference.percentiles.p97))
                                 )
                             }
                             val percentileBand = Path().apply {
-                                moveTo(referenceCoordinates.first().first.x, referenceCoordinates.first().first.y)
-                                referenceCoordinates.drop(1).forEach { lineTo(it.first.x, it.first.y) }
-                                referenceCoordinates.asReversed().forEach { lineTo(it.third.x, it.third.y) }
+                                moveTo(referenceCoordinates.first()[0].x, referenceCoordinates.first()[0].y)
+                                referenceCoordinates.drop(1).forEach { lineTo(it[0].x, it[0].y) }
+                                referenceCoordinates.asReversed().forEach { lineTo(it[4].x, it[4].y) }
                                 close()
                             }
                             drawPath(percentileBand, chartPrimary.copy(alpha = 0.09f))
-                            val medianLine = Path().apply {
-                                moveTo(referenceCoordinates.first().second.x, referenceCoordinates.first().second.y)
-                                referenceCoordinates.drop(1).forEach { lineTo(it.second.x, it.second.y) }
+                            fun percentileLine(index: Int) = Path().apply {
+                                moveTo(referenceCoordinates.first()[index].x, referenceCoordinates.first()[index].y)
+                                referenceCoordinates.drop(1).forEach { lineTo(it[index].x, it[index].y) }
+                            }
+                            listOf(1, 3).forEach { index ->
+                                drawPath(
+                                    percentileLine(index),
+                                    chartPrimary.copy(alpha = 0.34f),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                        width = 1.dp.toPx(),
+                                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                    )
+                                )
                             }
                             drawPath(
-                                medianLine,
-                                chartPrimary.copy(alpha = 0.72f),
+                                percentileLine(2),
+                                chartPrimary.copy(alpha = 0.82f),
                                 style = androidx.compose.ui.graphics.drawscope.Stroke(
                                     width = 2.dp.toPx(),
                                     cap = androidx.compose.ui.graphics.StrokeCap.Round
@@ -519,6 +531,10 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("━", color = chartPrimary, style = MaterialTheme.typography.titleSmall)
                             Text("标准 P50", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("┄", color = chartPrimary.copy(alpha = 0.55f), style = MaterialTheme.typography.titleSmall)
+                            Text("P25 / P75", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("▰", color = chartPrimary.copy(alpha = 0.38f), style = MaterialTheme.typography.titleSmall)
