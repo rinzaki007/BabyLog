@@ -94,7 +94,7 @@ class GrowthDataTest {
             baby(weight = null, length = null, head = null),
             listOf(
                 event("GROWTH", 1_710_000_000_000L, """{"lengthCm":19.9}"""),
-                event("GROWTH", 1_720_000_000_000L, """{"lengthCm":120.1}"""),
+                event("GROWTH", 1_720_000_000_000L, """{"lengthCm":150.1}"""),
                 event("GROWTH", 1_730_000_000_000L, """{"lengthCm":62.5}""")
             ),
             "lengthCm"
