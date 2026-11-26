@@ -53,4 +53,64 @@ class SecureTokenStoreTest {
 
         preferences.edit().clear().commit()
     }
+    @Test
+    fun savesValidatedServerAccountAndFamilyAsOneSessionSnapshot() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val preferences = context.getSharedPreferences("babylog_sync", Context.MODE_PRIVATE)
+        preferences.edit().clear().putLong("cursor", 42L).commit()
+
+        try {
+            SyncPreferences.saveAuthenticatedSession(
+                context = context,
+                server = " https://nas.example.com/ ",
+                token = "new-access-token",
+                accountEmail = "Baby@Example.com",
+                familyId = "family-b"
+            ) { "encrypted-test-token" }
+
+            assertEquals("https://nas.example.com", preferences.getString("server", null))
+            assertEquals("encrypted-test-token", preferences.getString("token_encrypted", null))
+            assertNull(preferences.getString("token", null))
+            assertEquals("baby@example.com", preferences.getString("account_email", null))
+            assertEquals("family-b", preferences.getString("family_id", null))
+            assertEquals(0L, preferences.getLong("cursor", -1L))
+        } finally {
+            preferences.edit().clear().commit()
+        }
+    }
+
+    @Test
+    fun keepsPreviousSessionWhenNewSessionCannotBeEncrypted() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val preferences = context.getSharedPreferences("babylog_sync", Context.MODE_PRIVATE)
+        preferences.edit().clear()
+            .putString("server", "https://old.example.com")
+            .putString("token_encrypted", "old-encrypted-token")
+            .putString("account_email", "old@example.com")
+            .putString("family_id", "family-a")
+            .putLong("cursor", 17L)
+            .commit()
+
+        try {
+            val result = runCatching {
+                SyncPreferences.saveAuthenticatedSession(
+                    context = context,
+                    server = "https://new.example.com",
+                    token = "new-access-token",
+                    accountEmail = "new@example.com",
+                    familyId = "family-b"
+                ) { error("keystore unavailable") }
+            }
+
+            assertTrue(result.isFailure)
+            assertEquals("https://old.example.com", preferences.getString("server", null))
+            assertEquals("old-encrypted-token", preferences.getString("token_encrypted", null))
+            assertEquals("old@example.com", preferences.getString("account_email", null))
+            assertEquals("family-a", preferences.getString("family_id", null))
+            assertEquals(17L, preferences.getLong("cursor", -1L))
+        } finally {
+            preferences.edit().clear().commit()
+        }
+    }
+
 }

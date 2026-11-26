@@ -77,11 +77,20 @@ class SyncConflictRecoveryTest {
             val dao = database.babyLogDao()
             dao.upsertBaby(BabyEntity("offline-placeholder", UNASSIGNED_FAMILY_ID, "离线宝宝", 1_000L, 1_000L, 1_000L))
             dao.upsertBaby(BabyEntity("offline-empty", "", "未归属宝宝", 1_000L, 1_000L, 1_000L))
+            dao.upsertBaby(BabyEntity("offline-not-in-snapshot", UNASSIGNED_FAMILY_ID, "稍后创建的宝宝", 1_000L, 1_000L, 1_000L))
             dao.upsertBaby(BabyEntity("other-family", "family-b", "其他家庭宝宝", 1_000L, 1_000L, 1_000L))
 
-            assertEquals(2, dao.assignUnassignedBabiesToFamily("family-a", UNASSIGNED_FAMILY_ID))
+            assertEquals(
+                2,
+                dao.assignUnassignedBabiesToFamily(
+                    "family-a",
+                    UNASSIGNED_FAMILY_ID,
+                    listOf("offline-placeholder", "offline-empty")
+                )
+            )
             assertEquals("family-a", dao.getBaby("offline-placeholder")?.familyId)
             assertEquals("family-a", dao.getBaby("offline-empty")?.familyId)
+            assertEquals(UNASSIGNED_FAMILY_ID, dao.getBaby("offline-not-in-snapshot")?.familyId)
             assertEquals("family-b", dao.getBaby("other-family")?.familyId)
         } finally {
             database.close()
@@ -119,4 +128,54 @@ class SyncConflictRecoveryTest {
             database.close()
         }
     }
+
+    @Test
+    fun resumesOfflineFamilyLinkWhenEarlierQueueEntriesAlreadyExist() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, BabyLogDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val dao = database.babyLogDao()
+            val baby = BabyEntity("interrupted-baby", UNASSIGNED_FAMILY_ID, "待恢复宝宝", 1_000L, 1_000L, 1_000L)
+            val event = BabyEventEntity("interrupted-event", "interrupted-baby", "FEEDING", 2_000L, "{\"amountMl\":90}", null, 2_000L)
+            val photo = BabyPhotoEntity("interrupted-photo", "interrupted-baby", "/tmp/interrupted-photo.jpg", null, 3_000L, 3_000L, 3_000L)
+            dao.upsertBaby(baby)
+            dao.upsertEvent(event)
+            dao.upsertPhoto(photo)
+
+            // Simulate process interruption after the baby/event operations were
+            // queued but before the profile was assigned to the authenticated family.
+            dao.enqueueOperation(SyncOperationEntity(
+                "interrupted-baby-op", "baby", baby.id, "upsert",
+                babySyncPayload(baby).toString(), null, 1_500L
+            ))
+            dao.enqueueOperation(SyncOperationEntity(
+                "interrupted-event-op", "event", event.id, "upsert",
+                eventSyncPayload(event).toString(), null, 2_500L
+            ))
+
+            val resumed = enqueueUnassignedFamilyData(
+                dao,
+                dao.getUnassignedBabies(UNASSIGNED_FAMILY_ID),
+                "family-resumed"
+            )
+
+            assertEquals(1, resumed)
+            assertEquals("family-resumed", dao.getBaby(baby.id)?.familyId)
+            assertEquals(3, dao.pendingOperationCount())
+            assertEquals(
+                setOf("baby", "event", "photo"),
+                dao.pendingOperations().map { it.entityType }.toSet()
+            )
+            assertTrue(
+                dao.pendingOperations().first { it.entityType == "baby" }
+                    .payloadJson.contains("\"familyId\":\"family-resumed\"")
+            )
+        } finally {
+            database.close()
+        }
+    }
+
 }

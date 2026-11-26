@@ -7,10 +7,13 @@ import org.junit.Test
 class SyncOwnershipTest {
     @Test
     fun allowsOnlyOperationsOwnedByTheActiveFamily() {
-        assertTrue(syncOperationBelongsToFamily("family-a", "family-a"))
-        assertFalse(syncOperationBelongsToFamily("family-a", "family-b"))
-        assertFalse(syncOperationBelongsToFamily(null, "family-a"))
-        assertFalse(syncOperationBelongsToFamily("family-a", ""))
+        assertTrue(syncOperationBelongsToFamily("baby", "family-a", "family-a"))
+        assertTrue(syncOperationBelongsToFamily("event", "family-a", "family-a"))
+        assertTrue(syncOperationBelongsToFamily("photo", "family-a", "family-a"))
+        assertFalse(syncOperationBelongsToFamily("baby", "family-a", "family-b"))
+        assertFalse(syncOperationBelongsToFamily("event", null, "family-a"))
+        assertFalse(syncOperationBelongsToFamily("photo", "family-a", ""))
+        assertFalse(syncOperationBelongsToFamily("future_entity", "family-a", "family-a"))
     }
 
     @Test

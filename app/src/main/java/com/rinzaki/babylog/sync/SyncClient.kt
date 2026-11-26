@@ -28,7 +28,6 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 object SyncPreferences {
     private const val FILE = "babylog_sync"
@@ -62,6 +61,28 @@ object SyncPreferences {
     fun familyId(context: Context) = prefs(context).getString("family_id", "") ?: ""
     fun cursor(context: Context) = prefs(context).getLong("cursor", 0L)
     fun saveServer(context: Context, value: String) { prefs(context).edit().putString("server", value.trim().trimEnd('/')).apply() }
+    fun saveAuthenticatedSession(
+        context: Context,
+        server: String,
+        token: String,
+        accountEmail: String,
+        familyId: String,
+        encrypt: (String) -> String = SecureTokenStore::encrypt
+    ) {
+        val normalizedServer = server.trim().trimEnd('/')
+        require(normalizedServer.isNotBlank() && token.isNotBlank() && familyId.isNotBlank()) {
+            "登录信息不完整，无法安全保存家庭会话"
+        }
+        val encrypted = encrypt(token)
+        check(prefs(context).edit()
+            .putString("server", normalizedServer)
+            .putString("token_encrypted", encrypted)
+            .remove("token")
+            .putString("account_email", accountEmail.trim().lowercase())
+            .putString("family_id", familyId)
+            .putLong("cursor", 0L)
+            .commit()) { "无法安全保存登录凭据，请重试" }
+    }
     fun saveSession(context: Context, token: String) {
         val encrypted = SecureTokenStore.encrypt(token)
         check(prefs(context).edit().putString("token_encrypted", encrypted).remove("token")
@@ -114,17 +135,27 @@ internal suspend fun enqueueUnassignedFamilyData(
     require(familyId.isNotBlank()) { "当前家庭空间标识无效" }
     if (unassignedBabies.isEmpty()) return 0
 
-    val claimedCount = dao.assignUnassignedBabiesToFamily(familyId, UNASSIGNED_FAMILY_ID)
-    if (claimedCount == 0) return 0
+    // Re-read each profile and only claim it if it is still unassigned. This avoids
+    // queueing children for a profile that another operation has already moved.
+    val eligibleBabies = unassignedBabies.mapNotNull { original ->
+        val current = dao.getBaby(original.id) ?: return@mapNotNull null
+        if (current.familyId.isBlank() || current.familyId == UNASSIGNED_FAMILY_ID) {
+            current.copy(familyId = familyId)
+        } else {
+            null
+        }
+    }
+    if (eligibleBabies.isEmpty()) return 0
 
-    val claimedBabyIds = unassignedBabies.map { it.id }.toSet()
+    // Queue every unassigned record before changing its owner. If the process is
+    // interrupted midway, the next login can still find the unassigned profile and
+    // finish the missing queue entries without losing the offline data.
+    val claimedBabyIds = eligibleBabies.map { it.id }.toSet()
     val now = System.currentTimeMillis()
-    unassignedBabies.forEach { original ->
-        val baby = dao.getBaby(original.id) ?: return@forEach
+    eligibleBabies.forEach { baby ->
         val babyPayload = babySyncPayload(baby).toString()
         if (dao.hasLocalOperation("baby", baby.id)) {
-            // A pre-login queued payload may still carry the unassigned placeholder ID.
-            // Refresh it before the worker uploads this profile to the newly linked family.
+            // Refresh a pre-login payload that may still contain the unassigned family ID.
             dao.updateBabyOperationPayload(baby.id, babyPayload)
         } else {
             dao.enqueueOperation(SyncOperationEntity(
@@ -152,9 +183,14 @@ internal suspend fun enqueueUnassignedFamilyData(
             ))
         }
     }
-    return claimedCount
-}
 
+    // Assign only the profiles whose queue entries were prepared above.
+    return dao.assignUnassignedBabiesToFamily(
+        familyId,
+        UNASSIGNED_FAMILY_ID,
+        eligibleBabies.map { it.id }
+    )
+}
 internal fun isFamilyOwnershipConflict(reason: String?): Boolean =
     reason == FAMILY_OWNERSHIP_CONFLICT_REASON
 
@@ -187,6 +223,15 @@ internal fun shouldRetrySyncStatus(statusCode: Int): Boolean =
 
 private object SyncExecutionMutex {
     val mutex = Mutex()
+}
+
+internal suspend fun <T> withSyncExecutionLock(action: suspend () -> T): T {
+    SyncExecutionMutex.mutex.lock()
+    return try {
+        action()
+    } finally {
+        SyncExecutionMutex.mutex.unlock()
+    }
 }
 
 private fun replaceDownloadedFile(temp: File, destination: File) {
@@ -512,11 +557,15 @@ suspend fun submitAuthoritativeSnapshot(context: Context, dao: com.rinzaki.babyl
         photos.count { it.deletedAt == null } + " 张照片设为家庭云端权威数据。"
 }
 
-internal fun syncOperationBelongsToFamily(ownerFamilyId: String?, activeFamilyId: String): Boolean =
+internal fun syncOperationBelongsToFamily(
+    entityType: String,
+    ownerFamilyId: String?,
+    activeFamilyId: String
+): Boolean = entityType in setOf("baby", "event", "photo") &&
     activeFamilyId.isNotBlank() && ownerFamilyId != null && ownerFamilyId == activeFamilyId
 
 class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result = SyncExecutionMutex.mutex.withLock { runSync() }
+    override suspend fun doWork(): Result = withSyncExecutionLock { runSync() }
 
     private suspend fun runSync(): Result {
         val base = SyncPreferences.server(applicationContext)
@@ -526,6 +575,14 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
         SyncPreferences.markSyncStarted(applicationContext)
         return try {
             val dao = RoomAccess.database(applicationContext).babyLogDao()
+            // Recover an interrupted first-link operation before processing queued
+            // operations. The helper is idempotent and the session lock prevents
+            // another account transition from changing ownership mid-recovery.
+            enqueueUnassignedFamilyData(
+                dao,
+                dao.getUnassignedBabies(UNASSIGNED_FAMILY_ID),
+                familyId
+            )
             var batch = 0
             while (batch < 10) {
                 val pending = dao.pendingOperations()
@@ -536,9 +593,10 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
                         "baby" -> dao.getBaby(operation.entityId)?.familyId
                         "event" -> dao.getEvent(operation.entityId)?.let { dao.getBaby(it.babyId)?.familyId }
                         "photo" -> dao.getPhoto(operation.entityId)?.let { dao.getBaby(it.babyId)?.familyId }
-                        else -> familyId
+                        // Unknown entity types have no verifiable owner; fail closed.
+                        else -> null
                     }
-                    if (!syncOperationBelongsToFamily(ownerFamilyId, familyId)) {
+                    if (!syncOperationBelongsToFamily(operation.entityType, ownerFamilyId, familyId)) {
                         dao.markOperationConflict(operation.operationId, FAMILY_OWNERSHIP_CONFLICT_REASON)
                         return@forEach
                     }
