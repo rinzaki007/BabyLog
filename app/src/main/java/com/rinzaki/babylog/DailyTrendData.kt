@@ -43,6 +43,7 @@ fun dailyTrendPoints(
                 "睡眠小时" -> event.eventType == "SLEEP"
                 "体温记录次数" -> event.eventType == "TEMPERATURE"
                 "里程碑次数" -> event.eventType == "MILESTONE"
+                "成长测量次数" -> event.eventType == "GROWTH"
                 "记录总数" -> true
                 else -> false
             }
@@ -57,6 +58,7 @@ fun dailyTrendPoints(
                 "睡眠小时" -> if (event.eventType == "SLEEP") payload.optInt("durationMinutes").coerceAtLeast(0) / 60f else 0f
                 "体温记录次数" -> if (event.eventType == "TEMPERATURE") 1f else 0f
                 "里程碑次数" -> if (event.eventType == "MILESTONE") 1f else 0f
+                "成长测量次数" -> if (event.eventType == "GROWTH") 1f else 0f
                 "记录总数" -> 1f
                 else -> 0f
             }
@@ -169,7 +171,7 @@ fun trendMetricsForCategory(category: String): List<String> = when (category) {
     "补充" -> listOf("补充次数")
     "护理" -> listOf("小便次数", "大便次数")
     "睡眠" -> listOf("睡眠小时")
-    "成长" -> listOf("记录总数")
+    "成长" -> listOf("成长测量次数")
     "体温" -> listOf("体温记录次数")
     "里程碑" -> listOf("里程碑次数")
     else -> listOf("喂养奶量", "喂养次数", "辅食次数", "补充次数", "小便次数", "大便次数", "睡眠小时", "体温记录次数", "里程碑次数", "记录总数")
