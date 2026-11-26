@@ -558,51 +558,62 @@ private fun GrowthOverviewCard(baby: BabyEntity, events: List<BabyEventEntity>) 
                 )
             }
             metrics.forEachIndexed { index, (label, unit, overview) ->
-                Row(
+                Column(
                     Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        overview.measuredAt?.let { measuredAt ->
-                            Text(
-                                SimpleDateFormat("M月d日", Locale.CHINA).format(Date(measuredAt)) +
-                                    " · " + growthMeasurementAgeLabel(baby.birthTime, measuredAt, zone),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } ?: Text(
-                            "尚无测量记录",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    GrowthOverviewSparkline(overview.recentValues)
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         Text(
                             overview.value?.let { value ->
                                 String.format(Locale.CHINA, if (unit == "kg") "%.2f %s" else "%.1f %s", value, unit)
-                            } ?: "—",
-                            style = MaterialTheme.typography.titleSmall,
+                            } ?: "暂无数据",
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        overview.comparison?.let { comparison ->
-                            val sign = if (comparison.change > 0f) "+" else ""
-                            Text(
-                                "较上次 $sign${String.format(Locale.CHINA, "%.2f", comparison.change)} $unit · ${comparison.elapsedDays} 天",
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            overview.measuredAt?.let { measuredAt ->
+                                Text(
+                                    SimpleDateFormat("M月d日", Locale.CHINA).format(Date(measuredAt)) +
+                                        " · " + growthMeasurementAgeLabel(baby.birthTime, measuredAt, zone),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } ?: Text(
+                                "尚无测量记录",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            overview.comparison?.let { comparison ->
+                                val sign = if (comparison.change > 0f) "+" else ""
+                                Text(
+                                    "较上次 $sign${String.format(Locale.CHINA, "%.2f", comparison.change)} $unit · 间隔 ${comparison.elapsedDays} 天",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } ?: if (overview.value != null) {
+                                Text(
+                                    "首次记录 · 后续测量后显示变化",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            overview.percentileBand?.let { band ->
+                                Text(
+                                    "中国标准参考：$band",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
-                        overview.percentileBand?.let { band ->
-                            Text(
-                                "中国标准 $band",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                        if (overview.recentValues.isNotEmpty()) GrowthOverviewSparkline(overview.recentValues)
                     }
                 }
                 if (index != metrics.lastIndex) {
@@ -1207,6 +1218,17 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
             Spacer(Modifier.height(4.dp))
             Text("长期变化", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text("按自然月汇总已有测量；没有记录的月份不会补值。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (interval == null) {
+                Text(
+                    if (allPoints.isEmpty()) {
+                        "还没有该项成长测量记录，添加体重、身长或头围数据后会在这里显示变化。"
+                    } else {
+                        "目前只有一次有效测量；至少记录两次，才能计算两次测量之间的变化。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             interval?.let { observed ->
                 val sign = if (observed.change > 0f) "+" else ""
                 val rate = observed.changePer30Days?.let { value ->
