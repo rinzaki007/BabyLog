@@ -527,8 +527,11 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val allPoints = remember(baby, events, key) { growthMetricPoints(baby, events, key) }
     val now = remember { System.currentTimeMillis() }
     val rangeStart = remember(range, now) { growthRangeStartMillis(range, now) }
-    val points = remember(allPoints, rangeStart) {
-        if (rangeStart == null) allPoints else allPoints.filter { it.first >= rangeStart }
+    val pointSourceIndices = remember(allPoints, rangeStart) {
+        growthPointIndicesInRange(allPoints, rangeStart)
+    }
+    val points = remember(allPoints, pointSourceIndices) {
+        pointSourceIndices.map(allPoints::get)
     }
     val chartZone = remember { ZoneId.systemDefault() }
     val birthDate = remember(baby.birthTime, chartZone) {
@@ -572,8 +575,8 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
             reference?.let { assessChineseGrowthPercentile(point.second, it) }
         }
     }
-    val measurementAssessments = remember(points, birthDate, referenceMetric, referenceSex, chartZone) {
-        points.map { point ->
+    val measurementAssessments = remember(allPoints, birthDate, referenceMetric, referenceSex, chartZone) {
+        allPoints.map { point ->
             val measuredDate = java.time.Instant.ofEpochMilli(point.first).atZone(chartZone).toLocalDate()
             chineseGrowthReferenceAtDate(
                 birthDate, measuredDate, referenceMetric, referenceSex
@@ -791,7 +794,10 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     )
                 }
                 selectedPoint?.let {
-                    growthMeasurementComparison(points, selectedPointIndex, chartZone)?.let { comparison ->
+                    val sourceIndex = pointSourceIndices.getOrNull(selectedPointIndex)
+                    sourceIndex?.let { index ->
+                        growthMeasurementComparison(allPoints, index, chartZone)
+                    }?.let { comparison ->
                         val sign = if (comparison.change > 0f) "+" else ""
                         val changeText = String.format(Locale.CHINA, "%.2f", comparison.change)
                         Text(
@@ -854,7 +860,8 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    val previousAssessment = measurementAssessments.getOrNull(selectedPointIndex - 1)
+                    val sourceIndex = pointSourceIndices.getOrNull(selectedPointIndex) ?: -1
+                    val previousAssessment = measurementAssessments.getOrNull(sourceIndex - 1)
                     growthPercentileTransitionLabel(
                         previousAssessment?.bandLabel,
                         assessment.bandLabel
