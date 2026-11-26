@@ -77,4 +77,30 @@ class PeriodTrendDataTest {
     fun rejectsUnknownPeriod() {
         aggregateTrendPeriods(emptyList(), "日")
     }
+
+    @Test
+    fun selectedPeriodComparesWithImmediatelyPreviousCalendarBucket() {
+        val periods = aggregateTrendPeriods(
+            (0..13).map { offset ->
+                DailyTrendPoint(start.plusDays(offset.toLong()), if (offset < 7) 2f else 3f)
+            },
+            "周"
+        )
+
+        assertEquals(null, periodTrendComparison(periods, 0))
+        val comparison = periodTrendComparison(periods, 1)
+        assertEquals(7f, comparison?.change ?: Float.NaN, 0.001f)
+        assertEquals(0, comparison?.activeDaysChange)
+        assertEquals(null, periodTrendComparison(periods, 2))
+    }
+
+    @Test
+    fun selectedPeriodRejectsNonFiniteComparisonResult() {
+        val periods = listOf(
+            PeriodTrendPoint(start, start.plusDays(6), Float.MAX_VALUE, 1, 7),
+            PeriodTrendPoint(start.plusDays(7), start.plusDays(13), -Float.MAX_VALUE, 1, 7)
+        )
+        assertEquals(null, periodTrendComparison(periods, 1))
+    }
+
 }
