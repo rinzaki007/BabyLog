@@ -591,14 +591,15 @@ private fun GrowthOverviewCard(baby: BabyEntity, events: List<BabyEventEntity>) 
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            overview.comparison?.let { comparison ->
+                            if (overview.comparison != null) {
+                                val comparison = overview.comparison
                                 val sign = if (comparison.change > 0f) "+" else ""
                                 Text(
                                     "较上次 $sign${String.format(Locale.CHINA, "%.2f", comparison.change)} $unit · 间隔 ${comparison.elapsedDays} 天",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            } ?: if (overview.value != null) {
+                            } else if (overview.value != null) {
                                 Text(
                                     "首次记录 · 后续测量后显示变化",
                                     style = MaterialTheme.typography.labelSmall,
