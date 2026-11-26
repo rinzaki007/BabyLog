@@ -83,9 +83,10 @@ class AlbumGroupingTest {
     @Test
     fun usesFewerAlbumColumnsOnCompactScreens() {
         assertEquals(2, albumGridColumnCount(320f))
-        assertEquals(2, albumGridColumnCount(359.9f))
-        assertEquals(3, albumGridColumnCount(360f))
-        assertEquals(3, albumGridColumnCount(420f))
+        assertEquals(2, albumGridColumnCount(339.9f))
+        assertEquals(3, albumGridColumnCount(340f))
+        assertEquals(3, albumGridColumnCount(439.9f))
+        assertEquals(4, albumGridColumnCount(440f))
     }
 
     @Test
