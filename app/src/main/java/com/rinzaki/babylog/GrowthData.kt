@@ -127,3 +127,26 @@ internal fun growthChartTimeFraction(
         .toFloat()
         .coerceIn(0f, 1f)
 }
+
+/** Comparison with the immediately preceding actual observation in the selected series. */
+internal data class GrowthMeasurementComparison(
+    val elapsedDays: Long,
+    val change: Float
+)
+
+internal fun growthMeasurementComparison(
+    points: List<Pair<Long, Float>>,
+    selectedIndex: Int,
+    zone: java.time.ZoneId = java.time.ZoneId.systemDefault()
+): GrowthMeasurementComparison? {
+    if (selectedIndex !in points.indices || selectedIndex == 0) return null
+    val previous = points[selectedIndex - 1]
+    val current = points[selectedIndex]
+    if (!previous.second.isFinite() || !current.second.isFinite()) return null
+    val previousDate = java.time.Instant.ofEpochMilli(previous.first).atZone(zone).toLocalDate()
+    val currentDate = java.time.Instant.ofEpochMilli(current.first).atZone(zone).toLocalDate()
+    if (currentDate.isBefore(previousDate)) return null
+    val elapsedDays = java.time.temporal.ChronoUnit.DAYS.between(previousDate, currentDate)
+    val change = current.second - previous.second
+    return GrowthMeasurementComparison(elapsedDays, change).takeIf { change.isFinite() }
+}
