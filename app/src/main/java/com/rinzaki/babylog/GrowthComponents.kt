@@ -333,6 +333,13 @@ private fun PeriodTrendSummary(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    periodTrendDailyAverage(point)?.let { dailyAverage ->
+                        Text(
+                            "日均 ${"%.1f".format(Locale.CHINA, dailyAverage)} $unit/天（按覆盖天数计算）",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (
                         selectedPeriodIndex > 0 &&
                         (!point.isComplete || !allPeriods[selectedPeriodIndex - 1].isComplete)
@@ -354,7 +361,7 @@ private fun PeriodTrendSummary(
                     }
                 }
                 Text(
-                    "首尾周期可能不完整；无相关记录的日期按 0 统计，有记录但指标值为 0 会保留记录条数。非零日按所选指标累计值大于 0 的日期统计。点击周期可查看与上一周期的变化。",
+                    "首尾周期可能不完整；无相关记录的日期按 0 统计，有记录但指标值为 0 会保留记录条数。日均按实际覆盖天数计算，比较不同长度的月份时可结合日均值理解总量变化。非零日按所选指标累计值大于 0 的日期统计。点击周期可查看与上一周期的变化。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
