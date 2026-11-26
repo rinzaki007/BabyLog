@@ -429,7 +429,7 @@ private fun GrowthOverviewCard(baby: BabyEntity, events: List<BabyEventEntity>) 
                         overview.comparison?.let { comparison ->
                             val sign = if (comparison.change > 0f) "+" else ""
                             Text(
-                                "较上次 $sign\${String.format(Locale.CHINA, "%.2f", comparison.change)} $unit · \${comparison.elapsedDays} 天",
+                                "较上次 $sign${String.format(Locale.CHINA, "%.2f", comparison.change)} $unit · ${comparison.elapsedDays} 天",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
