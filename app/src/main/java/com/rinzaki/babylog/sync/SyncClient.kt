@@ -575,6 +575,14 @@ class BabyLogSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
         SyncPreferences.markSyncStarted(applicationContext)
         return try {
             val dao = RoomAccess.database(applicationContext).babyLogDao()
+            // Recover an interrupted first-link operation before processing queued
+            // operations. The helper is idempotent and the session lock prevents
+            // another account transition from changing ownership mid-recovery.
+            enqueueUnassignedFamilyData(
+                dao,
+                dao.getUnassignedBabies(UNASSIGNED_FAMILY_ID),
+                familyId
+            )
             var batch = 0
             while (batch < 10) {
                 val pending = dao.pendingOperations()
