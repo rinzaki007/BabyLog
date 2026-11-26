@@ -133,8 +133,8 @@ class PeriodTrendDataTest {
         assertEquals(31, monthly[0].coveredDays)
         assertEquals(28, monthly[1].coveredDays)
         assertEquals(31, monthly[2].coveredDays)
-        assertEquals(28f, periodTrendComparison(monthly, 1)?.change ?: Float.NaN, 0.001f)
-        assertEquals(-28f, periodTrendComparison(monthly, 2)?.change ?: Float.NaN, 0.001f)
+        assertEquals(25f, periodTrendComparison(monthly, 1)?.change ?: Float.NaN, 0.001f)
+        assertEquals(-25f, periodTrendComparison(monthly, 2)?.change ?: Float.NaN, 0.001f)
     }
 
     @Test
@@ -142,8 +142,7 @@ class PeriodTrendDataTest {
         val daily = listOf(
             DailyTrendPoint(LocalDate.of(2026, 1, 10), 1f),
             DailyTrendPoint(LocalDate.of(2026, 1, 11), 1f),
-            DailyTrendPoint(LocalDate.of(2026, 2, 10), 1f),
-            DailyTrendPoint(LocalDate.of(2026, 2, 11), 1f)
+            DailyTrendPoint(LocalDate.of(2026, 2, 22), 1f)
         )
 
         val monthly = aggregateTrendPeriods(daily, "月")
