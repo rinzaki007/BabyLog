@@ -99,3 +99,11 @@ internal fun periodTrendComparison(
     if (!change.isFinite()) return null
     return PeriodTrendComparison(change, current.nonZeroDays - previous.nonZeroDays)
 }
+
+
+/** Average daily value within the actual calendar dates represented by this period. */
+internal fun periodTrendDailyAverage(point: PeriodTrendPoint): Float? {
+    if (point.coveredDays <= 0 || !point.value.isFinite() || point.value < 0f) return null
+    val average = point.value / point.coveredDays
+    return average.takeIf { it.isFinite() && it >= 0f }
+}
