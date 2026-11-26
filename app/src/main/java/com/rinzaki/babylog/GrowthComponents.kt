@@ -705,11 +705,37 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val percentileTrendPoints = remember(points, pointSourceIndices, measurementAssessments) {
         growthPercentileTrendPoints(points, pointSourceIndices, measurementAssessments)
     }
+    var showPercentileHistory by remember { mutableStateOf(false) }
     if (percentileTrendPoints.isNotEmpty()) {
-        GrowthPercentileBandTrendCard(
-            points = percentileTrendPoints,
-            selectedVisibleIndex = selectedPointIndex
-        )
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("历史百分位区间", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "查看每次测量在中国同月龄标准中的位置变化",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(onClick = { showPercentileHistory = !showPercentileHistory }) {
+                        Text(if (showPercentileHistory) "收起" else "展开")
+                    }
+                }
+                if (showPercentileHistory) {
+                    GrowthPercentileBandTrendCard(
+                        points = percentileTrendPoints,
+                        selectedVisibleIndex = selectedPointIndex
+                    )
+                }
+            }
+        }
     }
     Card(shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
