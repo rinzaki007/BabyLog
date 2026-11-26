@@ -682,9 +682,9 @@ private fun GrowthPercentileGuideCard(
     onToggleExpanded: () -> Unit
 ) {
     val markers = listOf(
-        Triple("P25", "第25百分位", reference.p25),
-        Triple("P50", "中位数", reference.p50),
-        Triple("P75", "第75百分位", reference.p75)
+        Triple("较低位置", "参考线", reference.p25),
+        Triple("中间位置", "参考中间值", reference.p50),
+        Triple("较高位置", "参考线", reference.p75)
     )
     val difference = measuredValue - reference.p50
     val differenceLabel = when {
@@ -698,9 +698,9 @@ private fun GrowthPercentileGuideCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("百分位怎么理解？", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text("和同月龄宝宝相比，怎么看？", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(
-                "把宝宝与相同性别、相同月龄的参考人群比较。P 后面的数字表示有多少比例的参考人群测量值不高于这条线。",
+                "这里是把宝宝和相同性别、相同月龄的参考人群作比较。它描述的是相对位置，不是成绩排名。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -718,7 +718,7 @@ private fun GrowthPercentileGuideCard(
                 }
             }
             Text(
-                "P25–P75 是中间 50% 的参考范围；P50 是中间位置，不是目标值或及格线。",
+                "中间位置两侧的范围，覆盖参考人群中间约一半的测量值。中间值不是目标值，也不是及格线。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -729,7 +729,7 @@ private fun GrowthPercentileGuideCard(
                 fontWeight = FontWeight.SemiBold
             )
             TextButton(onClick = onToggleExpanded, modifier = Modifier.align(Alignment.End)) {
-                Text(if (expanded) "收起其他参考值" else "查看 P3 / P10 / P90 / P97")
+                Text(if (expanded) "收起其他参考值" else "查看更宽的参考范围")
             }
             if (expanded) {
                 Text(
@@ -869,7 +869,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("成长曲线", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("按实际测量日期展示变化", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("每个点都是一次真实测量；背景范围是同月龄参考值", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(latest?.let { "${"%.2f".format(Locale.CHINA, it.second)} $unit" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
@@ -1007,10 +1007,10 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        GrowthChartLegendItem("宝宝实际测量", chartSecondary, LegendMark.SOLID_LINE)
-                        GrowthChartLegendItem("P50 中位数", chartPrimary, LegendMark.SOLID_LINE)
-                        GrowthChartLegendItem("P25 / P75", chartPrimary.copy(alpha = 0.55f), LegendMark.DASHED_LINE)
-                        GrowthChartLegendItem("P3–P97 参考范围", chartPrimary.copy(alpha = 0.38f), LegendMark.BAND)
+                        GrowthChartLegendItem("宝宝测量值", chartSecondary, LegendMark.SOLID_LINE)
+                        GrowthChartLegendItem("同月龄中间值", chartPrimary, LegendMark.SOLID_LINE)
+                        GrowthChartLegendItem("常见范围边界", chartPrimary.copy(alpha = 0.55f), LegendMark.DASHED_LINE)
+                        GrowthChartLegendItem("更宽参考范围", chartPrimary.copy(alpha = 0.38f), LegendMark.BAND)
                     }
                     Text(
                         "中国标准 WS/T 423—2022。按出生日期计算月龄；早产儿矫正月龄暂未纳入。身长/身高按官方年龄段口径。仅供趋势参考，不作诊断。",
@@ -1107,11 +1107,11 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text("中国标准百分位区间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("宝宝在同月龄参考人群中的位置", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(assessment.bandLabel, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                             }
                             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text("P50 参考值", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("参考中间值", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(String.format(Locale.CHINA, "%.2f %s", assessment.medianValue, unit), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             }
                         }
@@ -1174,7 +1174,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                 )
                                 measurementAssessments.getOrNull(pointIndex)?.let { assessment ->
                                     Text(
-                                        "中国标准 · ${assessment.bandLabel}",
+                                        "同月龄参考：${assessment.bandLabel}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -1217,8 +1217,8 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
             val interval = remember(allPoints) { growthMeasurementInterval(allPoints) }
             var showAllMonths by remember(allPoints) { mutableStateOf(false) }
             Spacer(Modifier.height(4.dp))
-            Text("长期变化", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text("按自然月汇总已有测量；没有记录的月份不会补值。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("按月回顾", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("只汇总当月真实记录；没有测量的月份会自动跳过，不会估算数值。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (interval == null) {
                 Text(
                     if (allPoints.isEmpty()) {
