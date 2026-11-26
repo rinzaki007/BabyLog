@@ -333,11 +333,12 @@ private fun PeriodTrendSummary(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (selectedPeriodIndex > 0 && selectedComparison == null &&
-                        !allPeriods[selectedPeriodIndex - 1].isComplete || !point.isComplete
+                    if (
+                        selectedPeriodIndex > 0 &&
+                        (!point.isComplete || !allPeriods[selectedPeriodIndex - 1].isComplete)
                     ) {
                         Text(
-                            "与上一周期覆盖天数不同，暂不直接比较总量",
+                            "当前或上一周期不是完整自然${period}，暂不直接比较总量",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
