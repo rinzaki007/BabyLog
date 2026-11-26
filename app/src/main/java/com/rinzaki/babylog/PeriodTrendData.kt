@@ -10,7 +10,8 @@ internal data class PeriodTrendPoint(
     val endDate: LocalDate,
     val value: Float,
     val nonZeroDays: Int,
-    val coveredDays: Int
+    val coveredDays: Int,
+    val isComplete: Boolean = true
 )
 
 /**
@@ -64,7 +65,10 @@ internal fun aggregateTrendPeriods(
             endDate = minOf(bucketEnd(cursor), last),
             value = values.sumOf { it.value.toDouble() }.toFloat(),
             nonZeroDays = values.count { it.value > 0f },
-            coveredDays = values.size
+            coveredDays = values.size,
+            // Completeness is based on the calendar bucket boundaries, not its length:
+            // a full 30-day month and a full 31-day month are both complete.
+            isComplete = first <= cursor && last >= bucketEnd(cursor)
         )
         cursor = nextBucket(cursor)
     }
@@ -84,8 +88,9 @@ internal fun periodTrendComparison(
     if (selectedIndex !in periods.indices || selectedIndex == 0) return null
     val previous = periods[selectedIndex - 1]
     val current = periods[selectedIndex]
-    // Totals from partial and complete calendar buckets are not directly comparable.
-    if (current.coveredDays != previous.coveredDays) return null
+    // Compare only complete calendar buckets. Their lengths may legitimately differ
+    // (for example, February and March), so covered-day counts alone are insufficient.
+    if (!current.isComplete || !previous.isComplete) return null
     val change = current.value - previous.value
     if (!change.isFinite()) return null
     return PeriodTrendComparison(change, current.nonZeroDays - previous.nonZeroDays)

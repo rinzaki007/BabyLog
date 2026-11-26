@@ -328,7 +328,7 @@ private fun PeriodTrendSummary(
                         fontWeight = FontWeight.SemiBold
                     )
                     if (selectedPeriodIndex > 0 && selectedComparison == null &&
-                        allPeriods[selectedPeriodIndex - 1].coveredDays != point.coveredDays
+                        !allPeriods[selectedPeriodIndex - 1].isComplete || !point.isComplete
                     ) {
                         Text(
                             "与上一周期覆盖天数不同，暂不直接比较总量",
