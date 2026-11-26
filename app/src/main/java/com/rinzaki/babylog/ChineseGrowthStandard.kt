@@ -145,3 +145,20 @@ internal fun growthPercentileTransitionLabel(
         "百分位区间由${previousBand}变化为$currentBand"
     }
 }
+
+
+/**
+ * Returns the measurement method used by WS/T 423—2022 for the selected age.
+ * The reference switches from recumbent length to standing height at 24 months.
+ */
+internal fun growthLengthHeightMethodHint(
+    birthDate: LocalDate,
+    measuredDate: LocalDate
+): String? {
+    if (measuredDate.isBefore(birthDate)) return null
+    return if (growthCompletedMonths(birthDate, measuredDate) < 24) {
+        "官方参考口径：平卧身长（未满24月龄）"
+    } else {
+        "官方参考口径：站立身高（满24月龄及以上）"
+    }
+}

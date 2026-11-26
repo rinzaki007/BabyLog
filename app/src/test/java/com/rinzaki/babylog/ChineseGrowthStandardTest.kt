@@ -21,6 +21,21 @@ class ChineseGrowthStandardTest {
         assertNull(growthPercentileTransitionLabel("中", null))
     }
 
+    @Test
+    fun switchesLengthHeightReferenceMethodAtTwentyFourCompletedMonths() {
+        val birthDate = LocalDate.of(2024, 1, 31)
+
+        assertEquals(
+            "官方参考口径：平卧身长（未满24月龄）",
+            growthLengthHeightMethodHint(birthDate, birthDate.plusMonths(23).plusDays(20))
+        )
+        assertEquals(
+            "官方参考口径：站立身高（满24月龄及以上）",
+            growthLengthHeightMethodHint(birthDate, birthDate.plusMonths(24))
+        )
+        assertNull(growthLengthHeightMethodHint(birthDate, birthDate.minusDays(1)))
+    }
+
     private val birth = GrowthPercentiles(2f, 3f, 4f, 5f, 6f, 7f, 8f)
     private val oneMonth = GrowthPercentiles(4f, 5f, 6f, 7f, 8f, 9f, 10f)
     private val fourMonths = GrowthPercentiles(7f, 8f, 9f, 10f, 11f, 12f, 13f)

@@ -567,6 +567,19 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+                if (metric == "身长") {
+                    selectedPoint?.let { point ->
+                        val measuredDate = java.time.Instant.ofEpochMilli(point.first)
+                            .atZone(chartZone).toLocalDate()
+                        growthLengthHeightMethodHint(birthDate, measuredDate)?.let { hint ->
+                            Text(
+                                "$hint；实际记录请尽量保持测量方式一致。",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
                 selectedAssessment?.let { assessment ->
                     Surface(
                         shape = RoundedCornerShape(12.dp),
