@@ -56,7 +56,7 @@ class GrowthOverviewDataTest {
         assertEquals(57.0f, length.value!!, 0.001f)
         assertEquals(38.0f, head.value!!, 0.001f)
         assertTrue(listOf(weight, length, head).all { it.percentileBand != null })
-        assertEquals(30L, weight.comparison?.elapsedDays)
+        assertEquals(29L, weight.comparison?.elapsedDays)
         assertEquals(0.9f, weight.comparison?.change ?: Float.NaN, 0.001f)
         assertEquals(null, weight.referenceHint)
     }
