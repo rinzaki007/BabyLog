@@ -25,6 +25,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -188,6 +194,10 @@ internal fun HomeFeedingIntervalCard(
     }
 }
 
+internal fun summaryPillAccessibilityLabel(label: String, value: String): String = "$label，$value"
+
+internal fun syncDetailsAccessibilityState(expanded: Boolean): String = if (expanded) "已展开" else "已收起"
+
 @Composable
 private fun SummaryGroupLabel(emoji: String, title: String) {
     Row(
@@ -195,7 +205,7 @@ private fun SummaryGroupLabel(emoji: String, title: String) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(emoji, style = MaterialTheme.typography.labelMedium)
+        Text(emoji, style = MaterialTheme.typography.labelMedium, modifier = Modifier.clearAndSetSemantics {})
         Text(
             title,
             style = MaterialTheme.typography.labelMedium,
@@ -282,7 +292,11 @@ internal fun TodaySummary(events: List<BabyEventEntity>, onSelect: (String) -> U
 internal fun SummaryPill(emoji: String, label: String, value: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     Column(
         modifier.fillMaxWidth().heightIn(min = 76.dp)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .semantics(mergeDescendants = true) {
+                contentDescription = summaryPillAccessibilityLabel(label, value)
+                if (onClick != null) role = Role.Button
+            }
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f), RoundedCornerShape(16.dp))
             .padding(horizontal = 4.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -294,7 +308,7 @@ internal fun SummaryPill(emoji: String, label: String, value: String, modifier: 
             modifier = Modifier.size(28.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text(emoji, style = MaterialTheme.typography.bodyMedium)
+                Text(emoji, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clearAndSetSemantics {})
             }
         }
         Text(
@@ -334,7 +348,7 @@ internal fun ActionCard(emoji: String, title: String, subtitle: String, modifier
                 modifier = Modifier.size(38.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(emoji, style = MaterialTheme.typography.titleLarge)
+                    Text(emoji, style = MaterialTheme.typography.titleLarge, modifier = Modifier.clearAndSetSemantics {})
                 }
             }
             Column(
@@ -381,7 +395,11 @@ internal fun HomeSyncStatusCard(
         Surface(
             color = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onToggleDetails)
+            modifier = Modifier.fillMaxWidth()
+                .clickable(role = Role.Button, onClick = onToggleDetails)
+                .semantics(mergeDescendants = true) {
+                    stateDescription = syncDetailsAccessibilityState(showDetails)
+                }
         ) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
