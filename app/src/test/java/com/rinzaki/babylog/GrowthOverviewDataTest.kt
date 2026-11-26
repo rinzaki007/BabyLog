@@ -79,7 +79,7 @@ class GrowthOverviewDataTest {
     @Test
     fun explainsWhenHeadCircumferenceReferenceAgeHasEnded() {
         val measuredDate = birthDate.plusMonths(36).plusDays(1)
-        val asOf = measuredDate.atStartOfDay(zone).toInstant().toEpochMilli()
+        val asOf = measuredDate.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val overview = growthMetricOverview(
             baby(),
             listOf(event(measuredDate, """{"headCircumferenceCm":48.0}""", "late")),
