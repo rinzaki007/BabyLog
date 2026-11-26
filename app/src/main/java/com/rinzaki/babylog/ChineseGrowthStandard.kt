@@ -129,3 +129,19 @@ internal fun chineseGrowthStandardSex(profileSex: String?): String? = when (prof
     "女宝" -> "GIRL"
     else -> null
 }
+
+/**
+ * Describes how two actual observations' percentile bands compare. This is a
+ * descriptive trend cue only; it does not infer health status or diagnose growth.
+ */
+internal fun growthPercentileTransitionLabel(
+    previousBand: String?,
+    currentBand: String?
+): String? {
+    if (previousBand.isNullOrBlank() || currentBand.isNullOrBlank()) return null
+    return if (previousBand == currentBand) {
+        "与上次测量处于相同的百分位区间（$currentBand）"
+    } else {
+        "百分位区间由$previousBand变化为$currentBand"
+    }
+}
