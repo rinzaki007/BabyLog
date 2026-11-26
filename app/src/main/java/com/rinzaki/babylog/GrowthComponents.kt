@@ -628,6 +628,118 @@ private fun GrowthOverviewCard(baby: BabyEntity, events: List<BabyEventEntity>) 
     }
 }
 
+
+private enum class LegendMark { SOLID_LINE, DASHED_LINE, BAND }
+
+@Composable
+private fun GrowthChartLegendItem(label: String, color: androidx.compose.ui.graphics.Color, mark: LegendMark) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Canvas(Modifier.width(22.dp).height(12.dp)) {
+            when (mark) {
+                LegendMark.SOLID_LINE -> drawLine(
+                    color, Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f),
+                    strokeWidth = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+                LegendMark.DASHED_LINE -> {
+                    val y = size.height / 2f
+                    val dash = 4.dp.toPx()
+                    var x = 0f
+                    while (x < size.width) {
+                        drawLine(color, Offset(x, y), Offset((x + dash * 0.55f).coerceAtMost(size.width), y), strokeWidth = 2.dp.toPx())
+                        x += dash
+                    }
+                }
+                LegendMark.BAND -> drawRoundRect(
+                    color = color,
+                    topLeft = Offset(0f, size.height * 0.2f),
+                    size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.6f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())
+                )
+            }
+        }
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun GrowthPercentileGuideCard(
+    reference: GrowthPercentiles,
+    measuredValue: Float,
+    unit: String,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit
+) {
+    val markers = listOf(
+        Triple("P25", "第25百分位", reference.p25),
+        Triple("P50", "中位数", reference.p50),
+        Triple("P75", "第75百分位", reference.p75)
+    )
+    val difference = measuredValue - reference.p50
+    val differenceLabel = when {
+        difference > 0.0001f -> "高于"
+        difference < -0.0001f -> "低于"
+        else -> "接近"
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("百分位怎么理解？", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "把宝宝与相同性别、相同月龄的参考人群比较。P 后面的数字表示有多少比例的参考人群测量值不高于这条线。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                markers.forEach { (code, description, value) ->
+                    Column(
+                        Modifier.weight(1f).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)).padding(horizontal = 7.dp, vertical = 9.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(code, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Text(String.format(Locale.CHINA, if (unit == "kg") "%.2f" else "%.1f", value) + " $unit", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                }
+            }
+            Text(
+                "P25–P75 是中间 50% 的参考范围；P50 是中间位置，不是目标值或及格线。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                "本次测量 ${String.format(Locale.CHINA, if (unit == "kg") "%.2f" else "%.1f", measuredValue)} $unit，${differenceLabel} P50 ${String.format(Locale.CHINA, if (unit == "kg") "%.2f" else "%.1f", kotlin.math.abs(difference))} $unit",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+            TextButton(onClick = onToggleExpanded, modifier = Modifier.align(Alignment.End)) {
+                Text(if (expanded) "收起其他参考值" else "查看 P3 / P10 / P90 / P97")
+            }
+            if (expanded) {
+                Text(
+                    listOf(
+                        "P3 ${String.format(Locale.CHINA, if (unit == "kg") "%.2f" else "%.1f", reference.p3)}",
+                        "P10 ${String.format(Locale.CHINA, if (unit == "kg") "%.2f" else "%.1f", reference.p10)}",
+                        "P90 ${String.format(Locale.CHINA, if (unit == "kg") "%.2f" else "%.1f", reference.p90)}",
+                        "P97 ${String.format(Locale.CHINA, if (unit == "kg") "%.2f" else "%.1f", reference.p97)}"
+                    ).joinToString("   ·   ") { "$it $unit" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "这些是分布两端的参考位置，用于帮助理解曲线范围；单次百分位不能单独判断宝宝是否健康。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
@@ -677,15 +789,18 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val dateFormat = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)
     var selectedPointIndex by remember(points) { mutableStateOf(points.lastIndex) }
     val selectedPoint = points.getOrNull(selectedPointIndex)
-    val selectedAssessment = remember(selectedPoint, birthDate, referenceMetric, referenceSex) {
+    val selectedReference = remember(selectedPoint, birthDate, referenceMetric, referenceSex, chartZone) {
         selectedPoint?.let { point ->
             val measuredDate = java.time.Instant.ofEpochMilli(point.first).atZone(chartZone).toLocalDate()
-            val reference = chineseGrowthReferenceAtDate(
-                birthDate, measuredDate, referenceMetric, referenceSex
-            )
-            reference?.let { assessChineseGrowthPercentile(point.second, it) }
+            chineseGrowthReferenceAtDate(birthDate, measuredDate, referenceMetric, referenceSex)
         }
     }
+    val selectedAssessment = remember(selectedPoint, selectedReference) {
+        selectedPoint?.let { point ->
+            selectedReference?.let { assessChineseGrowthPercentile(point.second, it) }
+        }
+    }
+    var showAllPercentileMarkers by remember(metric) { mutableStateOf(false) }
     val measurementAssessments = remember(allPoints, birthDate, referenceMetric, referenceSex, chartZone) {
         allPoints.map { point ->
             val measuredDate = java.time.Instant.ofEpochMilli(point.first).atZone(chartZone).toLocalDate()
@@ -745,10 +860,10 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     Text("按实际测量日期展示变化", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(latest?.let { "${"%.2f".format(Locale.getDefault(), it.second)} $unit" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text(latest?.let { "${"%.2f".format(Locale.CHINA, it.second)} $unit" } ?: "暂无数据", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                     if (delta != null) {
                         val sign = if (delta > 0) "+" else ""
-                        Text("较上次 $sign${"%.2f".format(Locale.getDefault(), delta)} $unit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("较上次 $sign${"%.2f".format(Locale.CHINA, delta)} $unit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -761,9 +876,9 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.width(42.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                        Text("${"%.1f".format(Locale.getDefault(), max)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${"%.1f".format(Locale.CHINA, max)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(110.dp))
-                        Text("${"%.1f".format(Locale.getDefault(), min)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${"%.1f".format(Locale.CHINA, min)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Canvas(
                         Modifier.weight(1f).height(150.dp).pointerInput(points, min, max) {
@@ -880,22 +995,10 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("━", color = chartSecondary, style = MaterialTheme.typography.titleSmall)
-                            Text("宝宝测量", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("━", color = chartPrimary, style = MaterialTheme.typography.titleSmall)
-                            Text("标准 P50", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("┄", color = chartPrimary.copy(alpha = 0.55f), style = MaterialTheme.typography.titleSmall)
-                            Text("P25 / P75", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("▰", color = chartPrimary.copy(alpha = 0.38f), style = MaterialTheme.typography.titleSmall)
-                            Text("P3–P97", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        GrowthChartLegendItem("宝宝实际测量", chartSecondary, LegendMark.SOLID_LINE)
+                        GrowthChartLegendItem("P50 中位数", chartPrimary, LegendMark.SOLID_LINE)
+                        GrowthChartLegendItem("P25 / P75", chartPrimary.copy(alpha = 0.55f), LegendMark.DASHED_LINE)
+                        GrowthChartLegendItem("P3–P97 参考范围", chartPrimary.copy(alpha = 0.38f), LegendMark.BAND)
                     }
                     Text(
                         "中国标准 WS/T 423—2022。按出生日期计算月龄；早产儿矫正月龄暂未纳入。身长/身高按官方年龄段口径。仅供趋势参考，不作诊断。",
@@ -1006,6 +1109,17 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    selectedReference?.let { reference ->
+                        selectedPoint?.let { point ->
+                            GrowthPercentileGuideCard(
+                                reference = reference,
+                                measuredValue = point.second,
+                                unit = unit,
+                                expanded = showAllPercentileMarkers,
+                                onToggleExpanded = { showAllPercentileMarkers = !showAllPercentileMarkers }
+                            )
+                        }
+                    }
                     val sourceIndex = pointSourceIndices.getOrNull(selectedPointIndex) ?: -1
                     val previousAssessment = measurementAssessments.getOrNull(sourceIndex - 1)
                     growthPercentileTransitionLabel(
