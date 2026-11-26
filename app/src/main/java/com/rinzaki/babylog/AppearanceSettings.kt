@@ -124,7 +124,7 @@ internal fun AppearanceSettingsCard(
                         style = BabyLogThemeStyle.DEFAULT,
                         subtitle = "原有暖色风格",
                         selected = selectedStyle == BabyLogThemeStyle.DEFAULT,
-                        colors = listOf(Color(0xFF955D50), Color(0xFF58715D), Color(0xFFFFF9F4)),
+                        colors = listOf(Color(0xFF945C4F), Color(0xFF58715D), Color(0xFFFFF9F4)),
                         onClick = { onSelectStyle(BabyLogThemeStyle.DEFAULT); showPicker = false }
                     )
                     ThemePreviewOption(
@@ -132,7 +132,7 @@ internal fun AppearanceSettingsCard(
                         style = BabyLogThemeStyle.CAPYBARA,
                         subtitle = "奶油米色、焦糖棕与自然绿",
                         selected = selectedStyle == BabyLogThemeStyle.CAPYBARA,
-                        colors = listOf(Color(0xFF9A6845), Color(0xFF71815C), Color(0xFFFFF7E9)),
+                        colors = listOf(Color(0xFF8A5A3A), Color(0xFF5A6A43), Color(0xFFFFF7E9)),
                         onClick = { onSelectStyle(BabyLogThemeStyle.CAPYBARA); showPicker = false }
                     )
                     ThemePreviewOption(
@@ -140,7 +140,7 @@ internal fun AppearanceSettingsCard(
                         style = BabyLogThemeStyle.KOALA,
                         subtitle = "桉树绿、雾霾蓝与奶油白",
                         selected = selectedStyle == BabyLogThemeStyle.KOALA,
-                        colors = listOf(Color(0xFF58776A), Color(0xFF6F8790), Color(0xFFF2F7F2)),
+                        colors = listOf(Color(0xFF4F7063), Color(0xFF526D76), Color(0xFFF2F7F2)),
                         onClick = { onSelectStyle(BabyLogThemeStyle.KOALA); showPicker = false }
                     )
                 }

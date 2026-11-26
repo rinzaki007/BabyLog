@@ -1,6 +1,7 @@
 package com.rinzaki.babylog.ui.theme
 
 import android.content.Context
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
@@ -39,32 +40,51 @@ object BabyLogThemePreferences {
     }
 }
 
-private val DefaultColors = lightColorScheme(
-    primary = Color(0xFF955D50), onPrimary = Color.White,
-    secondary = Color(0xFF58715D), onSecondary = Color.White,
-    tertiary = Color(0xFF86613A), background = Color(0xFFFFF9F4),
-    surface = Color(0xFFFFFEFC), surfaceVariant = Color(0xFFF3EBE4),
-    onSurface = Color(0xFF352E2A), onSurfaceVariant = Color(0xFF71655D),
-    outline = Color(0xFF96877D), outlineVariant = Color(0xFFECE3DC)
-)
+/**
+ * Define every semantic container role for each theme. Without explicit container
+ * values Material's default light palette leaks purple/pink surfaces into themed cards.
+ * Accent and supporting text colors also maintain readable contrast on tinted cards.
+ */
+internal fun babyLogColorScheme(style: BabyLogThemeStyle): ColorScheme = when (style) {
+    BabyLogThemeStyle.DEFAULT -> lightColorScheme(
+        primary = Color(0xFF945C4F), onPrimary = Color.White,
+        primaryContainer = Color(0xFFF1DDD6), onPrimaryContainer = Color(0xFF4A2820),
+        secondary = Color(0xFF58715D), onSecondary = Color.White,
+        secondaryContainer = Color(0xFFE1E9DF), onSecondaryContainer = Color(0xFF293E2D),
+        tertiary = Color(0xFF86613A), onTertiary = Color.White,
+        tertiaryContainer = Color(0xFFF1E2CE), onTertiaryContainer = Color(0xFF49331C),
+        background = Color(0xFFFFF9F4), onBackground = Color(0xFF352E2A),
+        surface = Color(0xFFFFFEFC), onSurface = Color(0xFF352E2A),
+        surfaceVariant = Color(0xFFF3EBE4), onSurfaceVariant = Color(0xFF71655D),
+        outline = Color(0xFF8E7E73), outlineVariant = Color(0xFFECE3DC)
+    )
 
-private val CapybaraColors = lightColorScheme(
-    primary = Color(0xFF9A6845), onPrimary = Color.White,
-    secondary = Color(0xFF71815C), onSecondary = Color.White,
-    tertiary = Color(0xFFC18A52), background = Color(0xFFFFF7E9),
-    surface = Color(0xFFFFFCF4), surfaceVariant = Color(0xFFF3E6D1),
-    onSurface = Color(0xFF493729), onSurfaceVariant = Color(0xFF806C58),
-    outline = Color(0xFFAA9278), outlineVariant = Color(0xFFE9D9C2)
-)
+    BabyLogThemeStyle.CAPYBARA -> lightColorScheme(
+        primary = Color(0xFF8A5A3A), onPrimary = Color.White,
+        primaryContainer = Color(0xFFF2E2D0), onPrimaryContainer = Color(0xFF4B2D18),
+        secondary = Color(0xFF5A6A43), onSecondary = Color.White,
+        secondaryContainer = Color(0xFFE5EBD8), onSecondaryContainer = Color(0xFF334126),
+        tertiary = Color(0xFF885E33), onTertiary = Color.White,
+        tertiaryContainer = Color(0xFFF5E4CC), onTertiaryContainer = Color(0xFF50351B),
+        background = Color(0xFFFFF7E9), onBackground = Color(0xFF493729),
+        surface = Color(0xFFFFFCF4), onSurface = Color(0xFF493729),
+        surfaceVariant = Color(0xFFF3E6D1), onSurfaceVariant = Color(0xFF735F4C),
+        outline = Color(0xFF8A745E), outlineVariant = Color(0xFFE9D9C2)
+    )
 
-private val KoalaColors = lightColorScheme(
-    primary = Color(0xFF58776A), onPrimary = Color.White,
-    secondary = Color(0xFF6F8790), onSecondary = Color.White,
-    tertiary = Color(0xFF9A8065), background = Color(0xFFF2F7F2),
-    surface = Color(0xFFFCFEFA), surfaceVariant = Color(0xFFE5EEE7),
-    onSurface = Color(0xFF2F4038), onSurfaceVariant = Color(0xFF68786E),
-    outline = Color(0xFF8B9B8F), outlineVariant = Color(0xFFD8E3DA)
-)
+    BabyLogThemeStyle.KOALA -> lightColorScheme(
+        primary = Color(0xFF4F7063), onPrimary = Color.White,
+        primaryContainer = Color(0xFFDCEBE3), onPrimaryContainer = Color(0xFF24483A),
+        secondary = Color(0xFF526D76), onSecondary = Color.White,
+        secondaryContainer = Color(0xFFDFEAEF), onSecondaryContainer = Color(0xFF2D4750),
+        tertiary = Color(0xFF79644F), onTertiary = Color.White,
+        tertiaryContainer = Color(0xFFECE3D8), onTertiaryContainer = Color(0xFF4C3B2A),
+        background = Color(0xFFF2F7F2), onBackground = Color(0xFF2F4038),
+        surface = Color(0xFFFCFEFA), onSurface = Color(0xFF2F4038),
+        surfaceVariant = Color(0xFFE5EEE7), onSurfaceVariant = Color(0xFF5E6E64),
+        outline = Color(0xFF75857A), outlineVariant = Color(0xFFD8E3DA)
+    )
+}
 
 private val BabyLogTypography = Typography().copy(
     displayLarge = TextStyle(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold),
@@ -87,11 +107,7 @@ private val BabyLogTypography = Typography().copy(
 @Composable
 fun BabyLogTheme(style: BabyLogThemeStyle = BabyLogThemeStyle.DEFAULT, content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = when (style) {
-            BabyLogThemeStyle.CAPYBARA -> CapybaraColors
-            BabyLogThemeStyle.KOALA -> KoalaColors
-            BabyLogThemeStyle.DEFAULT -> DefaultColors
-        },
+        colorScheme = babyLogColorScheme(style),
         typography = BabyLogTypography,
         content = content
     )
