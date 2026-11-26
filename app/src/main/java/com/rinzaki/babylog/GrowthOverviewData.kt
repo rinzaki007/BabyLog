@@ -14,7 +14,9 @@ internal data class GrowthMetricOverview(
     val value: Float?,
     val comparison: GrowthMeasurementComparison?,
     val percentileBand: String?,
-    val referenceHint: String?
+    val referenceHint: String?,
+    /** Latest actual measurements, oldest to newest, for a compact independent sparkline. */
+    val recentValues: List<Float>
 )
 
 internal fun growthMetricOverview(
@@ -27,7 +29,7 @@ internal fun growthMetricOverview(
     val points = growthMetricPoints(baby, events, metricKey, asOfMillis)
     val latestIndex = points.lastIndex
     val latest = points.getOrNull(latestIndex)
-        ?: return GrowthMetricOverview(null, null, null, null, null)
+        ?: return GrowthMetricOverview(null, null, null, null, null, emptyList())
 
     val standardMetric = when (metricKey) {
         "weightGrams" -> ChineseGrowthMetric.WEIGHT_FOR_AGE
@@ -51,6 +53,7 @@ internal fun growthMetricOverview(
             growthReferenceUnavailableHint(birthDate, measuredDate, standardMetric, sex)
         } else {
             null
-        }
+        },
+        recentValues = points.takeLast(5).map { it.second }
     )
 }
