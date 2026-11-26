@@ -73,8 +73,11 @@ internal fun groupAlbumPhotos(
 
 
 /** Use two album columns on compact content widths to keep thumbnails comfortably tappable. */
-internal fun albumGridColumnCount(availableWidthDp: Float): Int =
-    if (availableWidthDp < 360f) 2 else 3
+internal fun albumGridColumnCount(availableWidthDp: Float): Int = when {
+    availableWidthDp < 340f -> 2
+    availableWidthDp < 440f -> 3
+    else -> 4
+}
 
 
 /** A single concise screen-reader label for each actionable photo thumbnail. */
