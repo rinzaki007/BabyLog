@@ -88,4 +88,16 @@ class AlbumGroupingTest {
         assertEquals(3, albumGridColumnCount(420f))
     }
 
+    @Test
+    fun accessiblePhotoLabelIncludesCaptureTimeAndStorageLocation() {
+        assertEquals(
+            "宝宝照片，拍摄于2026年11月26日 08:30，本地原图",
+            albumPhotoAccessibilityLabel("2026年11月26日 08:30", "本地原图")
+        )
+        assertEquals(
+            "宝宝照片，拍摄于2026年11月26日 08:30，云端原图",
+            albumPhotoAccessibilityLabel("2026年11月26日 08:30", "云端原图")
+        )
+    }
+
 }
