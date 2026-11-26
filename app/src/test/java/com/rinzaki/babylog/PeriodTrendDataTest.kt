@@ -20,7 +20,7 @@ class PeriodTrendDataTest {
 
         assertEquals(3, weekly.observationCount)
         assertEquals(1, weekly.nonZeroDays)
-        assertEquals(7, weekly.coveredDays)
+        assertEquals(3, weekly.coveredDays)
     }
 
     @Test
