@@ -393,8 +393,9 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
         else -> ChineseGrowthMetric.WEIGHT_FOR_AGE
     }
     val referenceSex = chineseGrowthStandardSex(baby.sex)
+    val hasMultipleMeasurementDates = growthMeasurementDateCount(points, chartZone) >= 2
     val referencePoints = remember(birthDate, points, referenceMetric, referenceSex, chartZone) {
-        if (points.size < 2 || referenceSex == null) emptyList()
+        if (!hasMultipleMeasurementDates || referenceSex == null) emptyList()
         else {
             val startDate = java.time.Instant.ofEpochMilli(points.first().first).atZone(chartZone).toLocalDate()
             val endDate = java.time.Instant.ofEpochMilli(points.last().first).atZone(chartZone).toLocalDate()
@@ -612,7 +613,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     )
                 } else if (metric == "头围") {
                     Text(
-                        if (points.size == 1) {
+                        if (!hasMultipleMeasurementDates) {
                             "已有一次头围测量，可查看下方同月龄百分位参考；增加不同日期的测量后即可叠加标准曲线。中国头围标准覆盖 0–36 月龄。"
                         } else {
                             "中国头围标准覆盖 0–36 月龄，且需要至少两次不同日期的测量才能叠加曲线。"
