@@ -47,6 +47,9 @@ internal fun growthMetricPoints(
                     it.occurredAt >= baby.birthTime &&
                     it.occurredAt <= asOfMillis
             }
+            // DAO ordering for equal timestamps is not guaranteed. Use the stable event ID
+            // as a tie-breaker so same-time measurements render consistently across devices.
+            .sortedWith(compareBy<BabyEventEntity> { it.occurredAt }.thenBy { it.id })
             .forEach { event ->
                 val value = runCatching {
                     JSONObject(event.payloadJson).optDouble(metricKey).takeIf { it.isFinite() && it > 0.0 }
