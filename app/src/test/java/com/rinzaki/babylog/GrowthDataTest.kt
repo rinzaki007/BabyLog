@@ -151,6 +151,38 @@ class GrowthDataTest {
     }
 
     @Test
+    fun selectedGrowthMeasurementComparesWithPreviousActualObservation() {
+        val zone = java.time.ZoneId.of("Asia/Shanghai")
+        val points = listOf(
+            java.time.LocalDate.of(2026, 1, 1).atStartOfDay(zone).toInstant().toEpochMilli() to 3.2f,
+            java.time.LocalDate.of(2026, 1, 11).atStartOfDay(zone).toInstant().toEpochMilli() to 3.6f,
+            java.time.LocalDate.of(2026, 2, 1).atStartOfDay(zone).toInstant().toEpochMilli() to 4.1f
+        )
+        assertEquals(null, growthMeasurementComparison(points, 0, zone))
+        val firstComparison = growthMeasurementComparison(points, 1, zone)
+        assertEquals(10L, firstComparison?.elapsedDays)
+        assertEquals(0.4f, firstComparison?.change ?: Float.NaN, 0.001f)
+        val secondComparison = growthMeasurementComparison(points, 2, zone)
+        assertEquals(21L, secondComparison?.elapsedDays)
+        assertEquals(0.5f, secondComparison?.change ?: Float.NaN, 0.001f)
+        assertEquals(null, growthMeasurementComparison(points, 3, zone))
+    }
+
+    @Test
+    fun selectedGrowthMeasurementHandlesSameDayAndRejectsNonFiniteValues() {
+        val zone = java.time.ZoneId.of("Asia/Shanghai")
+        val timestamp = java.time.LocalDate.of(2026, 1, 1).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertEquals(
+            GrowthMeasurementComparison(0, 0.5f),
+            growthMeasurementComparison(listOf(timestamp to 3f, timestamp + 60_000L to 3.5f), 1, zone)
+        )
+        assertEquals(
+            null,
+            growthMeasurementComparison(listOf(timestamp to Float.NaN, timestamp + 1_000L to 3f), 1, zone)
+        )
+    }
+
+    @Test
     fun includesBirthLengthAndHeadCircumferenceInCentimeters() {
         assertEquals(50.0f, growthMetricPoints(baby(), emptyList(), "lengthCm").single().second, 0.001f)
         assertEquals(34.0f, growthMetricPoints(baby(), emptyList(), "headCircumferenceCm").single().second, 0.001f)
