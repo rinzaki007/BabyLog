@@ -1213,6 +1213,10 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     }
                 }
             }
+        }
+    }
+    Card(shape = RoundedCornerShape(22.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val longTerm = remember(allPoints) { growthMonthlySummaries(allPoints) }
             val interval = remember(allPoints) { growthMeasurementInterval(allPoints) }
             var showAllMonths by remember(allPoints) { mutableStateOf(false) }
@@ -1300,7 +1304,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     }
                 }
             }
-            Text("以上仅描述实际记录之间的变化，不进行生长速度预测或医学评价；请结合专业人员建议解读。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("这里只比较真实测量记录，不预测之后会长多少，也不作医学判断。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
