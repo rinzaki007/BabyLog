@@ -558,20 +558,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                                     }
                                 }
                             },
-                            events = allEvents,
-                            onLinkEvent = { photo, event, linked ->
-                                scope.launch {
-                                    val now = System.currentTimeMillis()
-                                    val updated = PhotoEventAssociation.withPhotoLink(event, photo.id, linked)
-                                        .copy(updatedAt = now, syncStatus = "PENDING")
-                                    dao.upsertEvent(updated)
-                                    if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                                        dao.clearPendingOperations("event", updated.id)
-                                        dao.enqueueOperation(SyncOperationEntity(UUID.randomUUID().toString(), "event", updated.id, "upsert", eventSyncPayload(updated).toString(), updated.serverVersion, now))
-                                        SyncScheduler.enqueue(appContext)
-                                    }
-                                }
-                            },
                             onDelete = { photo ->
                                 scope.launch {
                                     val now = System.currentTimeMillis()
