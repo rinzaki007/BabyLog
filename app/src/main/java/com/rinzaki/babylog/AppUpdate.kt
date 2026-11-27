@@ -496,7 +496,7 @@ private fun UpdateSourceCard(
                     if (version.isNullOrBlank()) "版本：暂不可用" else "版本：v$version" +
                         if (version?.let { AppVersionComparator.isNewer(it, versionCode, current.name, current.code) } == true) " · 有更新" else " · 无需更新",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (!version.isNullOrBlank() && version?.let { AppVersionComparator.isNewer(it, null, current.name, current.code) } == true)
+                    color = if (!version.isNullOrBlank() && version?.let { AppVersionComparator.isNewer(it, versionCode, current.name, current.code) } == true)
                         MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
