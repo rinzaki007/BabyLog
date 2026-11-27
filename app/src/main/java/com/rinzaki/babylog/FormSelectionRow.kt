@@ -14,8 +14,9 @@ internal fun selectionRowColumnCount(optionCount: Int, availableWidthDp: Float):
     if (optionCount <= 0) return 1
     return when {
         optionCount <= 2 -> optionCount
+        optionCount == 4 -> 2
         availableWidthDp < 360f -> 2
-        optionCount <= 4 -> optionCount
+        optionCount == 3 -> 3
         else -> 3
     }
 }
