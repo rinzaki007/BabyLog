@@ -24,8 +24,8 @@ android {
         applicationId = "com.rinzaki.babylog"
         minSdk = 26
         targetSdk = 35
-        versionCode = providers.gradleProperty("appVersionCode").orElse("222").get().toInt()
-        versionName = providers.gradleProperty("appVersionName").orElse("2.2.2").get()
+        versionCode = providers.gradleProperty("appVersionCode").orElse("310").get().toInt()
+        versionName = providers.gradleProperty("appVersionName").orElse("3.1.0").get()
     }
     if (hasReleaseSigning) {
         signingConfigs {
