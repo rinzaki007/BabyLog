@@ -143,9 +143,9 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                 }
                                 Slider(
                                     value = selectedMilkMl.toFloat(),
-                                    onValueChange = { amountText = ((it / 5f).roundToInt() * 5).coerceIn(5, 1000).toString() },
+                                    onValueChange = { amountText = snapSliderValue(it, 5, 1000, 5).toString() },
                                     valueRange = 5f..1000f,
-                                    steps = 0
+                                    steps = discreteSliderStepCount(5, 1000, 5)
                                 )
                                 SliderRuler(selectedMilkMl, 5, 1000, 5)
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -240,9 +240,9 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                 }
                                 Slider(
                                     value = selectedSleepMinutes.toFloat(),
-                                    onValueChange = { sleepMinutesText = ((it / 5f).roundToInt() * 5).coerceIn(10, 720).toString() },
+                                    onValueChange = { sleepMinutesText = snapSliderValue(it, 10, 720, 5).toString() },
                                     valueRange = 10f..720f,
-                                    steps = 0
+                                    steps = discreteSliderStepCount(10, 720, 5)
                                 )
                                 SliderRuler(selectedSleepMinutes, 10, 720, 5)
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -254,7 +254,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                     Text("10 分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text("12 小时", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Text("左右滑动调整，精确到 1 分钟。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("滑动按 5 分钟刻度定格，也可用 ±1 分钟微调。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -601,6 +601,17 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
 
 
 
+
+internal fun discreteSliderStepCount(min: Int, max: Int, step: Int): Int {
+    require(step > 0 && max > min && (max - min) % step == 0)
+    return ((max - min) / step - 1).coerceAtLeast(0)
+}
+
+internal fun snapSliderValue(value: Float, min: Int, max: Int, step: Int): Int {
+    require(step > 0 && max >= min)
+    val snapped = min + (((value - min) / step).roundToInt() * step)
+    return snapped.coerceIn(min, max)
+}
 
 @Composable
 private fun SliderRuler(value: Int, min: Int, max: Int, step: Int) {
