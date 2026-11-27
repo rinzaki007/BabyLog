@@ -491,45 +491,6 @@ private fun BabyLogApp(dao: BabyLogDao) {
                         }
                     }
                     if (page == 2) item {
-                        CollapsibleSection(
-                            title = "成长足迹与家庭纪念",
-                            description = "里程碑、重要时刻与家庭纪念日"
-                        ) {
-                            GrowthMilestonesSection(baby, milestoneEvents) { milestone ->
-                                val now = System.currentTimeMillis()
-                                val payload = JSONObject()
-                                    .put("milestoneId", milestone.id)
-                                    .put("milestoneTitle", milestone.title)
-                                    .put("category", milestone.category)
-                                val event = BabyEventEntity(
-                                    UUID.randomUUID().toString(), baby.id, "MILESTONE",
-                                    now, payload.toString(), null, now
-                                )
-                                scope.launch {
-                                    dao.upsertEvent(event)
-                                    if (SyncPreferences.familyId(appContext).isNotBlank()) {
-                                        dao.enqueueOperation(
-                                            SyncOperationEntity(
-                                                UUID.randomUUID().toString(), "event", event.id, "upsert",
-                                                eventSyncPayload(event).toString(), event.serverVersion, now
-                                            )
-                                        )
-                                        SyncScheduler.enqueue(appContext)
-                                    }
-                                }
-                            }
-                            FamilyMemorySection(baby, milestoneEvents)
-                        }
-                    }
-                    if (page == 2) item {
-                        CollapsibleSection(
-                            title = "辅食成长记录",
-                            description = "回顾尝试过的食物与进食历程"
-                        ) {
-                            SolidFoodJourneySection(solidFoodEvents)
-                        }
-                    }
-                    if (page == 2) item {
                         GrowthReportCard(isExporting = exportingGrowthReport) {
                             scope.launch {
                                 exportingGrowthReport = true
