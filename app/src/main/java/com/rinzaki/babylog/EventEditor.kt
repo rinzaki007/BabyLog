@@ -139,7 +139,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                 // Most everyday baby bottles top out around 300 ml. Keep larger
                                 // existing/preferred values editable without silently truncating them.
                                 val selectedMilkMl = amountText.toIntOrNull()?.coerceAtLeast(5) ?: 120
-                                val milkSliderMax = maxOf(300, selectedMilkMl)
+                                val milkSliderMax = maxOf(300, (((selectedMilkMl.toLong() + 4L) / 5L) * 5L).coerceAtMost(Int.MAX_VALUE.toLong() - 4L).toInt())
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(if (feedingMethod == "母乳") "奶量（可选）" else "本次奶量", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                                     Text("$selectedMilkMl ml", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
