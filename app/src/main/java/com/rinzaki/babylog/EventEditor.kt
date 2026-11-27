@@ -134,7 +134,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                         ) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("奶量", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                                val selectedMilkMl = amountText.toIntOrNull()?.coerceIn(1, 1000) ?: 120
+                                val selectedMilkMl = amountText.toIntOrNull()?.coerceIn(5, 1000) ?: 120
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(if (feedingMethod == "母乳") "奶量（可选）" else "本次奶量", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                                     Text("$selectedMilkMl ml", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -151,10 +151,10 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                     TextButton(onClick = { amountText = (selectedMilkMl + 1).coerceAtMost(1000).toString() }) { Text("+1") }
                                 }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("1 ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("5 ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text("1000 ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Text(if (feedingMethod == "母乳") "亲喂可不填写奶量；瓶喂母乳可滑动设置。" else "左右滑动即可调整，精确到 1 ml。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(if (feedingMethod == "母乳") "亲喂可不填写奶量；瓶喂母乳可滑动设置。" else "滑动按 5 ml 刻度吸附，也可用 ±1 ml 微调。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         if (feedingMethod != "配方奶") {
