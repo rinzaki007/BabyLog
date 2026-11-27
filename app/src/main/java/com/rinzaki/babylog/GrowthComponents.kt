@@ -1,5 +1,22 @@
 package com.rinzaki.babylog
 
+private fun readableGrowthPosition(raw: String): String {
+    val normalized = raw.uppercase(Locale.ROOT)
+        .replace("—", "–")
+        .replace("-", "–")
+        .replace(" ", "")
+    return when {
+        normalized.contains("P25") && normalized.contains("P75") -> "中间位置（$raw）"
+        normalized.contains("P10") && normalized.contains("P25") -> "略低位置（$raw）"
+        normalized.contains("P75") && normalized.contains("P90") -> "略高位置（$raw）"
+        normalized.contains("P3") && normalized.contains("P10") -> "较低位置（$raw）"
+        normalized.contains("P90") && normalized.contains("P97") -> "较高位置（$raw）"
+        normalized.contains("P97") || normalized.startsWith("≥") || normalized.startsWith(">") -> "高于较高参考范围（$raw）"
+        normalized.contains("P3") || normalized.startsWith("<") -> "低于较低参考范围（$raw）"
+        else -> raw
+    }
+}
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -129,7 +146,7 @@ private fun GrowthPercentileBandTrendCard(
             }
             val selected = points.firstOrNull { it.visibleIndex == selectedVisibleIndex }
             Text(
-                selected?.let { "当前选中：${it.bandLabel}" }
+                selected?.let { "当前选中：${readableGrowthPosition(it.bandLabel)}" }
                     ?: "共 ${points.size} 次测量有可用的百分位区间参考",
                 style = MaterialTheme.typography.labelSmall,
                 color = chartColor,
@@ -206,6 +223,8 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
         zone = ZoneId.systemDefault()
     )
     val average = recent.size.toDouble() / daysCovered.toDouble()
+    var showMetricDetails by remember(range, category) { mutableStateOf(false) }
+    var showTrendDetails by remember(range, category) { mutableStateOf(false) }
     Card(shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -220,6 +239,10 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
             }
+            TextButton(onClick = { showMetricDetails = !showMetricDetails }, modifier = Modifier.align(Alignment.Start)) {
+                Text(if (showMetricDetails) "收起分类统计" else "查看分类统计")
+            }
+            if (showMetricDetails) {
             if (category == "全部" || category == "喂养") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SummaryPill("🍼", "记录奶量", "${milk} ml", Modifier.weight(1f))
@@ -247,11 +270,17 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             if (category == "全部" || category == "睡眠") SummaryPill("🌙", "睡眠时长", if (sleepMinutes >= 60) "${sleepMinutes / 60}小时${sleepMinutes % 60}分" else "${sleepMinutes}分钟", Modifier.fillMaxWidth())
             if (category == "全部" || category == "体温") SummaryPill("🌡️", "体温记录", "${temperatureEvents.size} 次", Modifier.fillMaxWidth())
             if (category == "全部" || category == "里程碑") SummaryPill("🌱", "成长里程碑", "${milestoneEvents.size} 次", Modifier.fillMaxWidth())
+            }
             if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
-    DailyTrendChart(recent, range, category, ranged)
-    PeriodTrendSummary(recent, range, category, ranged)
+    TextButton(onClick = { showTrendDetails = !showTrendDetails }) {
+        Text(if (showTrendDetails) "收起趋势分析" else "查看趋势分析")
+    }
+    if (showTrendDetails) {
+        DailyTrendChart(recent, range, category, ranged)
+        PeriodTrendSummary(recent, range, category, ranged)
+    }
 }
 
 @Composable
@@ -608,7 +637,7 @@ private fun GrowthOverviewCard(baby: BabyEntity, events: List<BabyEventEntity>) 
                             }
                             overview.percentileBand?.let { band ->
                                 Text(
-                                    "中国标准参考：$band",
+                                    "中国标准参考：${readableGrowthPosition(band)}",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -829,6 +858,22 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val chartSecondary = MaterialTheme.colorScheme.secondary
     val chartGrid = MaterialTheme.colorScheme.outlineVariant
     GrowthOverviewCard(baby, events)
+    var showGrowthDetails by remember { mutableStateOf(false) }
+    Card(shape = RoundedCornerShape(18.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("成长测量与生长曲线", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text("按需展开历史测量、百分位参考和曲线", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = { showGrowthDetails = !showGrowthDetails }) {
+                Text(if (showGrowthDetails) "收起" else "展开")
+            }
+        }
+    }
+    if (showGrowthDetails) {
     val percentileTrendPoints = remember(points, pointSourceIndices, measurementAssessments) {
         growthPercentileTrendPoints(points, pointSourceIndices, measurementAssessments)
     }
@@ -941,7 +986,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                 referenceCoordinates.asReversed().forEach { lineTo(it[4].x, it[4].y) }
                                 close()
                             }
-                            drawPath(percentileBand, chartPrimary.copy(alpha = 0.09f))
+                            drawPath(percentileBand, chartPrimary.copy(alpha = 0.15f))
                             fun percentileLine(index: Int) = Path().apply {
                                 moveTo(referenceCoordinates.first()[index].x, referenceCoordinates.first()[index].y)
                                 referenceCoordinates.drop(1).forEach { lineTo(it[index].x, it[index].y) }
@@ -949,10 +994,13 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                             listOf(1, 3).forEach { index ->
                                 drawPath(
                                     percentileLine(index),
-                                    chartPrimary.copy(alpha = 0.34f),
+                                    chartPrimary.copy(alpha = 0.88f),
                                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                                        width = 1.dp.toPx(),
-                                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                        width = 1.7.dp.toPx(),
+                                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
+                                            floatArrayOf(6.dp.toPx(), 4.dp.toPx())
+                                        )
                                     )
                                 )
                             }
@@ -1009,8 +1057,8 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                     ) {
                         GrowthChartLegendItem("宝宝测量值", chartSecondary, LegendMark.SOLID_LINE)
                         GrowthChartLegendItem("同月龄中间值", chartPrimary, LegendMark.SOLID_LINE)
-                        GrowthChartLegendItem("常见范围边界", chartPrimary.copy(alpha = 0.55f), LegendMark.DASHED_LINE)
-                        GrowthChartLegendItem("更宽参考范围", chartPrimary.copy(alpha = 0.38f), LegendMark.BAND)
+                        GrowthChartLegendItem("常见范围（P25–P75）", chartPrimary.copy(alpha = 0.88f), LegendMark.DASHED_LINE)
+                        GrowthChartLegendItem("更宽参考范围（P3–P97）", chartPrimary.copy(alpha = 0.15f), LegendMark.BAND)
                     }
                     Text(
                         "中国标准 WS/T 423—2022。按出生日期计算月龄；早产儿矫正月龄暂未纳入。身长/身高按官方年龄段口径。仅供趋势参考，不作诊断。",
@@ -1108,7 +1156,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text("宝宝在同月龄参考人群中的位置", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(assessment.bandLabel, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                Text(readableGrowthPosition(assessment.bandLabel), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                             }
                             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text("参考中间值", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1174,7 +1222,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                                 )
                                 measurementAssessments.getOrNull(pointIndex)?.let { assessment ->
                                     Text(
-                                        "同月龄参考：${assessment.bandLabel}",
+                                        "同月龄参考：${readableGrowthPosition(assessment.bandLabel)}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -1306,6 +1354,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
             }
             Text("这里只比较真实测量记录，不预测之后会长多少，也不作医学判断。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
     }
 }
 
