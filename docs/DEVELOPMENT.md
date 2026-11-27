@@ -48,9 +48,9 @@ BabyLog Android 客户端、NAS 同步服务和网页管理面板属于同一个
 
 Dependabot 每周检查 Gradle / Android 依赖、`server/` 下的 Python 依赖以及 GitHub Actions 版本，并以 Pull Request 提交更新。依赖升级应先通过本仓库完整 CI，再合并；不要为了追新版本跳过兼容性验证。
 
-## BabyLog 3.0.0 发布候选与正式发布流程
+## 历史发布准备说明
 
-当前 3.0.0 已完成阶段 A～E 的主要开发和自动化兼容性审查，但真机验收尚未完成。发布候选人工检查项见 [3.0.0-RELEASE-READINESS.md](3.0.0-RELEASE-READINESS.md)。在真机验收勾选完成并由项目维护者明确确认前，不得触发正式 Release 工作流、创建 v3.0.0 Tag、发布 APK 或更新 NAS。
+3.0.0 阶段的发布候选检查已属于历史记录；当前版本发布以本文件下方的通用 Android 正式发布流程、当前 PR 验收结果和维护者确认作为准则。
 
 ## Android 正式发布流程
 
