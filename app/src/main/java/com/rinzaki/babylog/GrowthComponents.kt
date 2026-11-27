@@ -244,7 +244,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     }
 
     // Keep the daily bar trend as the primary, immediately visible view.
-    DailyTrendChart(recent, range, category, ranged)
+    DailyTrendChart(recent, range, category, ranged, baby?.birthTime)
 
     TextButton(onClick = { showOtherDetails = !showOtherDetails }) {
         Text(if (showOtherDetails) "收起其他统计详情" else "查看其他统计详情")
@@ -289,7 +289,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
 }
 
 @Composable
-private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, category: String, allTimeEvents: List<BabyEventEntity>) {
+private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, category: String, allTimeEvents: List<BabyEventEntity>, babyBirthTime: Long?) {
     val availableMetrics = remember(category) { trendMetricsForCategory(category) }
     var metric by remember(category) { mutableStateOf(availableMetrics.first()) }
     val days = dailyTrendWindowDays(range, allTimeEvents)
@@ -373,11 +373,81 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
                     fontWeight = FontWeight.SemiBold
                 )
             }
+            if (metric == "喂养奶量" && babyBirthTime != null) {
+                selectedDay?.let { point ->
+                    DailyMilkGuidanceCard(
+                        birthTime = babyBirthTime,
+                        selectedDate = point.date,
+                        dailyMilkMl = point.value
+                    )
+                }
+            }
             Text("无相关记录的日期按 0 统计；有记录但指标值为 0 会单独标明记录条数。睡眠按记录的时长合计。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
+
+@Composable
+private fun DailyMilkGuidanceCard(
+    birthTime: Long,
+    selectedDate: LocalDate,
+    dailyMilkMl: Float
+) {
+    val guidance = remember(birthTime, selectedDate) {
+        dailyMilkGuidanceForDate(birthTime, selectedDate)
+    } ?: return
+    val ageMonths = remember(birthTime, selectedDate) {
+        val birthDate = java.time.Instant.ofEpochMilli(birthTime)
+            .atZone(ZoneId.systemDefault()).toLocalDate()
+        java.time.temporal.ChronoUnit.MONTHS.between(birthDate, selectedDate).toInt()
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f))
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text("中国婴幼儿奶量参考", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(
+                if (guidance.isExactAssessmentAge) {
+                    "${guidance.assessmentAgeMonths}月龄评估参考：${guidance.minimumMl}–${guidance.maximumMl} ml / 日"
+                } else {
+                    "当前约${ageMonths}月龄；下一个评估节点（${guidance.assessmentAgeMonths}月龄）参考：${guidance.minimumMl}–${guidance.maximumMl} ml / 日"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                fontWeight = FontWeight.SemiBold
+            )
+            if (guidance.isExactAssessmentAge) {
+                val comparison = when {
+                    dailyMilkMl < guidance.minimumMl -> "低于该月龄参考范围"
+                    dailyMilkMl > guidance.maximumMl -> "高于该月龄参考范围"
+                    else -> "处于该月龄参考范围内"
+                }
+                Text(
+                    "当日记录：${dailyMilkMl.toInt()} ml · $comparison",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            } else {
+                Text(
+                    "所选日期尚未到达该评估月龄，不直接判定高低，也不对未发布的月龄数值进行插值。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Text(
+                "来源：国家卫生健康委《婴幼儿营养喂养评估服务指南（试行）》。适用于指南列出的评估月龄；个体应结合生长情况和专业建议判断。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+            )
+        }
+    }
+}
 
 @Composable
 private fun PeriodTrendSummary(
