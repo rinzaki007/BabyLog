@@ -99,7 +99,7 @@ jobs:
           "$AAPT" dump resources "$APK" | grep -q "mipmap/ic_launcher_round"
       - name: Publish GitHub Release
         if: github.event_name == 'push' || inputs.publish
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
           name: BabyLog ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
