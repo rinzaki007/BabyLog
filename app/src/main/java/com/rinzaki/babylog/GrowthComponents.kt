@@ -880,14 +880,10 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     }
     var showPercentileHistory by remember { mutableStateOf(false) }
     if (percentileTrendPoints.isNotEmpty()) {
-        Card(
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Column(
-                Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("历史百分位区间", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -907,7 +903,6 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                         selectedVisibleIndex = selectedPointIndex
                     )
                 }
-            }
         }
     }
     Card(shape = RoundedCornerShape(22.dp)) {
