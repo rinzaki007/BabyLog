@@ -1,5 +1,6 @@
 package com.rinzaki.babylog
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
@@ -8,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -20,6 +22,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,11 +58,16 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
     }
     var urine by remember(existing?.id) { mutableStateOf(if (existing == null) RecordPreferences.getBoolean(context, RecordPreferences.DIAPER_URINE, true) else initialPayload.optBoolean("urine")) }
     var stool by remember(existing?.id) { mutableStateOf(if (existing == null) RecordPreferences.getBoolean(context, RecordPreferences.DIAPER_STOOL, false) else initialPayload.optBoolean("stool")) }
-    var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", if (existing == null) RecordPreferences.get(context, RecordPreferences.DIAPER_SHAPE, "糊状") else "糊状")) }
+    var stoolShape by remember(existing?.id) {
+        mutableStateOf(
+            initialPayload.optString("stoolShape", if (existing == null) RecordPreferences.get(context, RecordPreferences.DIAPER_SHAPE, "糊状") else "糊状")
+                .let { if (it == "软便") "成形" else it }
+        )
+    }
     var stoolColor by remember(existing?.id) {
         mutableStateOf(
             initialPayload.optString("stoolColor", if (existing == null) RecordPreferences.get(context, RecordPreferences.DIAPER_COLOR, "黄色") else "黄色")
-                .let { if (it in listOf("黄色", "绿色", "棕色", "红色", "其他")) it else "其他" }
+                .let { if (it == "棕色") "其他" else if (it in listOf("黄色", "绿色", "红色", "其他")) it else "其他" }
         )
     }
     var stoolAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolAmount", if (existing == null) RecordPreferences.get(context, RecordPreferences.DIAPER_AMOUNT, "中量") else "中量")) }
@@ -128,22 +136,28 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                         ) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("奶量", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                                val selectedMilkMl = amountText.toIntOrNull()?.coerceIn(1, 1000) ?: 120
+                                val selectedMilkMl = amountText.toIntOrNull()?.coerceIn(5, 1000) ?: 120
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(if (feedingMethod == "母乳") "奶量（可选）" else "本次奶量", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                                     Text("$selectedMilkMl ml", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 }
                                 Slider(
                                     value = selectedMilkMl.toFloat(),
-                                    onValueChange = { amountText = it.toInt().coerceIn(1, 1000).toString() },
-                                    valueRange = 1f..1000f,
+                                    onValueChange = { amountText = ((it / 5f).roundToInt() * 5).coerceIn(5, 1000).toString() },
+                                    valueRange = 5f..1000f,
                                     steps = 0
                                 )
+                                SliderRuler(selectedMilkMl, 5, 1000, 5)
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("每格 5 ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                    TextButton(onClick = { amountText = (selectedMilkMl - 1).coerceAtLeast(5).toString() }) { Text("−1") }
+                                    TextButton(onClick = { amountText = (selectedMilkMl + 1).coerceAtMost(1000).toString() }) { Text("+1") }
+                                }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("1 ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("5 ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text("1000 ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Text(if (feedingMethod == "母乳") "亲喂可不填写奶量；瓶喂母乳可滑动设置。" else "左右滑动即可调整，精确到 1 ml。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(if (feedingMethod == "母乳") "亲喂可不填写奶量；瓶喂母乳可滑动设置。" else "滑动按 5 ml 刻度吸附，也可用 ±1 ml 微调。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         if (feedingMethod != "配方奶") {
@@ -195,10 +209,10 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text("大便情况", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                                     Text("性状", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    SelectionRow(listOf("稀水样", "糊状", "软便", "成形", "干硬"), stoolShape) { stoolShape = it }
+                                    SelectionRow(listOf("稀水样", "糊状", "成形", "干硬"), stoolShape) { stoolShape = it }
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     Text("颜色", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    SelectionRow(listOf("黄色", "绿色", "棕色", "红色", "其他"), stoolColor) { stoolColor = it }
+                                    SelectionRow(listOf("黄色", "绿色", "红色", "棕色/其他"), if (stoolColor == "其他") "棕色/其他" else stoolColor) { stoolColor = if (it == "棕色/其他") "其他" else it }
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     Text("大便量", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     SelectionRow(listOf("少量", "中量", "大量"), stoolAmount) { stoolAmount = it }
@@ -226,10 +240,16 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                 }
                                 Slider(
                                     value = selectedSleepMinutes.toFloat(),
-                                    onValueChange = { sleepMinutesText = it.toInt().coerceIn(10, 720).toString() },
+                                    onValueChange = { sleepMinutesText = ((it / 5f).roundToInt() * 5).coerceIn(10, 720).toString() },
                                     valueRange = 10f..720f,
                                     steps = 0
                                 )
+                                SliderRuler(selectedSleepMinutes, 10, 720, 5)
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("每格 5 分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                    TextButton(onClick = { sleepMinutesText = (selectedSleepMinutes - 1).coerceAtLeast(10).toString() }) { Text("−1") }
+                                    TextButton(onClick = { sleepMinutesText = (selectedSleepMinutes + 1).coerceAtMost(720).toString() }) { Text("+1") }
+                                }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("10 分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text("12 小时", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -580,3 +600,42 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
 }
 
 
+
+
+@Composable
+private fun SliderRuler(value: Int, min: Int, max: Int, step: Int) {
+    val tickColor = MaterialTheme.colorScheme.outlineVariant
+    val activeColor = MaterialTheme.colorScheme.primary
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(12.dp)) {
+            val count = ((max - min) / step).coerceAtLeast(1)
+            repeat(count + 1) { index ->
+                val x = size.width * index / count.toFloat()
+                val major = index % 5 == 0
+                drawLine(
+                    color = if (min + index * step == value) activeColor else tickColor,
+                    start = Offset(x, 0f),
+                    end = Offset(x, if (major) size.height else size.height * 0.48f),
+                    strokeWidth = if (min + index * step == value) 2.dp.toPx() else 1.dp.toPx()
+                )
+            }
+        }
+        val labels = listOf(
+            (value - step * 2).coerceAtLeast(min),
+            (value - step).coerceAtLeast(min),
+            value.coerceIn(min, max),
+            (value + step).coerceAtMost(max),
+            (value + step * 2).coerceAtMost(max)
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            labels.forEachIndexed { index, label ->
+                Text(
+                    label.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (index == 2) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (index == 2) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+    }
+}
