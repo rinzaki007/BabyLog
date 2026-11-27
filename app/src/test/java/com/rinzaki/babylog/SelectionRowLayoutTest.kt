@@ -12,9 +12,9 @@ class SelectionRowLayoutTest {
     }
 
     @Test
-    fun regularWidthsPreserveExistingThreeAndFourColumnLayouts() {
+    fun fourOptionsUseBalancedTwoByTwoLayoutOnRegularWidths() {
         assertEquals(3, selectionRowColumnCount(3, 360f))
-        assertEquals(4, selectionRowColumnCount(4, 392f))
+        assertEquals(2, selectionRowColumnCount(4, 392f))
         assertEquals(3, selectionRowColumnCount(6, 392f))
     }
 
