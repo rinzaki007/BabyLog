@@ -226,7 +226,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     )
     val average = recent.size.toDouble() / daysCovered.toDouble()
     var showMetricDetails by remember(range, category) { mutableStateOf(false) }
-    var showTrendDetails by remember(range, category) { mutableStateOf(false) }
+    var showTrendDetails by remember(range, category) { mutableStateOf(true) }
     Card(shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -861,11 +861,11 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val chartGrid = MaterialTheme.colorScheme.outlineVariant
     GrowthOverviewCard(baby, events)
     var showGrowthDetails by remember { mutableStateOf(false) }
-    Card(shape = RoundedCornerShape(18.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
-        ) {
+        )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("成长测量与生长曲线", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text("按需展开历史测量、百分位参考和曲线", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
