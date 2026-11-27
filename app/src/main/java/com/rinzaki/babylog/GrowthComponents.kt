@@ -172,6 +172,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     }
     var range by remember { mutableStateOf("近7天") }
     var category by remember { mutableStateOf("全部") }
+    var showOtherDetails by remember(range, category) { mutableStateOf(false) }
     val rangeDays = when (range) { "近7天" -> 7; "近30天" -> 30; "近90天" -> 90; else -> null }
     val start = rangeDays?.let {
         LocalDate.now().minusDays((it - 1).toLong()).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -215,8 +216,6 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             payload.optString("supplementName") == "水" && payload.optString("unit") == "ml"
         }.getOrDefault(false)
     }.sumOf { runCatching { JSONObject(it.payloadJson).optDouble("amount").toInt() }.getOrDefault(0) }
-    // The fallback start date must come from the baby's complete record history,
-    // not the currently selected category, so category averages share one denominator.
     val daysCovered = statisticsDaysCovered(
         events = ranged,
         rangeDays = rangeDays,
@@ -225,12 +224,11 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
         zone = ZoneId.systemDefault()
     )
     val average = recent.size.toDouble() / daysCovered.toDouble()
-    var showMetricDetails by remember(range, category) { mutableStateOf(false) }
-    var showTrendDetails by remember(range, category) { mutableStateOf(true) }
+
     Card(shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("数据统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("日常照护统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Text("${recent.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text("统计周期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
@@ -241,46 +239,51 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
             }
-            TextButton(onClick = { showMetricDetails = !showMetricDetails }, modifier = Modifier.align(Alignment.Start)) {
-                Text(if (showMetricDetails) "收起分类统计" else "查看分类统计")
+            if (recent.isEmpty()) {
+                Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
-            if (showMetricDetails) {
-            if (category == "全部" || category == "喂养") {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryPill("🍼", "记录奶量", "${milk} ml", Modifier.weight(1f))
-                    SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
-                    if (visibleFeedingMethods.any { it == "母乳" || it == "混合喂养" }) {
-                        SummaryPill("🤱", "亲喂时长", if (breastMinutes > 0) "${breastMinutes} 分钟" else "未记录", Modifier.weight(1f))
-                    }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    visibleFeedingMethods.forEach { method ->
-                        val icon = when (method) { "母乳" -> "🤱"; "配方奶" -> "🍼"; else -> "🥛" }
-                        SummaryPill(icon, method, "${feedingMethods[method] ?: 0} 次", Modifier.weight(1f))
-                    }
-                }
-            }
-            if (category == "全部" || category == "补充") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryPill("🧴", "补充次数", "${supplementEvents.size} 次", Modifier.weight(1f))
-                SummaryPill("🚰", "饮水量", "${waterMl} ml", Modifier.weight(1f))
-            }
-            if (category == "全部" || category == "辅食") SummaryPill("🥣", "辅食次数", "${solidFoodEvents.size} 次", Modifier.fillMaxWidth())
-            if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
-                SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
-            }
-            if (category == "全部" || category == "睡眠") SummaryPill("🌙", "睡眠时长", if (sleepMinutes >= 60) "${sleepMinutes / 60}小时${sleepMinutes % 60}分" else "${sleepMinutes}分钟", Modifier.fillMaxWidth())
-            if (category == "全部" || category == "体温") SummaryPill("🌡️", "体温记录", "${temperatureEvents.size} 次", Modifier.fillMaxWidth())
-            if (category == "全部" || category == "里程碑") SummaryPill("🌱", "成长里程碑", "${milestoneEvents.size} 次", Modifier.fillMaxWidth())
-            }
-            if (recent.isEmpty()) Text("这个时间范围内还没有相关记录。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
-    TextButton(onClick = { showTrendDetails = !showTrendDetails }) {
-        Text(if (showTrendDetails) "收起趋势分析" else "查看趋势分析")
+
+    // Keep the daily bar trend as the primary, immediately visible view.
+    DailyTrendChart(recent, range, category, ranged)
+
+    TextButton(onClick = { showOtherDetails = !showOtherDetails }) {
+        Text(if (showOtherDetails) "收起其他统计详情" else "查看其他统计详情")
     }
-    if (showTrendDetails) {
-        DailyTrendChart(recent, range, category, ranged)
+    if (showOtherDetails) {
+        Card(shape = RoundedCornerShape(22.dp)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("分类统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (category == "全部" || category == "喂养") {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SummaryPill("🍼", "记录奶量", "${milk} ml", Modifier.weight(1f))
+                        SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
+                        if (visibleFeedingMethods.any { it == "母乳" || it == "混合喂养" }) {
+                            SummaryPill("🤱", "亲喂时长", if (breastMinutes > 0) "${breastMinutes} 分钟" else "未记录", Modifier.weight(1f))
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        visibleFeedingMethods.forEach { method ->
+                            val icon = when (method) { "母乳" -> "🤱"; "配方奶" -> "🍼"; else -> "🥛" }
+                            SummaryPill(icon, method, "${feedingMethods[method] ?: 0} 次", Modifier.weight(1f))
+                        }
+                    }
+                }
+                if (category == "全部" || category == "补充") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryPill("🧴", "补充次数", "${supplementEvents.size} 次", Modifier.weight(1f))
+                    SummaryPill("🚰", "饮水量", "${waterMl} ml", Modifier.weight(1f))
+                }
+                if (category == "全部" || category == "辅食") SummaryPill("🥣", "辅食次数", "${solidFoodEvents.size} 次", Modifier.fillMaxWidth())
+                if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
+                    SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
+                }
+                if (category == "全部" || category == "睡眠") SummaryPill("🌙", "睡眠时长", if (sleepMinutes >= 60) "${sleepMinutes / 60}小时${sleepMinutes % 60}分" else "${sleepMinutes}分钟", Modifier.fillMaxWidth())
+                if (category == "全部" || category == "体温") SummaryPill("🌡️", "体温记录", "${temperatureEvents.size} 次", Modifier.fillMaxWidth())
+                if (category == "全部" || category == "里程碑") SummaryPill("🌱", "成长里程碑", "${milestoneEvents.size} 次", Modifier.fillMaxWidth())
+            }
+        }
         PeriodTrendSummary(recent, range, category, ranged)
     }
 }
