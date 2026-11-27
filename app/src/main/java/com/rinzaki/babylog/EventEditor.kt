@@ -519,7 +519,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                     // Keep the user's preferred selections, but clear values that
                                     // belong only to the record just saved.
                                     val nextTime = LocalDateTime.now()
-                                    date = nextTime.toLocalDate()
+                                    // Keep the selected date for batch backfilling; only refresh the time.
                                     hour = nextTime.hour
                                     minute = nextTime.minute
                                     note = ""
