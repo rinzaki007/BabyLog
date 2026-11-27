@@ -364,6 +364,7 @@ internal fun AppUpdateSection() {
             UpdateSourceCard(
                 title = "内网更新 · NAS",
                 version = nasRelease?.version,
+                versionCode = nasRelease?.versionCode,
                 status = nasMessage,
                 selected = selectedSource == "nas",
                 enabled = checkingSource == null && !downloading && nasRelease != null,
@@ -378,6 +379,7 @@ internal fun AppUpdateSection() {
             UpdateSourceCard(
                 title = "官方更新 · GitHub",
                 version = officialRelease?.version,
+                versionCode = officialRelease?.versionCode,
                 status = officialMessage,
                 selected = selectedSource == "official",
                 enabled = checkingSource == null && !downloading && officialRelease != null,
@@ -466,6 +468,7 @@ internal fun AppUpdateSection() {
 private fun UpdateSourceCard(
     title: String,
     version: String?,
+    versionCode: Long?,
     status: String,
     selected: Boolean,
     enabled: Boolean,
@@ -491,7 +494,7 @@ private fun UpdateSourceCard(
                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (version.isNullOrBlank()) "版本：暂不可用" else "版本：v$version" +
-                        if (version?.let { AppVersionComparator.isNewer(it, null, current.name, current.code) } == true) " · 有更新" else " · 无需更新",
+                        if (version?.let { AppVersionComparator.isNewer(it, versionCode, current.name, current.code) } == true) " · 有更新" else " · 无需更新",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (!version.isNullOrBlank() && version?.let { AppVersionComparator.isNewer(it, null, current.name, current.code) } == true)
                         MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
