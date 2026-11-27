@@ -171,8 +171,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
         value = dao.getBaby(babyId)
     }
     var range by remember { mutableStateOf("近7天") }
-    var category by remember { mutableStateOf("全部") }
-    var showOtherDetails by remember(range, category) { mutableStateOf(false) }
+    var showOtherDetails by remember(range) { mutableStateOf(false) }
     val rangeDays = when (range) { "近7天" -> 7; "近30天" -> 30; "近90天" -> 90; else -> null }
     val start = rangeDays?.let {
         LocalDate.now().minusDays((it - 1).toLong()).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -181,19 +180,8 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     val events by eventsFlow.collectAsState(initial = emptyList())
     val now = System.currentTimeMillis()
     val ranged = events.filter { it.deletedAt == null && it.occurredAt >= start && it.occurredAt <= now }
-    val recent = ranged.filter { event ->
-        when (category) {
-            "喂养" -> event.eventType == "FEEDING"
-            "护理" -> event.eventType == "DIAPER"
-            "睡眠" -> event.eventType == "SLEEP"
-            "补充" -> event.eventType == "SUPPLEMENT"
-            "辅食" -> event.eventType == "SOLID_FOOD"
-            "成长" -> event.eventType == "GROWTH"
-            "里程碑" -> event.eventType == "MILESTONE"
-            "体温" -> event.eventType == "TEMPERATURE"
-            else -> true
-        }
-    }
+    // The overview always includes all daily care records; category filtering is intentionally removed.
+    val recent = ranged
     val feedingEvents = recent.filter { it.eventType == "FEEDING" }
     val milk = feedingEvents.sumOf { runCatching { JSONObject(it.payloadJson).optInt("amountMl") }.getOrDefault(0) }
     val feedCount = feedingEvents.size
@@ -233,8 +221,6 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             }
             Text("统计周期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("近7天", "近30天", "近90天", "全部"), range) { range = it }
-            Text("记录类型", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-            SelectionRow(listOf("全部", "喂养", "辅食", "补充", "护理", "睡眠", "体温", "成长", "里程碑"), category) { category = it }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
@@ -246,7 +232,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     }
 
     // Keep the daily bar trend as the primary, immediately visible view.
-    DailyTrendChart(recent, range, category, ranged)
+    DailyTrendChart(recent, range, "全部", ranged)
 
     TextButton(onClick = { showOtherDetails = !showOtherDetails }) {
         Text(if (showOtherDetails) "收起其他统计详情" else "查看其他统计详情")
@@ -255,7 +241,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
         Card(shape = RoundedCornerShape(22.dp)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("分类统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if (category == "全部" || category == "喂养") {
+                if (true) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SummaryPill("🍼", "记录奶量", "${milk} ml", Modifier.weight(1f))
                         SummaryPill("🧴", "喂养次数", "${feedCount} 次", Modifier.weight(1f))
@@ -270,21 +256,21 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
                         }
                     }
                 }
-                if (category == "全部" || category == "补充") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (true) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SummaryPill("🧴", "补充次数", "${supplementEvents.size} 次", Modifier.weight(1f))
                     SummaryPill("🚰", "饮水量", "${waterMl} ml", Modifier.weight(1f))
                 }
-                if (category == "全部" || category == "辅食") SummaryPill("🥣", "辅食次数", "${solidFoodEvents.size} 次", Modifier.fillMaxWidth())
-                if (category == "全部" || category == "护理") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (true) SummaryPill("🥣", "辅食次数", "${solidFoodEvents.size} 次", Modifier.fillMaxWidth())
+                if (true) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SummaryPill("💧", "小便", "${peeCount} 次", Modifier.weight(1f))
                     SummaryPill("🌿", "大便", "${stoolCount} 次", Modifier.weight(1f))
                 }
-                if (category == "全部" || category == "睡眠") SummaryPill("🌙", "睡眠时长", if (sleepMinutes >= 60) "${sleepMinutes / 60}小时${sleepMinutes % 60}分" else "${sleepMinutes}分钟", Modifier.fillMaxWidth())
-                if (category == "全部" || category == "体温") SummaryPill("🌡️", "体温记录", "${temperatureEvents.size} 次", Modifier.fillMaxWidth())
-                if (category == "全部" || category == "里程碑") SummaryPill("🌱", "成长里程碑", "${milestoneEvents.size} 次", Modifier.fillMaxWidth())
+                if (true) SummaryPill("🌙", "睡眠时长", if (sleepMinutes >= 60) "${sleepMinutes / 60}小时${sleepMinutes % 60}分" else "${sleepMinutes}分钟", Modifier.fillMaxWidth())
+                if (true) SummaryPill("🌡️", "体温记录", "${temperatureEvents.size} 次", Modifier.fillMaxWidth())
+                if (true) SummaryPill("🌱", "成长里程碑", "${milestoneEvents.size} 次", Modifier.fillMaxWidth())
             }
         }
-        PeriodTrendSummary(recent, range, category, ranged)
+        PeriodTrendSummary(recent, range, "全部", ranged)
     }
 }
 
@@ -863,7 +849,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val chartSecondary = MaterialTheme.colorScheme.secondary
     val chartGrid = MaterialTheme.colorScheme.outlineVariant
     GrowthOverviewCard(baby, events)
-    var showGrowthDetails by remember { mutableStateOf(false) }
+    var showGrowthDetails by remember { mutableStateOf(true) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
