@@ -233,9 +233,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
             }
             Text("统计周期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             SelectionRow(listOf("近7天", "近30天", "近90天", "全部"), range) { range = it }
-            Text("记录类型", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-            SelectionRow(listOf("全部", "喂养", "辅食", "补充", "护理", "睡眠", "体温", "成长", "里程碑"), category) { category = it }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryPill("📈", "记录总数", "${recent.size} 条", Modifier.weight(1f))
                 SummaryPill("🗓️", "日均记录", "${"%.1f".format(Locale.CHINA, average)} 条", Modifier.weight(1f))
             }
@@ -254,7 +252,9 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     if (showOtherDetails) {
         Card(shape = RoundedCornerShape(22.dp)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("分类统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("详细统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("选择需要查看的记录类型", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SelectionRow(listOf("全部", "喂养", "辅食", "补充", "护理", "睡眠", "体温", "成长", "里程碑"), category) { category = it }
                 if (category == "全部" || category == "喂养") {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SummaryPill("🍼", "记录奶量", "${milk} ml", Modifier.weight(1f))
@@ -863,7 +863,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
     val chartSecondary = MaterialTheme.colorScheme.secondary
     val chartGrid = MaterialTheme.colorScheme.outlineVariant
     GrowthOverviewCard(baby, events)
-    var showGrowthDetails by remember { mutableStateOf(false) }
+    var showGrowthDetails by remember { mutableStateOf(true) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
@@ -924,7 +924,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                 }
             }
             SelectionRow(listOf("体重", "身长", "头围"), metric) { metric = it }
-            SelectionRow(listOf("近 30 天", "近 90 天", "近半年", "近一年", "全部"), range) { range = it }
+            SelectionRow(listOf("近90天", "近一年", "全部"), range) { range = it }
             if (points.isEmpty()) {
                 Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
                     Text("还没有${metric}数据，记录几次后就能看到变化", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
