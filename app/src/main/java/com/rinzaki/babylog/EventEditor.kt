@@ -212,7 +212,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                     SelectionRow(listOf("稀水样", "糊状", "成形", "干硬"), stoolShape) { stoolShape = it }
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     Text("颜色", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    SelectionRow(listOf("黄色", "绿色", "红色", "棕色/其他"), stoolColor) { stoolColor = if (it == "棕色/其他") "其他" else it }
+                                    SelectionRow(listOf("黄色", "绿色", "红色", "棕色/其他"), if (stoolColor == "其他") "棕色/其他" else stoolColor) { stoolColor = if (it == "棕色/其他") "其他" else it }
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     Text("大便量", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     SelectionRow(listOf("少量", "中量", "大量"), stoolAmount) { stoolAmount = it }
