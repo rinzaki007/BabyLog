@@ -1,5 +1,6 @@
 package com.rinzaki.babylog
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
@@ -8,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -145,8 +147,9 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                     valueRange = 5f..1000f,
                                     steps = 0
                                 )
+                                SliderRuler(selectedMilkMl, 5, 1000, 5)
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("5 ml 刻度", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                    Text("每格 5 ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                                     TextButton(onClick = { amountText = (selectedMilkMl - 1).coerceAtLeast(5).toString() }) { Text("−1") }
                                     TextButton(onClick = { amountText = (selectedMilkMl + 1).coerceAtMost(1000).toString() }) { Text("+1") }
                                 }
@@ -241,8 +244,9 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                     valueRange = 10f..720f,
                                     steps = 0
                                 )
+                                SliderRuler(selectedSleepMinutes, 10, 720, 5)
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("5 分钟刻度", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                    Text("每格 5 分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                                     TextButton(onClick = { sleepMinutesText = (selectedSleepMinutes - 1).coerceAtLeast(10).toString() }) { Text("−1") }
                                     TextButton(onClick = { sleepMinutesText = (selectedSleepMinutes + 1).coerceAtMost(720).toString() }) { Text("+1") }
                                 }
@@ -596,3 +600,42 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
 }
 
 
+
+
+@Composable
+private fun SliderRuler(value: Int, min: Int, max: Int, step: Int) {
+    val tickColor = MaterialTheme.colorScheme.outlineVariant
+    val activeColor = MaterialTheme.colorScheme.primary
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(12.dp)) {
+            val count = ((max - min) / step).coerceAtLeast(1)
+            repeat(count + 1) { index ->
+                val x = size.width * index / count.toFloat()
+                val major = index % 5 == 0
+                drawLine(
+                    color = if (min + index * step == value) activeColor else tickColor,
+                    start = Offset(x, 0f),
+                    end = Offset(x, if (major) size.height else size.height * 0.48f),
+                    strokeWidth = if (min + index * step == value) 2.dp.toPx() else 1.dp.toPx()
+                )
+            }
+        }
+        val labels = listOf(
+            (value - step * 2).coerceAtLeast(min),
+            (value - step).coerceAtLeast(min),
+            value.coerceIn(min, max),
+            (value + step).coerceAtMost(max),
+            (value + step * 2).coerceAtMost(max)
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            labels.forEachIndexed { index, label ->
+                Text(
+                    label.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (index == 2) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (index == 2) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+    }
+}
