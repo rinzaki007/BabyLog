@@ -41,7 +41,9 @@ private fun readableGrowthPosition(raw: String): String {
     return when {
         normalized.contains("P25") && normalized.contains("P75") -> "中间位置（$raw）"
         normalized.contains("P10") && normalized.contains("P25") -> "略低位置（$raw）"
+        normalized.contains("P3") && normalized.contains("P25") -> "较低位置（$raw）"
         normalized.contains("P75") && normalized.contains("P90") -> "略高位置（$raw）"
+        normalized.contains("P75") && normalized.contains("P97") -> "较高位置（$raw）"
         normalized.contains("P3") && normalized.contains("P10") -> "较低位置（$raw）"
         normalized.contains("P90") && normalized.contains("P97") -> "较高位置（$raw）"
         normalized.contains("P97") || normalized.startsWith("≥") || normalized.startsWith(">") -> "高于较高参考范围（$raw）"
