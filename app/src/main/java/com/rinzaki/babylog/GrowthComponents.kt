@@ -244,7 +244,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
     }
 
     // Keep the daily bar trend as the primary, immediately visible view.
-    DailyTrendChart(recent, range, category, ranged)
+    DailyTrendChart(recent, range, category, ranged, baby?.birthTime)
 
     TextButton(onClick = { showOtherDetails = !showOtherDetails }) {
         Text(if (showOtherDetails) "收起其他统计详情" else "查看其他统计详情")
@@ -289,7 +289,7 @@ internal fun TrendsSummary(babyId: String, dao: BabyLogDao) {
 }
 
 @Composable
-private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, category: String, allTimeEvents: List<BabyEventEntity>) {
+private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, category: String, allTimeEvents: List<BabyEventEntity>, babyBirthTime: Long?) {
     val availableMetrics = remember(category) { trendMetricsForCategory(category) }
     var metric by remember(category) { mutableStateOf(availableMetrics.first()) }
     val days = dailyTrendWindowDays(range, allTimeEvents)
@@ -372,6 +372,15 @@ private fun DailyTrendChart(events: List<BabyEventEntity>, range: String, catego
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold
                 )
+            }
+            if (metric == "喂养奶量" && babyBirthTime != null) {
+                selectedDay?.let { point ->
+                    DailyMilkGuidanceCard(
+                        birthTime = babyBirthTime,
+                        selectedDate = point.date,
+                        dailyMilkMl = point.value
+                    )
+                }
             }
             Text("无相关记录的日期按 0 统计；有记录但指标值为 0 会单独标明记录条数。睡眠按记录的时长合计。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
