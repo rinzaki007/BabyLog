@@ -25,7 +25,7 @@ class DailyMilkGuidanceTest {
 
     @Test
     fun betweenAssessmentMonthsUsesNextCheckpointWithoutInterpolation() {
-        val guidance = dailyMilkGuidanceForDate(birthTime, LocalDate.of(2026, 4, 15), zone)
+        val guidance = dailyMilkGuidanceForDate(birthTime, LocalDate.of(2026, 5, 15), zone)
 
         assertEquals(6, guidance?.assessmentAgeMonths)
         assertEquals(800, guidance?.minimumMl)
