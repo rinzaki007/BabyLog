@@ -56,9 +56,14 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
     var urine by remember(existing?.id) { mutableStateOf(if (existing == null) RecordPreferences.getBoolean(context, RecordPreferences.DIAPER_URINE, true) else initialPayload.optBoolean("urine")) }
     var stool by remember(existing?.id) { mutableStateOf(if (existing == null) RecordPreferences.getBoolean(context, RecordPreferences.DIAPER_STOOL, false) else initialPayload.optBoolean("stool")) }
     var stoolShape by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolShape", if (existing == null) RecordPreferences.get(context, RecordPreferences.DIAPER_SHAPE, "糊状") else "糊状")) }
-    var stoolColor by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolColor", if (existing == null) RecordPreferences.get(context, RecordPreferences.DIAPER_COLOR, "黄色") else "黄色")) }
+    var stoolColor by remember(existing?.id) {
+        mutableStateOf(
+            initialPayload.optString("stoolColor", if (existing == null) RecordPreferences.get(context, RecordPreferences.DIAPER_COLOR, "黄色") else "黄色")
+                .let { if (it in listOf("黄色", "绿色", "棕色", "红色", "其他")) it else "其他" }
+        )
+    }
     var stoolAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolAmount", if (existing == null) RecordPreferences.get(context, RecordPreferences.DIAPER_AMOUNT, "中量") else "中量")) }
-    var sleepMinutesText by remember(existing?.id) { mutableStateOf((if (existing == null) RecordPreferences.get(context, RecordPreferences.SLEEP_DURATION, "60").toIntOrNull() ?: 60 else initialPayload.optInt("durationMinutes", 60)).coerceIn(10, 720).toString()) }
+    var sleepMinutesText by remember(existing?.id) { mutableStateOf((if (existing == null) RecordPreferences.get(context, RecordPreferences.SLEEP_DURATION, "60").toIntOrNull() ?: 60 else initialPayload.optInt("durationMinutes", 60)).toString()) }
     var weightKg by remember(existing?.id) { mutableStateOf(initialPayload.optInt("weightGrams").takeIf { it > 0 }?.div(1000.0)?.toString().orEmpty()) }
     var lengthCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("lengthCm").takeIf { it > 0 }?.toString().orEmpty()) }
     var headCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.toString().orEmpty()) }
@@ -123,17 +128,22 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                         ) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("奶量", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                                OutlinedTextField(
-                                    value = amountText,
-                                    onValueChange = { raw -> amountText = raw.filter(Char::isDigit).take(4) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text(if (feedingMethod == "母乳") "母乳量（可选）" else "奶量") },
-                                    supportingText = { Text(if (feedingMethod == "母乳") "亲喂可只记录时长；瓶喂母乳可填写奶量。" else "可点选常用值，也可以直接输入 1–1000 ml。") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true
+                                val selectedMilkMl = amountText.toIntOrNull()?.coerceIn(1, 1000) ?: 120
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    Text(if (feedingMethod == "母乳") "奶量（可选）" else "本次奶量", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                    Text("$selectedMilkMl ml", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                                Slider(
+                                    value = selectedMilkMl.toFloat(),
+                                    onValueChange = { amountText = it.toInt().coerceIn(1, 1000).toString() },
+                                    valueRange = 1f..1000f,
+                                    steps = 0
                                 )
-                                Text("常用奶量 · ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                SelectionRow(listOf("60", "90", "120", "150", "180", "210"), amountText) { amountText = it }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("1 ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("1000 ml", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text(if (feedingMethod == "母乳") "亲喂可不填写奶量；瓶喂母乳可滑动设置。" else "左右滑动即可调整，精确到 1 ml。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         if (feedingMethod != "配方奶") {
@@ -188,7 +198,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                     SelectionRow(listOf("稀水样", "糊状", "软便", "成形", "干硬"), stoolShape) { stoolShape = it }
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     Text("颜色", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    SelectionRow(listOf("黄色", "金黄色", "绿色", "棕色", "灰白色", "黑色", "红色", "其他"), stoolColor) { stoolColor = it }
+                                    SelectionRow(listOf("黄色", "绿色", "棕色", "红色", "其他"), stoolColor) { stoolColor = it }
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     Text("大便量", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     SelectionRow(listOf("少量", "中量", "大量"), stoolAmount) { stoolAmount = it }
@@ -204,17 +214,27 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                         ) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("睡眠时长", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                                OutlinedTextField(
-                                    value = sleepMinutesText,
-                                    onValueChange = { raw -> sleepMinutesText = raw.filter(Char::isDigit).take(3) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("时长（分钟）") },
-                                    supportingText = { Text("可直接输入 10–720 分钟") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true
+                                val selectedSleepMinutes = sleepMinutesText.toIntOrNull()?.coerceIn(10, 720) ?: 60
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    Text("本次睡眠时长", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                    Text(
+                                        if (selectedSleepMinutes >= 60) "${selectedSleepMinutes / 60}小时${selectedSleepMinutes % 60}分" else "${selectedSleepMinutes}分钟",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Slider(
+                                    value = selectedSleepMinutes.toFloat(),
+                                    onValueChange = { sleepMinutesText = it.toInt().coerceIn(10, 720).toString() },
+                                    valueRange = 10f..720f,
+                                    steps = 0
                                 )
-                                Text("常用时长 · 分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                SelectionRow(listOf("30", "60", "90", "120", "180", "240"), sleepMinutesText) { sleepMinutesText = it }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("10 分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("12 小时", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text("左右滑动调整，精确到 1 分钟。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -499,7 +519,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
                                     // Keep the user's preferred selections, but clear values that
                                     // belong only to the record just saved.
                                     val nextTime = LocalDateTime.now()
-                                    date = nextTime.toLocalDate()
+                                    // Keep the selected date for batch backfilling; only refresh the time.
                                     hour = nextTime.hour
                                     minute = nextTime.minute
                                     note = ""
