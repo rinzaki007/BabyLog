@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.rinzaki.babylog.sync.SyncPreferences
+import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -30,24 +31,18 @@ private const val RELEASE_API = "https://api.github.com/repos/rinzaki007/BabyLog
 private const val UPDATE_PREFS = "babylog_update_preferences"
 private data class BabyRelease(
     val tag: String, val version: String, val notes: String, val url: String,
-    val size: Long, val sha256: String?, val source: String
+    val size: Long, val sha256: String?, val source: String, val versionCode: Long? = null
 )
 
 private object BabyUpdater {
-    fun currentVersion(context: Context): String {
+    fun currentVersion(context: Context): InstalledAppVersion {
         @Suppress("DEPRECATION")
-        return context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0.0.0"
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        return InstalledAppVersion(info.versionName ?: "0.0.0", PackageInfoCompat.getLongVersionCode(info))
     }
 
-    fun newer(latest: String, current: String): Boolean {
-        val a = latest.substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 }
-        val b = current.substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 }
-        for (i in 0 until maxOf(a.size, b.size)) {
-            val x = a.getOrElse(i) { 0 }; val y = b.getOrElse(i) { 0 }
-            if (x != y) return x > y
-        }
-        return false
-    }
+    fun newer(release: BabyRelease, current: InstalledAppVersion): Boolean =
+        AppVersionComparator.isNewer(release.version, release.versionCode, current.name, current.code)
 
     suspend fun checkNas(context: Context): Pair<BabyRelease?, String> = withContext(Dispatchers.IO) {
         val base = SyncPreferences.server(context).trim().trimEnd('/')
@@ -69,7 +64,8 @@ private object BabyUpdater {
                     tag, version, json.optString("notes").ifBlank { "本次更新未提供说明。" },
                     base + path, json.optLong("size"),
                     json.optString("sha256").takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) },
-                    "内网 NAS"
+                    "内网 NAS",
+                    json.optLong("versionCode").takeIf { it > 0L }
                 )
                 release to "NAS 安装包已就绪"
             } finally { connection.disconnect() }
@@ -131,7 +127,8 @@ private object BabyUpdater {
             tag, version, json.optString("notes").ifBlank { "本次更新未提供说明。" },
             downloadUrl, json.optLong("size", 0L).coerceAtLeast(0L),
             json.optString("sha256").takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) },
-            "官方 GitHub"
+            "官方 GitHub",
+            json.optLong("versionCode").takeIf { it > 0L }
         )
     }
 
@@ -317,7 +314,7 @@ internal fun AppUpdateSection() {
     var error by remember { mutableStateOf<String?>(null) }
     val current = remember { BabyUpdater.currentVersion(context) }
     val selectedRelease = when (selectedSource) { "nas" -> nasRelease; "official" -> officialRelease; else -> null }
-    val hasUpdate = selectedRelease?.let { BabyUpdater.newer(it.version, current) } == true
+    val hasUpdate = selectedRelease?.let { BabyUpdater.newer(it, current) } == true
 
     fun checkUpdate() {
         if (checkingSource != null || downloading) return
@@ -360,13 +357,14 @@ internal fun AppUpdateSection() {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("应用更新", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("当前 v$current", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text("当前 v${current.name}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
             Text("先检查两个渠道的最新版本，再选择要下载的安装包。", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             UpdateSourceCard(
                 title = "内网更新 · NAS",
                 version = nasRelease?.version,
+                versionCode = nasRelease?.versionCode,
                 status = nasMessage,
                 selected = selectedSource == "nas",
                 enabled = checkingSource == null && !downloading && nasRelease != null,
@@ -381,6 +379,7 @@ internal fun AppUpdateSection() {
             UpdateSourceCard(
                 title = "官方更新 · GitHub",
                 version = officialRelease?.version,
+                versionCode = officialRelease?.versionCode,
                 status = officialMessage,
                 selected = selectedSource == "official",
                 enabled = checkingSource == null && !downloading && officialRelease != null,
@@ -396,8 +395,9 @@ internal fun AppUpdateSection() {
             if (release != null) {
                 Text(
                     when {
-                        BabyUpdater.newer(release.version, current) -> "所选来源有新版本：v${release.version}"
-                        release.version == current -> "所选来源与当前安装版本一致"
+                        BabyUpdater.newer(release, current) -> "所选来源有新版本：v${release.version}"
+                        release.versionCode != null && release.versionCode == current.code -> "所选来源与当前安装版本一致"
+                        release.version == current.name -> "所选来源与当前安装版本一致"
                         else -> "所选来源版本低于当前安装版本"
                     },
                     style = MaterialTheme.typography.bodyMedium,
@@ -468,11 +468,12 @@ internal fun AppUpdateSection() {
 private fun UpdateSourceCard(
     title: String,
     version: String?,
+    versionCode: Long?,
     status: String,
     selected: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
-    current: String
+    current: InstalledAppVersion
 ) {
     Card(
         onClick = onClick,
@@ -493,9 +494,9 @@ private fun UpdateSourceCard(
                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (version.isNullOrBlank()) "版本：暂不可用" else "版本：v$version" +
-                        if (BabyUpdater.newer(version, current)) " · 有更新" else " · 无需更新",
+                        if (version?.let { AppVersionComparator.isNewer(it, versionCode, current.name, current.code) } == true) " · 有更新" else " · 无需更新",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (!version.isNullOrBlank() && BabyUpdater.newer(version, current))
+                    color = if (!version.isNullOrBlank() && version?.let { AppVersionComparator.isNewer(it, versionCode, current.name, current.code) } == true)
                         MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)

@@ -52,11 +52,11 @@ Recommended manual process:
 
 A pushed tag matching `v*` (for example `v2.0.0`) also triggers the workflow. Only create such a tag after confirming it points to a commit already merged into `main` and validated by CI. Manual dispatch creates the corresponding `v<version>` tag and GitHub Release.
 
-The workflow generates `versionCode` from the GitHub Actions run number. The version name comes from the manual input or the pushed tag. Do not reuse a version tag or assume that rerunning a partially successful release is harmless.
+The workflow generates `versionCode` from the GitHub Actions run number and publishes it in `updates/latest.json`. The version name comes from the manual input or the pushed tag. The app compares `versionCode` whenever the update manifest provides it; version names are only a compatibility fallback. Do not reuse a version tag or assume that rerunning a partially successful release is harmless.
 
 ## Verify the published update feed
 
-The release workflow generates `latest.json` on the `updates` branch. It contains the release tag, version, APK download URL, file size, and SHA-256 digest. The app's update checker uses this public manifest to identify the current release.
+The release workflow generates `latest.json` on the `updates` branch. It contains the release tag, version, `versionCode`, APK download URL, file size, and SHA-256 digest. The app's update checker uses this public manifest to identify the current release. Historical installs with the mistakenly formatted `3.03` version name are interpreted as `3.0.3` when an older NAS manifest does not provide a `versionCode`.
 
 A successful GitHub Release does not by itself prove that the in-app update feed was published. Confirm that the **Publish public update manifest** step also succeeded and compare the manifest values with the actual release APK. If that step fails after the Release was created, inspect the existing Release and manifest before retrying; repair the feed from the already-published APK where possible rather than rebuilding and republishing the same tag blindly.
 
