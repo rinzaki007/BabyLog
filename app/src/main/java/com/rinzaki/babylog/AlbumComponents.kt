@@ -56,7 +56,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.rinzaki.babylog.data.BabyEntity
-import com.rinzaki.babylog.data.BabyEventEntity
 import com.rinzaki.babylog.data.BabyPhotoEntity
 import com.rinzaki.babylog.sync.mimeTypeForPath
 import com.rinzaki.babylog.sync.SyncPreferences
@@ -87,8 +86,6 @@ internal fun BabyAlbumSection(
     onAdd: (android.net.Uri, Long) -> Unit,
     onCaption: (BabyPhotoEntity, String) -> Unit,
     onDelete: (BabyPhotoEntity) -> Unit,
-    events: List<BabyEventEntity> = emptyList(),
-    onLinkEvent: (BabyPhotoEntity, BabyEventEntity, Boolean) -> Unit = { _, _, _ -> },
     initialPhoto: BabyPhotoEntity? = null,
     onInitialPhotoConsumed: () -> Unit = {}
 ) {
