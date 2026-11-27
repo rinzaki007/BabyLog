@@ -1,22 +1,5 @@
 package com.rinzaki.babylog
 
-private fun readableGrowthPosition(raw: String): String {
-    val normalized = raw.uppercase(Locale.ROOT)
-        .replace("—", "–")
-        .replace("-", "–")
-        .replace(" ", "")
-    return when {
-        normalized.contains("P25") && normalized.contains("P75") -> "中间位置（$raw）"
-        normalized.contains("P10") && normalized.contains("P25") -> "略低位置（$raw）"
-        normalized.contains("P75") && normalized.contains("P90") -> "略高位置（$raw）"
-        normalized.contains("P3") && normalized.contains("P10") -> "较低位置（$raw）"
-        normalized.contains("P90") && normalized.contains("P97") -> "较高位置（$raw）"
-        normalized.contains("P97") || normalized.startsWith("≥") || normalized.startsWith(">") -> "高于较高参考范围（$raw）"
-        normalized.contains("P3") || normalized.startsWith("<") -> "低于较低参考范围（$raw）"
-        else -> raw
-    }
-}
-
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,6 +32,23 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
+
+private fun readableGrowthPosition(raw: String): String {
+    val normalized = raw.uppercase(Locale.ROOT)
+        .replace("—", "–")
+        .replace("-", "–")
+        .replace(" ", "")
+    return when {
+        normalized.contains("P25") && normalized.contains("P75") -> "中间位置（$raw）"
+        normalized.contains("P10") && normalized.contains("P25") -> "略低位置（$raw）"
+        normalized.contains("P75") && normalized.contains("P90") -> "略高位置（$raw）"
+        normalized.contains("P3") && normalized.contains("P10") -> "较低位置（$raw）"
+        normalized.contains("P90") && normalized.contains("P97") -> "较高位置（$raw）"
+        normalized.contains("P97") || normalized.startsWith("≥") || normalized.startsWith(">") -> "高于较高参考范围（$raw）"
+        normalized.contains("P3") || normalized.startsWith("<") -> "低于较低参考范围（$raw）"
+        else -> raw
+    }
+}
 
 
 @Composable
