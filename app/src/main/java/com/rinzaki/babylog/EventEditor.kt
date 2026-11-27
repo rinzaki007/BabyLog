@@ -63,7 +63,7 @@ internal fun EventEditor(eventType: String, existing: BabyEventEntity? = null, o
         )
     }
     var stoolAmount by remember(existing?.id) { mutableStateOf(initialPayload.optString("stoolAmount", if (existing == null) RecordPreferences.get(context, RecordPreferences.DIAPER_AMOUNT, "中量") else "中量")) }
-    var sleepMinutesText by remember(existing?.id) { mutableStateOf((if (existing == null) RecordPreferences.get(context, RecordPreferences.SLEEP_DURATION, "60").toIntOrNull() ?: 60 else initialPayload.optInt("durationMinutes", 60)).coerceIn(10, 720).toString()) }
+    var sleepMinutesText by remember(existing?.id) { mutableStateOf((if (existing == null) RecordPreferences.get(context, RecordPreferences.SLEEP_DURATION, "60").toIntOrNull() ?: 60 else initialPayload.optInt("durationMinutes", 60)).toString()) }
     var weightKg by remember(existing?.id) { mutableStateOf(initialPayload.optInt("weightGrams").takeIf { it > 0 }?.div(1000.0)?.toString().orEmpty()) }
     var lengthCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("lengthCm").takeIf { it > 0 }?.toString().orEmpty()) }
     var headCm by remember(existing?.id) { mutableStateOf(initialPayload.optDouble("headCircumferenceCm").takeIf { it > 0 }?.toString().orEmpty()) }
