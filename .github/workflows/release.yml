@@ -51,6 +51,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then VERSION="${{ inputs.version }}"; fi
           VERSION_CODE=$((GITHUB_RUN_NUMBER + 1))
+          echo "BABYLOG_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
           sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx10g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8/' gradle.properties
           sed -i 's/^org.gradle.parallel=.*/org.gradle.parallel=false/' gradle.properties
           {
@@ -125,6 +126,7 @@ jobs:
           {
             "tag": "$VERSION_TAG",
             "version": "$VERSION",
+            "versionCode": $BABYLOG_VERSION_CODE,
             "notes": "BabyLog $VERSION_TAG 官方更新",
             "url": "$DOWNLOAD_URL",
             "size": $APK_SIZE,
