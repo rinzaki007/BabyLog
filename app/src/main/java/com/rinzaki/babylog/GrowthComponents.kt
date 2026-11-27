@@ -865,7 +865,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
-        )
+        ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("成长测量与生长曲线", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text("按需展开历史测量、百分位参考和曲线", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -874,8 +874,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
                 Text(if (showGrowthDetails) "收起" else "展开")
             }
         }
-    }
-    if (showGrowthDetails) {
+        if (showGrowthDetails) {
     val percentileTrendPoints = remember(points, pointSourceIndices, measurementAssessments) {
         growthPercentileTrendPoints(points, pointSourceIndices, measurementAssessments)
     }
@@ -1356,6 +1355,7 @@ internal fun GrowthSection(baby: BabyEntity, events: List<BabyEventEntity>) {
             }
             Text("这里只比较真实测量记录，不预测之后会长多少，也不作医学判断。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
     }
     }
 }
